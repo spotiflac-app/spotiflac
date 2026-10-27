@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: README
+    url: https://github.com/spotiflacapp/spotiflac#readme
+    about: Check the README for setup instructions and FAQ
+  - name: Extension Development Guide
+    url: https://github.com/spotiflacapp/spotiflac/blob/main/docs/EXTENSION_DEVELOPMENT.md
+    about: Documentation for building SpotiFLAC extensions

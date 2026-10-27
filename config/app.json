@@ -1,0 +1,11 @@
+{
+  "announcement": null,
+  "donate": {
+    "enabled": false,
+    "title": "Support SpotiFLAC",
+    "message": "Project updates are published at https://spotiflac.com.",
+    "methods": [],
+    "supporters": [],
+    "notices": []
+  }
+}
