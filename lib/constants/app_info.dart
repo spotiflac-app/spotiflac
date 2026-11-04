@@ -23,22 +23,22 @@ class AppInfo {
   static const String license = 'LGPL-3.0-only';
   static const String copyright = '© 2026 Zarz Eleutherius';
 
-  static const String mobileAuthor = 'spotiflacapp';
+  static const String mobileAuthor = 'spotiflac-app';
 
   static const String githubRepo = String.fromEnvironment(
     'SPOTIFLAC_GITHUB_REPO',
-    defaultValue: 'spotiflacapp/spotiflac',
+    defaultValue: 'spotiflac-app/spotiflac',
   );
   static const String githubUrl = 'https://github.com/$githubRepo';
 
   /// All platform packages are published alongside the source.
   static const String desktopGithubRepo = String.fromEnvironment(
     'SPOTIFLAC_DESKTOP_GITHUB_REPO',
-    defaultValue: 'spotiflacapp/spotiflac',
+    defaultValue: 'spotiflac-app/spotiflac',
   );
   static const String remoteConfigApiUrl = String.fromEnvironment(
     'SPOTIFLAC_CONFIG_URL',
-    defaultValue: 'https://raw.githubusercontent.com/spotiflacapp/spotiflac/main/config/app.json',
+    defaultValue: 'https://raw.githubusercontent.com/spotiflac-app/spotiflac/main/config/app.json',
   );
 
   /// Enable only after registering and configuring your own Discord application.

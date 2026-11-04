@@ -32,7 +32,7 @@ def prepare(directory,version):
     checksum=''.join(f'{digest(p)}  {p.name}\n' for p in packages)
     (directory/'SHA256SUMS.txt').write_text(checksum,encoding='utf-8')
     notes=[f'# SpotiFLAC {version}','', 'Website: https://spotiflac.com',
-           'Source: https://github.com/spotiflacapp/spotiflac','',
+           'Source: https://github.com/spotiflac-app/spotiflac','',
            'Only packages successfully built in this workflow are listed.','',
            '| File | Bytes |','|---|---:|']
     notes += [f'| `{p.name}` | {p.stat().st_size} |' for p in packages]

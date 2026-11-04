@@ -27,7 +27,7 @@ class OwnedReleaseTest(unittest.TestCase):
             root=Path(temp);feed=root/'apps.json';feed.write_text('{"apps": []}')
             ipa=root/'SpotiFLAC-v1.0.0-ios-unsigned.ipa'
             with zipfile.ZipFile(ipa,'w') as z:z.writestr('Payload/Runner.app/Info.plist',plistlib.dumps({'CFBundleIdentifier':'com.spotiflac.app'}))
-            update(feed,ipa,'v1.0.0','spotiflacapp/spotiflac')
+            update(feed,ipa,'v1.0.0','spotiflac-app/spotiflac')
             item=json.loads(feed.read_text())['apps'][0]
             self.assertEqual(item['size'],ipa.stat().st_size)
             self.assertEqual(item['bundleIdentifier'],'com.spotiflac.app')
@@ -37,7 +37,7 @@ class OwnedReleaseTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp);feed=root/'apps.json';feed.write_text('{"apps": []}');ipa=root/'wrong.ipa'
             with zipfile.ZipFile(ipa,'w') as z:z.writestr('Payload/Runner.app/Info.plist',plistlib.dumps({'CFBundleIdentifier':'other.app'}))
-            with self.assertRaises(ValueError):update(feed,ipa,'v1.0.0','spotiflacapp/spotiflac')
+            with self.assertRaises(ValueError):update(feed,ipa,'v1.0.0','spotiflac-app/spotiflac')
             self.assertEqual(json.loads(feed.read_text())['apps'],[])
 
 if __name__=='__main__':unittest.main()

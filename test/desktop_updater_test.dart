@@ -231,8 +231,8 @@ void main() {
       await recording(_appImageHost).checkForUpdate();
       await recording(UpdateHost.android).checkForUpdate();
       expect(requested.map((url) => url.path), [
-        '/repos/spotiflacapp/spotiflac/releases',
-        '/repos/spotiflacapp/spotiflac/releases',
+        '/repos/spotiflac-app/spotiflac/releases',
+        '/repos/spotiflac-app/spotiflac/releases',
       ]);
     });
 

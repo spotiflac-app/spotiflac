@@ -10,13 +10,13 @@
 
 <p align="center">
   <a href="https://spotiflac.com"><b>Official website: spotiflac.com</b></a>
-  · <a href="https://github.com/spotiflacapp/spotiflac">Source code</a>
+  · <a href="https://github.com/spotiflac-app/spotiflac">Source code</a>
 </p>
 
 </div>
 
 <p align="center">
-  <a href="https://github.com/spotiflacapp/spotiflac/releases/latest">
+  <a href="https://github.com/spotiflac-app/spotiflac/releases/latest">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="assets/readme/badges/badge-release-dark.svg">
       <img alt="Download the latest release" src="assets/readme/badges/badge-release-light.svg" height="56">
@@ -184,7 +184,7 @@ Project setup: [release and signing instructions](docs/RELEASE_SETUP.md) · [own
       <p>
         Add metadata and lyrics sources from community extension
         repositories, then choose their priority. Building one? See the
-        <a href="https://github.com/spotiflacapp/spotiflac/blob/main/docs/EXTENSION_DEVELOPMENT.md">extension documentation</a>.
+        <a href="https://github.com/spotiflac-app/spotiflac/blob/main/docs/EXTENSION_DEVELOPMENT.md">extension documentation</a>.
       </p>
       <p></p>
     </td>
@@ -375,7 +375,7 @@ another country's recommendations without a VPN.
 Yes! Add the official source to receive updates directly within the app. Copy this link:
 
 ```
-https://raw.githubusercontent.com/spotiflacapp/spotiflac/refs/heads/main/apps.json
+https://raw.githubusercontent.com/spotiflac-app/spotiflac/refs/heads/main/apps.json
 ```
 
 In AltStore/SideStore, go to **Browse > Sources**, tap **+**, and paste the link.
@@ -388,8 +388,8 @@ In AltStore/SideStore, go to **Browse > Sources**, tap **+**, and paste the link
 
 Thanks to everyone who has contributed to SpotiFLAC!
 
-<a href="https://github.com/spotiflacapp/spotiflac/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=spotiflacapp/spotiflac" />
+<a href="https://github.com/spotiflac-app/spotiflac/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=spotiflac-app/spotiflac" />
 </a>
 
 We also appreciate everyone who helped with translations, reported bugs, suggested features, and spread the word.

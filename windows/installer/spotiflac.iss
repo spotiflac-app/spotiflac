@@ -36,7 +36,7 @@
 #define AppName "SpotiFLAC"
 #define AppExe "spotiflac.exe"
 #define AppUserModelId "com.spotiflac.app"
-#define AppUrl "https://github.com/spotiflacapp/spotiflac"
+#define AppUrl "https://github.com/spotiflac-app/spotiflac"
 
 #if Arch == "arm64"
   #define AllowedArchitectures "arm64"
@@ -52,7 +52,7 @@ AppVerName={#AppName} {#AppVersion}
 AppPublisher=SpotiFLAC
 AppPublisherURL=https://spotiflac.com
 AppSupportURL={#AppUrl}/issues
-AppUpdatesURL=https://github.com/spotiflacapp/spotiflac/releases
+AppUpdatesURL=https://github.com/spotiflac-app/spotiflac/releases
 VersionInfoVersion={#NumericVersion}
 VersionInfoProductName={#AppName}
 VersionInfoDescription={#AppName} Setup

@@ -5,7 +5,7 @@
 # Template for the changelog body
 body = """
 {%- macro remote_url() -%}
-  https://github.com/spotiflacapp/spotiflac
+  https://github.com/spotiflac-app/spotiflac
 {%- endmacro -%}
 
 {% if version %}\
@@ -22,7 +22,7 @@ body = """
             {% if commit.github.pr_number %} \
                 ([#{{ commit.github.pr_number }}]({{ self::remote_url() }}/pull/{{ commit.github.pr_number }}))\
             {% endif %}\
-            {%- if commit.github.username and commit.github.username != "spotiflacapp" %} by [@{{ commit.github.username }}](https://github.com/{{ commit.github.username }}){%- endif %}
+            {%- if commit.github.username and commit.github.username != "spotiflac-app" %} by [@{{ commit.github.username }}](https://github.com/{{ commit.github.username }}){%- endif %}
     {%- endfor %}
 {% endfor %}
 
@@ -99,5 +99,5 @@ tag_pattern = "v[0-9].*"
 sort_commits = "newest"
 
 [remote.github]
-owner = "spotiflacapp"
+owner = "spotiflac-app"
 repo = "spotiflac"

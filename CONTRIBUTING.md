@@ -8,7 +8,7 @@ the project.
 
 ## Before You Start
 
-- Search the [existing issues](https://github.com/spotiflacapp/spotiflac/issues)
+- Search the [existing issues](https://github.com/spotiflac-app/spotiflac/issues)
   before opening a new one.
 - Use the issue template that best matches the problem.
 - Keep pull requests focused. Separate unrelated fixes into separate PRs.
@@ -40,7 +40,7 @@ exact Flutter version declared in `.fvmrc` and replace `fvm flutter` with
    ```bash
    git clone https://github.com/YOUR_USERNAME/SpotiFLAC.git
    cd SpotiFLAC
-   git remote add upstream https://github.com/spotiflacapp/spotiflac.git
+   git remote add upstream https://github.com/spotiflac-app/spotiflac.git
    ```
 
 2. Install the pinned Flutter SDK and Dart dependencies:

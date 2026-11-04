@@ -216,13 +216,13 @@ build_deb() {
 Package: $BINARY_NAME
 Version: $deb_version
 Architecture: $DEB_ARCH
-Maintainer: SpotiFLAC <348904540+spotiflacapp@users.noreply.github.com>
+Maintainer: SpotiFLAC <spotiflac-app@users.noreply.github.com>
 Installed-Size: $installed_size
 Depends: $depends
 Recommends: gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, xdg-utils, xdg-desktop-portal
 Section: sound
 Priority: optional
-Homepage: https://github.com/spotiflacapp/spotiflac
+Homepage: https://github.com/spotiflac-app/spotiflac
 Description: Music player and library manager
  SpotiFLAC plays local and network music, edits metadata, and fetches tracks
  and lyrics through extensions you install.
