@@ -84,8 +84,9 @@ class SpotiFLACTheme extends ThemeExtension<SpotiFLACTheme> {
       SpotiFLACAccent.pink => CupertinoColors.systemPink,
     };
     // Accents also label links and small controls on white surfaces.
-    if (!dark && accent == SpotiFLACAccent.green)
+    if (!dark && accent == SpotiFLACAccent.green) {
       return const Color(0xff24863d);
+    }
     return dark ? color.darkColor : color.highContrastColor;
   }
 

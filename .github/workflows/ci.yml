@@ -2,6 +2,14 @@ name: CI
 
 on:
   workflow_dispatch:
+    inputs:
+      checks:
+        description: Checks to run
+        type: choice
+        default: all
+        options:
+          - all
+          - flutter
   pull_request:
   push:
     branches:
@@ -11,7 +19,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.ref }}-${{ inputs.checks || 'all' }}
   cancel-in-progress: true
 
 jobs:
@@ -23,9 +31,9 @@ jobs:
       pull-requests: read
     outputs:
       dart: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.dart == 'true' }}
-      android: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.android == 'true' }}
-      ios: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.ios == 'true' }}
-      rust: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.rust == 'true' }}
+      android: ${{ (github.event_name == 'workflow_dispatch' && inputs.checks != 'flutter') || (github.event_name != 'workflow_dispatch' && steps.filter.outputs.android == 'true') }}
+      ios: ${{ (github.event_name == 'workflow_dispatch' && inputs.checks != 'flutter') || (github.event_name != 'workflow_dispatch' && steps.filter.outputs.ios == 'true') }}
+      rust: ${{ (github.event_name == 'workflow_dispatch' && inputs.checks != 'flutter') || (github.event_name != 'workflow_dispatch' && steps.filter.outputs.rust == 'true') }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
