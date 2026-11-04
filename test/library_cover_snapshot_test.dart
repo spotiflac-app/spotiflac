@@ -91,8 +91,9 @@ void main() {
   test('native reads only detached private all-source projection', () async {
     final observed = _HandoffDatabase(database, () async {
       expect(
-        (await database.rawQuery('PRAGMA database_list'))
-            .map((row) => row['name']),
+        (await database.rawQuery(
+          'PRAGMA database_list',
+        )).map((row) => row['name']),
         unorderedEquals(['main', 'temp']),
       );
     });
@@ -151,25 +152,22 @@ void main() {
     });
   }
 
-  test(
-    'same references despite row replacement remain safe to prune',
-    () async {
-      final observed = _HandoffDatabase(database, () async {
-        await database.execute(
-          "UPDATE library SET id='changed', source_id='hidden' WHERE id='visible'",
-        );
-      });
-      expect(
-        await withLibraryCoverSnapshot(
-          observed,
-          (_) async => 1,
-          temporaryDirectory: directory,
-        ),
-        1,
+  test('same references despite row replacement remain safe to prune', () async {
+    final observed = _HandoffDatabase(database, () async {
+      await database.execute(
+        "UPDATE library SET id='changed', source_id='hidden' WHERE id='visible'",
       );
-      await _expectClean(database, directory);
-    },
-  );
+    });
+    expect(
+      await withLibraryCoverSnapshot(
+        observed,
+        (_) async => 1,
+        temporaryDirectory: directory,
+      ),
+      1,
+    );
+    await _expectClean(database, directory);
+  });
 
   test('WAL writer barrier spans private native read and deletion', () async {
     final writer = await SqliteProcessDatabase.open(path: database.path);

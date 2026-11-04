@@ -37,47 +37,50 @@ void main() {
   });
 
   for (final auth in SubsonicAuth.values) {
-    test('auth $auth preserves the base path and sends no Basic credentials', () async {
-      final connection = server.connection(auth: auth, path: '/prefix/rest/');
-      await storage.list(connection);
-      await storage.list(connection);
-      final query = server.requests.first.queryParameters;
-      expect(
-        server.requests.map((uri) => uri.path),
-        everyElement('/prefix/rest/ping.view'),
-      );
-      expect(server.authorizations, everyElement(isNull));
-      expect(query['v'], '1.16.1');
-      switch (auth) {
-        case SubsonicAuth.saltedToken:
-          expect(
-            query['t'],
-            md5
-                .convert(utf8.encode('${connection.password}${query['s']}'))
-                .toString(),
-          );
-          expect(query['u'], connection.username);
-          expect(query.keys, isNot(contains('p')));
-          expect(query.keys, isNot(contains('apiKey')));
-          expect(server.salts.toSet(), hasLength(2));
-        case SubsonicAuth.password:
-          expect(
-            query['p'],
-            'enc:${utf8.encode(connection.password).map((b) => b.toRadixString(16).padLeft(2, '0')).join()}',
-          );
-          expect(query.keys, isNot(contains('apiKey')));
-          expect(query.keys, isNot(contains('t')));
-        case SubsonicAuth.apiKey:
-          expect(query['apiKey'], connection.apiKey);
-          expect(
-            query.keys.toSet().intersection({'u', 'p', 't', 's'}),
-            isEmpty,
-          );
-      }
-      final restored = NetworkConnection.fromJson(connection.toJson());
-      expect(restored.subsonicAuth, auth);
-      expect(restored.apiKey, connection.apiKey);
-    });
+    test(
+      'auth $auth preserves the base path and sends no Basic credentials',
+      () async {
+        final connection = server.connection(auth: auth, path: '/prefix/rest/');
+        await storage.list(connection);
+        await storage.list(connection);
+        final query = server.requests.first.queryParameters;
+        expect(
+          server.requests.map((uri) => uri.path),
+          everyElement('/prefix/rest/ping.view'),
+        );
+        expect(server.authorizations, everyElement(isNull));
+        expect(query['v'], '1.16.1');
+        switch (auth) {
+          case SubsonicAuth.saltedToken:
+            expect(
+              query['t'],
+              md5
+                  .convert(utf8.encode('${connection.password}${query['s']}'))
+                  .toString(),
+            );
+            expect(query['u'], connection.username);
+            expect(query.keys, isNot(contains('p')));
+            expect(query.keys, isNot(contains('apiKey')));
+            expect(server.salts.toSet(), hasLength(2));
+          case SubsonicAuth.password:
+            expect(
+              query['p'],
+              'enc:${utf8.encode(connection.password).map((b) => b.toRadixString(16).padLeft(2, '0')).join()}',
+            );
+            expect(query.keys, isNot(contains('apiKey')));
+            expect(query.keys, isNot(contains('t')));
+          case SubsonicAuth.apiKey:
+            expect(query['apiKey'], connection.apiKey);
+            expect(
+              query.keys.toSet().intersection({'u', 'p', 't', 's'}),
+              isEmpty,
+            );
+        }
+        final restored = NetworkConnection.fromJson(connection.toJson());
+        expect(restored.subsonicAuth, auth);
+        expect(restored.apiKey, connection.apiKey);
+      },
+    );
   }
 
   test(

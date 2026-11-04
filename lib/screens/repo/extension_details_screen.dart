@@ -361,8 +361,10 @@ class _ExtensionDetailsScreenState
             EdgeInsets.symmetric(horizontal: wideListInset(context)),
         child: Text(
           ext.description,
-          style: Theme.of(context).textTheme.bodyLarge
-              ?.copyWith(height: 1.5, color: colorScheme.onSurface),
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+            height: 1.5,
+            color: colorScheme.onSurface,
+          ),
         ),
       ),
     );

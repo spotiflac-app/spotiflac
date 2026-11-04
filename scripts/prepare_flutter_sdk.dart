@@ -10,9 +10,9 @@ Future<bool> prepareFlutterSdk({
   required Directory project,
   bool checkOnly = false,
 }) async {
-  final pin = jsonDecode(
-    File('${project.path}/.fvmrc').readAsStringSync(),
-  ) as Map<String, dynamic>;
+  final pin =
+      jsonDecode(File('${project.path}/.fvmrc').readAsStringSync())
+          as Map<String, dynamic>;
   if (pin['flutter'] != _patchedVersion) {
     throw StateError('Review the semantics patch for the new Flutter pin.');
   }

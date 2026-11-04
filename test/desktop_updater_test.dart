@@ -288,8 +288,9 @@ void main() {
     });
 
     test('Windows gets the installer', () async {
-      final update = await checker(const UpdateHost(os: 'windows', arch: 'x64'))
-          .checkForUpdate();
+      final update = await checker(
+        const UpdateHost(os: 'windows', arch: 'x64'),
+      ).checkForUpdate();
       expect(update?.installKind, UpdateInstallKind.windowsInstaller);
       expect(update?.assetName, 'SpotiFLAC-$_version-windows-x64-setup.exe');
     });

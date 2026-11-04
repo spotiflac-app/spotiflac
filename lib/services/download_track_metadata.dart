@@ -32,8 +32,9 @@ Future<Track> enrichIncompleteDownloadTrack(
     if (selectedIsrc.isNotEmpty &&
         resolvedIsrc.isNotEmpty &&
         selectedIsrc != resolvedIsrc) {
-      AppLogger('DownloadMetadata')
-          .w('Ignoring supplemental metadata for a different recording');
+      AppLogger(
+        'DownloadMetadata',
+      ).w('Ignoring supplemental metadata for a different recording');
       return track;
     }
     final durationMs = readPositiveInt(data['duration_ms']);

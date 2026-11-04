@@ -1,8 +1,7 @@
 part of 'music_player_service.dart';
 
-typedef AutoplayLibraryLoader = Future<List<PlayableMedia>> Function(
-  PlayableMedia seed,
-);
+typedef AutoplayLibraryLoader =
+    Future<List<PlayableMedia>> Function(PlayableMedia seed);
 
 Future<void> resetAutoplayLearning({MusicPlayerRuntime? runtime}) async {
   final target = runtime ?? musicPlayerRuntime;

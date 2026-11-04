@@ -5,10 +5,8 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider_windows/path_provider_windows.dart';
 
 /// Runs an external command; [Process.run] in production.
-typedef DesktopProcessRunner = Future<ProcessResult> Function(
-  String executable,
-  List<String> arguments,
-);
+typedef DesktopProcessRunner =
+    Future<ProcessResult> Function(String executable, List<String> arguments);
 
 /// Folder created inside the OS Music folder for desktop downloads, matching
 /// the mobile `Download/SpotiFLAC` and `Documents/SpotiFLAC` defaults.

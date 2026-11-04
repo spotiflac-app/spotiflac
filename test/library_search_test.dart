@@ -103,27 +103,33 @@ void main() {
         offset: offset,
       );
 
-      test('matches unordered words across title and artist, including partial words', () async {
-        expect((await search('green lil')).map((hit) => hit.id), [
-          '1',
-          'local',
-        ]);
-        expect((await search('mrs.   APPLE lilac')).map((hit) => hit.id), [
-          '1',
-          'local',
-        ]);
-      });
-      test('ranks exact title first and excludes hidden sources and duplicate paths', () async {
-        expect((await search('lilac')).map((hit) => hit.id), [
-          '1',
-          'local',
-          '3',
-        ]);
-        expect(
-          (await search('lilac', includeLocal: false)).map((hit) => hit.id),
-          ['1', '3'],
-        );
-      });
+      test(
+        'matches unordered words across title and artist, including partial words',
+        () async {
+          expect((await search('green lil')).map((hit) => hit.id), [
+            '1',
+            'local',
+          ]);
+          expect((await search('mrs.   APPLE lilac')).map((hit) => hit.id), [
+            '1',
+            'local',
+          ]);
+        },
+      );
+      test(
+        'ranks exact title first and excludes hidden sources and duplicate paths',
+        () async {
+          expect((await search('lilac')).map((hit) => hit.id), [
+            '1',
+            'local',
+            '3',
+          ]);
+          expect(
+            (await search('lilac', includeLocal: false)).map((hit) => hit.id),
+            ['1', '3'],
+          );
+        },
+      );
       test(
         'scan and download tree aliases appear as one search result',
         () async {
@@ -205,11 +211,14 @@ void main() {
           );
         },
       );
-      test('artists combine local and downloaded songs without counting duplicate files', () async {
-        final hits = await search('green', kind: LibrarySearchKind.artists);
-        expect(hits.single.title, 'Mrs. GREEN APPLE');
-        expect(hits.single.trackCount, 3);
-      });
+      test(
+        'artists combine local and downloaded songs without counting duplicate files',
+        () async {
+          final hits = await search('green', kind: LibrarySearchKind.artists);
+          expect(hits.single.title, 'Mrs. GREEN APPLE');
+          expect(hits.single.trackCount, 3);
+        },
+      );
       test(
         'pagination has stable ordering without missing or repeated hits',
         () async {

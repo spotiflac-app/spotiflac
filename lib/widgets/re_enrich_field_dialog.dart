@@ -159,8 +159,9 @@ class _ReEnrichFieldSheetState extends State<_ReEnrichFieldSheet> {
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
               child: Text(
                 l10n.downloadedAlbumSelectedCount(widget.selectedCount),
-                style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(color: colorScheme.onSurfaceVariant),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
               ),
             ),
             _options(
@@ -242,8 +243,9 @@ class _ReEnrichFieldSheetState extends State<_ReEnrichFieldSheet> {
                     const SizedBox(height: 4),
                     Text(
                       l10n.trackReEnrichManualHint,
-                      style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(color: colorScheme.onSurfaceVariant),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
@@ -406,8 +408,9 @@ class _ReEnrichFieldSheetState extends State<_ReEnrichFieldSheet> {
                   const SizedBox(height: 4),
                   Text(
                     subtitle,
-                    style: Theme.of(context).textTheme.bodyMedium
-                        ?.copyWith(color: scheme.onSurfaceVariant),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),

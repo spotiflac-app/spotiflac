@@ -509,8 +509,9 @@ void main() {
         'muted-playback-',
       );
       addTearDown(() => directory.delete(recursive: true));
-      final file = await File('${directory.path}/song.flac')
-          .writeAsString('audio');
+      final file = await File(
+        '${directory.path}/song.flac',
+      ).writeAsString('audio');
       final volume = StreamController<double>.broadcast();
       addTearDown(volume.close);
       final runtime = _runtime(
@@ -722,8 +723,9 @@ void main() {
         'queued-deletion-',
       );
       addTearDown(() => directory.delete(recursive: true));
-      final file = await File('${directory.path}/one.flac')
-          .writeAsString('audio');
+      final file = await File(
+        '${directory.path}/one.flac',
+      ).writeAsString('audio');
       final events = SourceDeletionEvents();
       final runtimes = [
         _runtime(sourceDeletionEvents: events),
@@ -758,8 +760,9 @@ void main() {
         'cached-deletion-',
       );
       addTearDown(() => directory.delete(recursive: true));
-      final cached = await File('${directory.path}/copy.flac')
-          .writeAsString('audio');
+      final cached = await File(
+        '${directory.path}/copy.flac',
+      ).writeAsString('audio');
       const channel = MethodChannel('com.spotiflac.app/backend');
       final messenger =
           TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
@@ -795,8 +798,9 @@ void main() {
   test('failed player stop cannot undo a confirmed storage deletion', () async {
     final directory = await Directory.systemTemp.createTemp('failed-reaction-');
     addTearDown(() => directory.delete(recursive: true));
-    final file = await File('${directory.path}/song.flac')
-        .writeAsString('audio');
+    final file = await File(
+      '${directory.path}/song.flac',
+    ).writeAsString('audio');
     final events = SourceDeletionEvents();
     final decks = <_Deck>[];
     final runtime = _runtime(decks: decks, sourceDeletionEvents: events);
@@ -822,10 +826,12 @@ void main() {
         'pending-deletion-',
       );
       addTearDown(() => directory.delete(recursive: true));
-      final stale = await File('${directory.path}/stale.flac')
-          .writeAsString('old');
-      final replacement = await File('${directory.path}/new.flac')
-          .writeAsString('new');
+      final stale = await File(
+        '${directory.path}/stale.flac',
+      ).writeAsString('old');
+      final replacement = await File(
+        '${directory.path}/new.flac',
+      ).writeAsString('new');
       final copying = Completer<void>();
       final release = Completer<String>();
       const channel = MethodChannel('com.spotiflac.app/backend');

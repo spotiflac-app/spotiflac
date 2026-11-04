@@ -92,15 +92,17 @@ class AppSliverHeader extends StatelessWidget {
                   leading ??
                   (context.isSpotiFLAC
                       ? AppIconButton(
-                          tooltip: MaterialLocalizations.of(context)
-                              .backButtonTooltip,
+                          tooltip: MaterialLocalizations.of(
+                            context,
+                          ).backButtonTooltip,
                           icon: const AppIcon(Icons.chevron_left),
                           onPressed: () => Navigator.pop(context),
                         )
                       // Expressive app bars hold navigation in a tonal circle.
                       : AppIconButton.filledTonal(
-                          tooltip: MaterialLocalizations.of(context)
-                              .backButtonTooltip,
+                          tooltip: MaterialLocalizations.of(
+                            context,
+                          ).backButtonTooltip,
                           icon: const AppIcon(Icons.arrow_back),
                           style: ButtonStyle(
                             backgroundColor: WidgetStatePropertyAll(

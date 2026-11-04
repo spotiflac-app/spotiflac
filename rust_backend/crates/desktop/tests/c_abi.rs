@@ -2,11 +2,11 @@
 //! The library keeps process-wide state, so every test shares one
 //! initialization and uses its own call IDs.
 
+use serde_json::{Value, json};
 use spotiflac_desktop::{
     implemented_methods, kind, spotiflac_call, spotiflac_cancel, spotiflac_free, spotiflac_init,
     spotiflac_subscribe, spotiflac_unsubscribe,
 };
-use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
 use std::ffi::CString;
 use std::path::PathBuf;

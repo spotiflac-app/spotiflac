@@ -1,9 +1,10 @@
 import 'package:spotiflac/services/platform_bridge.dart';
 
-typedef NativeCacheJobRunner = Future<Map<String, dynamic>> Function(
-  Map<String, dynamic> request, {
-  String? requestId,
-});
+typedef NativeCacheJobRunner =
+    Future<Map<String, dynamic>> Function(
+      Map<String, dynamic> request, {
+      String? requestId,
+    });
 
 /// Returns null on the desktop adapter. Mobile filesystem work uses the
 /// existing cancellable native worker without changing the public FFI API.

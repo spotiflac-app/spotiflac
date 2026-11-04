@@ -77,8 +77,9 @@ void main() {
   test(
     'container hints cannot override measured FLAC or lossy audio',
     () async {
-      final source = await File('${directory.path}/Song.m4a')
-          .writeAsString('MP4');
+      final source = await File(
+        '${directory.path}/Song.m4a',
+      ).writeAsString('MP4');
       for (final codec in ['flac', 'aac', 'eac3']) {
         for (final raw in <Map<String, dynamic>>[
           {'audio_codec': 'm4a'},
@@ -106,8 +107,9 @@ void main() {
   test(
     'actual stream decisions follow the shared native conversion cases',
     () async {
-      final source = await File('${directory.path}/Song.m4a')
-          .writeAsString('MP4');
+      final source = await File(
+        '${directory.path}/Song.m4a',
+      ).writeAsString('MP4');
       for (final row in File(
         'android/app/src/test/resources/finalization_container_cases.tsv',
       ).readAsLinesSync()) {
@@ -143,20 +145,23 @@ void main() {
     'FLAC-in-MP4 is remuxed while actual native FLAC is renamed and tagged',
     () async {
       for (final native in [false, true]) {
-        final source = await File('${directory.path}/Song.m4a')
-            .writeAsString(native ? 'fLaCaudio' : 'MP4audio');
+        final source = await File(
+          '${directory.path}/Song.m4a',
+        ).writeAsString(native ? 'fLaCaudio' : 'MP4audio');
         final events = <String>[];
         final stage = finalizer(
           probe: (_) async => 'flac',
           rename: (path) async {
             events.add('rename');
-            return (await File(path).rename('${directory.path}/Song.flac'))
-                .path;
+            return (await File(
+              path,
+            ).rename('${directory.path}/Song.flac')).path;
           },
           convert: (path) async {
             events.add('remux');
-            final output = await File('${directory.path}/Song.flac')
-                .writeAsString('fLaCaudio');
+            final output = await File(
+              '${directory.path}/Song.flac',
+            ).writeAsString('fLaCaudio');
             await File(path).delete();
             return output.path;
           },
@@ -193,8 +198,9 @@ void main() {
   test(
     'deferred SAF keeps the logical name with the finalized FLAC suffix',
     () async {
-      final source = await File('${directory.path}/native_saf_work_123.m4a')
-          .writeAsString('MP4audio');
+      final source = await File(
+        '${directory.path}/native_saf_work_123.m4a',
+      ).writeAsString('MP4audio');
       final outputPath = '${directory.path}/native_saf_work_123.flac';
       final result = DownloadResult.fromMap({
         'file_name': 'Artist - Song.m4a',

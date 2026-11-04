@@ -491,8 +491,9 @@ class _SetupScreenState extends ConsumerState<SetupScreen>
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
               child: Text(
                 context.l10n.setupDownloadLocationIosMessage,
-                style: Theme.of(context).textTheme.bodyMedium
-                    ?.copyWith(color: colorScheme.onSurfaceVariant),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
               ),
             ),
             ListTile(

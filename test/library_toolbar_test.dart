@@ -177,8 +177,9 @@ void main() {
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context)
-                .copyWith(disableAnimations: reduceMotion),
+            data: MediaQuery.of(
+              context,
+            ).copyWith(disableAnimations: reduceMotion),
             child: child!,
           ),
           // SpotiFLAC opens Songs as a section page from its Library root.

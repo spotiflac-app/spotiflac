@@ -3,8 +3,8 @@
 use super::{RecordStore, RuntimeHints, protocol};
 use crate::auth::{AuthRegistry, PendingAuthRequest};
 use crate::manifest::SignedSession;
-use spotiflac_network::{HttpRequest, HttpResponse, NetworkSession};
 use serde_json::{Value, json};
+use spotiflac_network::{HttpRequest, HttpResponse, NetworkSession};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};

@@ -312,8 +312,9 @@ void main() {
       where: 'id = ?',
       whereArgs: ['download-0-1'],
     );
-    await LibraryFileSizes(db)
-        .refresh(includeLocal: false, includeHistory: true);
+    await LibraryFileSizes(
+      db,
+    ).refresh(includeLocal: false, includeHistory: true);
     expect(
       (await db.query(
         'history_db.track_file_sizes',
@@ -329,16 +330,18 @@ void main() {
     () async {
       final root = await Directory.systemTemp.createTemp('library-size-');
       addTearDown(() => root.delete(recursive: true));
-      final file = await File('${root.path}/example.flac')
-          .writeAsBytes(List.filled(37, 0));
+      final file = await File(
+        '${root.path}/example.flac',
+      ).writeAsBytes(List.filled(37, 0));
       await db.update(
         'history_db.history',
         {'file_path': file.path},
         where: 'id = ?',
         whereArgs: ['download-0-1'],
       );
-      await LibraryFileSizes(db)
-          .refresh(includeLocal: false, includeHistory: true);
+      await LibraryFileSizes(
+        db,
+      ).refresh(includeLocal: false, includeHistory: true);
       final row = (await db.query(
         'history_db.track_file_sizes',
         where: 'item_id = ?',

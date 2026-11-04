@@ -90,8 +90,9 @@ class AlbumDescription extends StatelessWidget {
                         icon: context.isSpotiFLAC
                             ? CupertinoIcons.xmark
                             : Icons.close,
-                        tooltip: MaterialLocalizations.of(context)
-                            .closeButtonTooltip,
+                        tooltip: MaterialLocalizations.of(
+                          context,
+                        ).closeButtonTooltip,
                         onPressed: () => Navigator.of(context).pop(),
                       ),
                       Expanded(
@@ -147,8 +148,9 @@ class AlbumDescription extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          var effectiveStyle = DefaultTextStyle.of(context).style
-              .merge(previewStyle);
+          var effectiveStyle = DefaultTextStyle.of(
+            context,
+          ).style.merge(previewStyle);
           if (MediaQuery.boldTextOf(context)) {
             effectiveStyle = effectiveStyle.merge(
               const TextStyle(fontWeight: FontWeight.bold),

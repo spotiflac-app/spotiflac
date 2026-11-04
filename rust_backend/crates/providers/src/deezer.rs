@@ -5,6 +5,7 @@ mod cache;
 mod extended;
 
 use crate::resolver::{Check, ResolverError, http::ResolverHttp};
+use serde::de::DeserializeOwned;
 use spotiflac_core::{
     lyrics,
     metadata::{
@@ -13,7 +14,6 @@ use spotiflac_core::{
     },
 };
 use spotiflac_network::NetworkService;
-use serde::de::DeserializeOwned;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime};

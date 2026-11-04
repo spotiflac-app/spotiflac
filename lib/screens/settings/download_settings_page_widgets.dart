@@ -68,8 +68,9 @@ class _RegionPickerSheetState extends State<_RegionPickerSheet> {
                       padding: const EdgeInsets.all(24),
                       child: Text(
                         context.l10n.searchEmptyResultSubtitle,
-                        style: Theme.of(context).textTheme.bodyMedium
-                            ?.copyWith(color: colorScheme.onSurfaceVariant),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ),
                   ],
@@ -166,8 +167,9 @@ class _ServiceSelector extends ConsumerWidget {
                 Expanded(
                   child: Text(
                     context.l10n.extensionsNoDownloadProvider,
-                    style: Theme.of(context).textTheme.bodyMedium
-                        ?.copyWith(color: colorScheme.onSurfaceVariant),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
               ],
@@ -251,8 +253,9 @@ class _MetadataSourceSelector extends ConsumerWidget {
         children: [
           Text(
             context.l10n.optionsPrimaryProvider,
-            style: Theme.of(context).textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.w500),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w500),
           ),
           const SizedBox(height: 4),
           Text(
@@ -321,8 +324,9 @@ class _DefaultSearchTabSelector extends ConsumerWidget {
         children: [
           Text(
             context.l10n.optionsDefaultSearchTab,
-            style: Theme.of(context).textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.w500),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w500),
           ),
           const SizedBox(height: 4),
           Text(

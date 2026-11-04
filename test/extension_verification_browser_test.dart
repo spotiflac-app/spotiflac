@@ -82,7 +82,8 @@ void main() {
             if (searches == 1) {
               throw PlatformException(
                 code: 'ERROR',
-                message: "verification_required: extension 'sample-provider' needs signed-session verification: Error: VERIFY_REQUIRED",
+                message:
+                    "verification_required: extension 'sample-provider' needs signed-session verification: Error: VERIFY_REQUIRED",
               );
             }
             return [

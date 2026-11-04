@@ -64,256 +64,250 @@ final _albums = List.generate(
 void main() {
   final binding = PerformanceTestBinding.ensureInitialized();
 
-  testWidgets(
-    'SpotiFLAC production screens with deterministic 2000-track data',
-    (tester) async {
-      final probe = PerformanceProbe(
-        binding,
-        tester,
-        suite: 'spotiflac_screens',
-      );
-      final preferences = (await tester.runAsync(
-        SharedPreferences.getInstance,
-      ))!;
-      final settingsBefore = preferences.getString('app_settings');
-      const databaseChannel = MethodChannel('com.tekartik.sqflite');
-      final databaseCalls = <String>[];
-      final messenger =
-          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-      messenger.setMockMethodCallHandler(databaseChannel, (call) async {
-        databaseCalls.add(call.method);
-        fail('Unexpected database call: ${call.method}');
-      });
-      addTearDown(
-        () => messenger.setMockMethodCallHandler(databaseChannel, null),
-      );
-      final index = ValueNotifier(0);
-      addTearDown(index.dispose);
-      final requests = <LibraryBrowseRequest>[];
-      final pageOffsets = <int>[];
-      final search = _Search();
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            settingsProvider.overrideWith(_Settings.new),
-            libraryCollectionsProvider.overrideWith(_Collections.new),
-            extensionProvider.overrideWith(_Extensions.new),
-            exploreProvider.overrideWith(_Explore.new),
-            downloadHistoryProvider.overrideWith(_History.new),
-            downloadHistoryBatchExistsProvider.overrideWith(
-              (ref, request) async => <String>{},
-            ),
-            downloadQueueProvider.overrideWith(_Queue.new),
-            recentAccessProvider.overrideWith(_Recent.new),
-            trackProvider.overrideWith(() => search),
-            userProfileProvider.overrideWith(_Profile.new),
-            currentMediaItemProvider.overrideWithBuild(
-              (ref, notifier) => Stream.value(null),
-            ),
-            libraryBrowsePageLoaderProvider.overrideWithValue((page) async {
-              final request = page.browse;
-              requests.add(request);
-              pageOffsets.add(page.offset);
-              final rows = _albums.where((album) {
-                return '${album.name} ${album.artist}'.toLowerCase().contains(
-                      request.search.toLowerCase(),
-                    ) &&
-                    (request.completeness == null ||
-                        album.completeness!.status ==
-                            (request.completeness == incompleteAlbumFilter
-                                ? 'incomplete'
-                                : 'unknown'));
-              }).toList();
-              if (request.sort == 'latest') {
-                return LibraryBrowsePage(
-                  rows.reversed.skip(page.offset).take(request.limit).toList(),
-                );
-              }
-              return LibraryBrowsePage(
-                rows.skip(page.offset).take(request.limit).toList(),
-              );
-            }),
-          ],
-          child: MaterialApp(
-            theme: SpotiFLACTheme.build(Brightness.dark),
-            locale: const Locale('en'),
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            home: _Tabs(index: index),
+  testWidgets('SpotiFLAC production screens with deterministic 2000-track data', (
+    tester,
+  ) async {
+    final probe = PerformanceProbe(binding, tester, suite: 'spotiflac_screens');
+    final preferences = (await tester.runAsync(SharedPreferences.getInstance))!;
+    final settingsBefore = preferences.getString('app_settings');
+    const databaseChannel = MethodChannel('com.tekartik.sqflite');
+    final databaseCalls = <String>[];
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(databaseChannel, (call) async {
+      databaseCalls.add(call.method);
+      fail('Unexpected database call: ${call.method}');
+    });
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(databaseChannel, null),
+    );
+    final index = ValueNotifier(0);
+    addTearDown(index.dispose);
+    final requests = <LibraryBrowseRequest>[];
+    final pageOffsets = <int>[];
+    final search = _Search();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          settingsProvider.overrideWith(_Settings.new),
+          libraryCollectionsProvider.overrideWith(_Collections.new),
+          extensionProvider.overrideWith(_Extensions.new),
+          exploreProvider.overrideWith(_Explore.new),
+          downloadHistoryProvider.overrideWith(_History.new),
+          downloadHistoryBatchExistsProvider.overrideWith(
+            (ref, request) async => <String>{},
           ),
+          downloadQueueProvider.overrideWith(_Queue.new),
+          recentAccessProvider.overrideWith(_Recent.new),
+          trackProvider.overrideWith(() => search),
+          userProfileProvider.overrideWith(_Profile.new),
+          currentMediaItemProvider.overrideWithBuild(
+            (ref, notifier) => Stream.value(null),
+          ),
+          libraryBrowsePageLoaderProvider.overrideWithValue((page) async {
+            final request = page.browse;
+            requests.add(request);
+            pageOffsets.add(page.offset);
+            final rows = _albums.where((album) {
+              return '${album.name} ${album.artist}'.toLowerCase().contains(
+                    request.search.toLowerCase(),
+                  ) &&
+                  (request.completeness == null ||
+                      album.completeness!.status ==
+                          (request.completeness == incompleteAlbumFilter
+                              ? 'incomplete'
+                              : 'unknown'));
+            }).toList();
+            if (request.sort == 'latest') {
+              return LibraryBrowsePage(
+                rows.reversed.skip(page.offset).take(request.limit).toList(),
+              );
+            }
+            return LibraryBrowsePage(
+              rows.skip(page.offset).take(request.limit).toList(),
+            );
+          }),
+        ],
+        child: MaterialApp(
+          theme: SpotiFLACTheme.build(Brightness.dark),
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: _Tabs(index: index),
         ),
-      );
-      await tester.runAsync(() => probe.wait(const Duration(seconds: 1)));
+      ),
+    );
+    await tester.runAsync(() => probe.wait(const Duration(seconds: 1)));
 
-      Future<void> select(int value) async {
-        FocusManager.instance.primaryFocus?.unfocus();
-        index.value = value;
+    Future<void> select(int value) async {
+      FocusManager.instance.primaryFocus?.unfocus();
+      index.value = value;
+      await probe.wait(const Duration(milliseconds: 350));
+    }
+
+    Future<void> scrollRoundTrip() async {
+      final scrollable = find.byType(Scrollable).hitTestable().first;
+      final position = tester.state<ScrollableState>(scrollable).position;
+      position.jumpTo(0);
+      await probe.wait(const Duration(milliseconds: 100));
+      await position.animateTo(
+        position.maxScrollExtent.clamp(0.0, 2400.0),
+        duration: const Duration(milliseconds: 900),
+        curve: Curves.linear,
+      );
+      await position.animateTo(
+        0,
+        duration: const Duration(milliseconds: 900),
+        curve: Curves.linear,
+      );
+      await probe.wait(const Duration(milliseconds: 200));
+    }
+
+    await tester.runAsync(() async {
+      await select(1);
+      expect(find.byType(QueueTab), findsOneWidget);
+      await tester.tap(find.text('Albums').hitTestable().first);
+      await probe.wait(const Duration(milliseconds: 500));
+      final position = tester
+          .state<ScrollableState>(find.byType(Scrollable).hitTestable().first)
+          .position;
+      for (var page = 0; page < 4; page++) {
+        position.jumpTo(position.maxScrollExtent);
+        await probe.wait(const Duration(milliseconds: 250));
+      }
+      position.jumpTo(0);
+      expect(requests.last.limit, 40);
+      expect(pageOffsets.last, 160);
+    });
+    await probe.measure(
+      'library_album_grid_scroll_2000_tracks',
+      scrollRoundTrip,
+      warmup: scrollRoundTrip,
+    );
+
+    Future<void> filterRoundTrip() async {
+      for (final label in [
+        'Incomplete albums',
+        'Album completeness unknown',
+        'All',
+      ]) {
+        await tester.tap(find.byTooltip('Filters').hitTestable());
+        await probe.wait(const Duration(milliseconds: 350));
+        await tester.tap(find.text(label).hitTestable().last);
         await probe.wait(const Duration(milliseconds: 350));
       }
+      expect(requests.last.completeness, isNull);
+    }
 
-      Future<void> scrollRoundTrip() async {
-        final scrollable = find.byType(Scrollable).hitTestable().first;
-        final position = tester.state<ScrollableState>(scrollable).position;
-        position.jumpTo(0);
+    await probe.measure(
+      'library_album_completeness_filters',
+      filterRoundTrip,
+      warmup: filterRoundTrip,
+    );
+    await tester.runAsync(() async {
+      await tester.tap(find.byTooltip('Search your library').hitTestable());
+      await probe.wait(const Duration(milliseconds: 400));
+      FocusManager.instance.primaryFocus?.unfocus();
+    });
+    Future<void> librarySearchRoundTrip() async {
+      final field = tester.widget<AppSearchField>(
+        find.byType(AppSearchField).hitTestable(),
+      );
+      field.controller.text = 'Album 01';
+      field.onChanged?.call('Album 01');
+      await probe.wait(const Duration(milliseconds: 500));
+      expect(requests.last.search, 'Album 01');
+      await tester.tap(find.byTooltip('Clear').hitTestable());
+      await probe.wait(const Duration(milliseconds: 500));
+      expect(requests.last.search, isEmpty);
+    }
+
+    await probe.measure(
+      'library_album_search_clear',
+      librarySearchRoundTrip,
+      warmup: librarySearchRoundTrip,
+    );
+    await tester.runAsync(() async {
+      Navigator.of(
+        tester.element(find.byType(Scrollable).hitTestable().first),
+      ).pop();
+      await probe.wait(const Duration(milliseconds: 500));
+      await select(3);
+    });
+    await probe.measure(
+      'queue_downloads_scroll_2000_tracks',
+      scrollRoundTrip,
+      warmup: scrollRoundTrip,
+    );
+
+    await tester.runAsync(() => select(2));
+    Future<void> searchRoundTrip() async {
+      final field = tester.widget<AppSearchField>(
+        find.byType(AppSearchField).hitTestable(),
+      );
+      for (final query in ['Fixture', 'Fixture song', 'Fixture song 1']) {
+        field.controller.text = query;
+        field.onChanged?.call(query);
         await probe.wait(const Duration(milliseconds: 100));
-        await position.animateTo(
-          position.maxScrollExtent.clamp(0.0, 2400.0),
-          duration: const Duration(milliseconds: 900),
-          curve: Curves.linear,
-        );
-        await position.animateTo(
-          0,
-          duration: const Duration(milliseconds: 900),
-          curve: Curves.linear,
-        );
-        await probe.wait(const Duration(milliseconds: 200));
       }
+      await probe.wait(const Duration(milliseconds: 900));
+      expect(search._resultCount, greaterThan(0));
+      await tester.tap(find.byTooltip('Clear').hitTestable());
+      await probe.wait(const Duration(milliseconds: 400));
+      expect(field.controller.text, isEmpty);
+    }
 
-      await tester.runAsync(() async {
-        await select(1);
-        expect(find.byType(QueueTab), findsOneWidget);
-        await tester.tap(find.text('Albums').hitTestable().first);
-        await probe.wait(const Duration(milliseconds: 500));
-        final position = tester
-            .state<ScrollableState>(find.byType(Scrollable).hitTestable().first)
-            .position;
-        for (var page = 0; page < 4; page++) {
-          position.jumpTo(position.maxScrollExtent);
-          await probe.wait(const Duration(milliseconds: 250));
-        }
-        position.jumpTo(0);
-        expect(requests.last.limit, 40);
-        expect(pageOffsets.last, 160);
-      });
-      await probe.measure(
-        'library_album_grid_scroll_2000_tracks',
-        scrollRoundTrip,
-        warmup: scrollRoundTrip,
-      );
-
-      Future<void> filterRoundTrip() async {
-        for (final label in [
-          'Incomplete albums',
-          'Album completeness unknown',
-          'All',
-        ]) {
-          await tester.tap(find.byTooltip('Filters').hitTestable());
-          await probe.wait(const Duration(milliseconds: 350));
-          await tester.tap(find.text(label).hitTestable().last);
-          await probe.wait(const Duration(milliseconds: 350));
-        }
-        expect(requests.last.completeness, isNull);
-      }
-
-      await probe.measure(
-        'library_album_completeness_filters',
-        filterRoundTrip,
-        warmup: filterRoundTrip,
-      );
-      await tester.runAsync(() async {
-        await tester.tap(find.byTooltip('Search your library').hitTestable());
-        await probe.wait(const Duration(milliseconds: 400));
-        FocusManager.instance.primaryFocus?.unfocus();
-      });
-      Future<void> librarySearchRoundTrip() async {
-        final field = tester.widget<AppSearchField>(
-          find.byType(AppSearchField).hitTestable(),
-        );
-        field.controller.text = 'Album 01';
-        field.onChanged?.call('Album 01');
-        await probe.wait(const Duration(milliseconds: 500));
-        expect(requests.last.search, 'Album 01');
-        await tester.tap(find.byTooltip('Clear').hitTestable());
-        await probe.wait(const Duration(milliseconds: 500));
-        expect(requests.last.search, isEmpty);
-      }
-
-      await probe.measure(
-        'library_album_search_clear',
-        librarySearchRoundTrip,
-        warmup: librarySearchRoundTrip,
-      );
-      await tester.runAsync(() async {
-        Navigator.of(
-          tester.element(find.byType(Scrollable).hitTestable().first),
-        ).pop();
-        await probe.wait(const Duration(milliseconds: 500));
-        await select(3);
-      });
-      await probe.measure(
-        'queue_downloads_scroll_2000_tracks',
-        scrollRoundTrip,
-        warmup: scrollRoundTrip,
-      );
-
-      await tester.runAsync(() => select(2));
-      Future<void> searchRoundTrip() async {
-        final field = tester.widget<AppSearchField>(
-          find.byType(AppSearchField).hitTestable(),
-        );
-        for (final query in ['Fixture', 'Fixture song', 'Fixture song 1']) {
-          field.controller.text = query;
-          field.onChanged?.call(query);
-          await probe.wait(const Duration(milliseconds: 100));
-        }
-        await probe.wait(const Duration(milliseconds: 900));
-        expect(search._resultCount, greaterThan(0));
-        await tester.tap(find.byTooltip('Clear').hitTestable());
-        await probe.wait(const Duration(milliseconds: 400));
-        expect(field.controller.text, isEmpty);
-      }
-
-      await probe.measure(
-        'home_search_input_results_clear',
-        searchRoundTrip,
-        warmup: searchRoundTrip,
-      );
-      Future<void> tabRoundTrip() async {
-        for (final value in [0, 1, 2, 3, 0]) {
-          await tester.tap(
-            find.descendant(
-              of: find.byType(SpotiFLACTabBar),
-              matching: find.text(
-                ['Home', 'Library', 'Search', 'Downloads'][value],
-              ),
+    await probe.measure(
+      'home_search_input_results_clear',
+      searchRoundTrip,
+      warmup: searchRoundTrip,
+    );
+    Future<void> tabRoundTrip() async {
+      for (final value in [0, 1, 2, 3, 0]) {
+        await tester.tap(
+          find.descendant(
+            of: find.byType(SpotiFLACTabBar),
+            matching: find.text(
+              ['Home', 'Library', 'Search', 'Downloads'][value],
             ),
-          );
-          await probe.wait(const Duration(milliseconds: 350));
-          expect(index.value, value);
-        }
-      }
-
-      await probe.measure(
-        'lazy_tab_view_retained_production_tabs',
-        tabRoundTrip,
-        warmup: tabRoundTrip,
-      );
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.runAsync(() async {
+          ),
+        );
         await probe.wait(const Duration(milliseconds: 350));
-        await preferences.reload();
-      });
-      expect(preferences.getString('app_settings'), settingsBefore);
-      expect(databaseCalls, isEmpty);
-      await probe.finish(
-        metadata: {
-          'scope': 'Production QueueTab, SpotiFLACLibraryScreen, HomeTab, LazyTabView and SpotiFLACTabBar; synthetic provider data, no artwork/network/database/IME.',
-          'trackCount': _tracks.length,
-          'albumCount': _albums.length,
-          'queueCount': 2000,
-          'searchResultLimit': 80,
-          'browseRequests': requests.length,
-          'maximumBrowseLimit': requests
-              .map((request) => request.limit)
-              .reduce((a, b) => a > b ? a : b),
-          'searchRequests': search._requests,
-          'settingsUnchanged': true,
-          'databaseCalls': databaseCalls.length,
-        },
-      );
-    },
-  );
+        expect(index.value, value);
+      }
+    }
+
+    await probe.measure(
+      'lazy_tab_view_retained_production_tabs',
+      tabRoundTrip,
+      warmup: tabRoundTrip,
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.runAsync(() async {
+      await probe.wait(const Duration(milliseconds: 350));
+      await preferences.reload();
+    });
+    expect(preferences.getString('app_settings'), settingsBefore);
+    expect(databaseCalls, isEmpty);
+    await probe.finish(
+      metadata: {
+        'scope':
+            'Production QueueTab, SpotiFLACLibraryScreen, HomeTab, LazyTabView and SpotiFLACTabBar; synthetic provider data, no artwork/network/database/IME.',
+        'trackCount': _tracks.length,
+        'albumCount': _albums.length,
+        'queueCount': 2000,
+        'searchResultLimit': 80,
+        'browseRequests': requests.length,
+        'maximumBrowseLimit': requests
+            .map((request) => request.limit)
+            .reduce((a, b) => a > b ? a : b),
+        'searchRequests': search._requests,
+        'settingsUnchanged': true,
+        'databaseCalls': databaseCalls.length,
+      },
+    );
+  });
 }
 
 class _Tabs extends StatelessWidget {

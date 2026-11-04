@@ -225,8 +225,9 @@ class _RepoTabState extends ConsumerState<RepoTab> {
                       context.l10n.storeExtensionsCount(
                         filteredExtensions.length,
                       ),
-                      style: Theme.of(context).textTheme.bodyMedium
-                          ?.copyWith(color: colorScheme.onSurfaceVariant),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ),
                 ),
@@ -374,8 +375,9 @@ class _RepoTabState extends ConsumerState<RepoTab> {
               const SizedBox(height: 24),
               Text(
                 context.l10n.storeAddRepoTitle,
-                style: Theme.of(context).textTheme.headlineSmall
-                    ?.copyWith(fontWeight: FontWeight.bold),
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 32),
@@ -486,8 +488,10 @@ class _RepoTabState extends ConsumerState<RepoTab> {
             const SizedBox(height: 4),
             Text(
               currentUrl,
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(fontFamily: 'monospace', fontSize: 11),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontFamily: 'monospace',
+                fontSize: 11,
+              ),
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
             ),
@@ -531,9 +535,9 @@ class _RepoTabState extends ConsumerState<RepoTab> {
                     ),
                   ),
                   filled: true,
-                  fillColor: Theme.of(context)
-                      .colorScheme
-                      .surfaceContainerHighest,
+                  fillColor: Theme.of(
+                    context,
+                  ).colorScheme.surfaceContainerHighest,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 20,
                     vertical: 16,
@@ -593,8 +597,9 @@ class _RepoTabState extends ConsumerState<RepoTab> {
             const SizedBox(height: 8),
             Text(
               context.friendlyError(error),
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: colorScheme.onSurfaceVariant),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
@@ -628,8 +633,9 @@ class _RepoTabState extends ConsumerState<RepoTab> {
             hasFilters
                 ? context.l10n.storeEmptyNoResults
                 : context.l10n.storeEmptyNoExtensions,
-            style: Theme.of(context).textTheme.titleMedium
-                ?.copyWith(color: colorScheme.onSurfaceVariant),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
           ),
           if (hasFilters) ...[
             const SizedBox(height: 8),
@@ -960,8 +966,9 @@ class _ExtensionItem extends StatelessWidget {
             ),
             child: Text(
               'v${extension.version}',
-              style: Theme.of(context).textTheme.labelSmall
-                  ?.copyWith(color: colorScheme.onSurfaceVariant),
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
         ],
@@ -996,8 +1003,9 @@ class _ExtensionItem extends StatelessWidget {
             )
           : Text(
               extension.description,
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: colorScheme.onSurfaceVariant),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),

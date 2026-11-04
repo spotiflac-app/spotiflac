@@ -9,38 +9,38 @@ import 'package:path/path.dart' as p;
 /// Absolute library path that takes precedence over the bundled location.
 const desktopBackendLibraryEnvironmentKey = 'SPOTIFLAC_DESKTOP_LIB';
 
-typedef _CallbackNative = Void Function(
-  Uint64 id,
-  Int32 kind,
-  Pointer<Uint8> data,
-  Size len,
-);
-typedef _InitNative = Void Function(
-  Pointer<NativeFunction<_CallbackNative>> callback,
-  Pointer<Uint8> config,
-  Size len,
-);
-typedef _InitDart = void Function(
-  Pointer<NativeFunction<_CallbackNative>> callback,
-  Pointer<Uint8> config,
-  int len,
-);
-typedef _CallNative = Void Function(
-  Uint64 id,
-  Pointer<Utf8> method,
-  Pointer<Uint8> args,
-  Size argsLen,
-  Pointer<Uint8> bytes,
-  Size bytesLen,
-);
-typedef _CallDart = void Function(
-  int id,
-  Pointer<Utf8> method,
-  Pointer<Uint8> args,
-  int argsLen,
-  Pointer<Uint8> bytes,
-  int bytesLen,
-);
+typedef _CallbackNative =
+    Void Function(Uint64 id, Int32 kind, Pointer<Uint8> data, Size len);
+typedef _InitNative =
+    Void Function(
+      Pointer<NativeFunction<_CallbackNative>> callback,
+      Pointer<Uint8> config,
+      Size len,
+    );
+typedef _InitDart =
+    void Function(
+      Pointer<NativeFunction<_CallbackNative>> callback,
+      Pointer<Uint8> config,
+      int len,
+    );
+typedef _CallNative =
+    Void Function(
+      Uint64 id,
+      Pointer<Utf8> method,
+      Pointer<Uint8> args,
+      Size argsLen,
+      Pointer<Uint8> bytes,
+      Size bytesLen,
+    );
+typedef _CallDart =
+    void Function(
+      int id,
+      Pointer<Utf8> method,
+      Pointer<Uint8> args,
+      int argsLen,
+      Pointer<Uint8> bytes,
+      int bytesLen,
+    );
 typedef _KindNative = Void Function(Int32 kind);
 typedef _KindDart = void Function(int kind);
 typedef _FreeNative = Void Function(Pointer<Uint8> data, Size len);

@@ -54,8 +54,9 @@ class LocalNetworkAccess {
       return true;
     }
     // A public DNS name can still point at a NAS on the local network.
-    return (await _lookup(host).timeout(const Duration(seconds: 5)))
-        .any(_isLocalAddress);
+    return (await _lookup(
+      host,
+    ).timeout(const Duration(seconds: 5))).any(_isLocalAddress);
   }
 
   static bool _isLocalAddress(InternetAddress address) {

@@ -192,7 +192,9 @@ class PlaybackController extends Notifier<PlaybackState> {
       }
       if (resolvedPaths == null) {
         throw Exception(
-          skippedCueVirtualTrack ? cueVirtualTrackRequiresSplitMessage : 'No local audio file is available to open. Download the track first.',
+          skippedCueVirtualTrack
+              ? cueVirtualTrackRequiresSplitMessage
+              : 'No local audio file is available to open. Download the track first.',
         );
       }
     }

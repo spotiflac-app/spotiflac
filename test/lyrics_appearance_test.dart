@@ -67,8 +67,9 @@ void main() {
             child: MaterialApp(
               theme: theme,
               builder: (context, child) => MediaQuery(
-                data: MediaQuery.of(context)
-                    .copyWith(disableAnimations: reduced),
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(disableAnimations: reduced),
                 child: child!,
               ),
               home: Scaffold(

@@ -89,161 +89,171 @@ void main() {
   final messenger =
       TestWidgetsFlutterBinding.ensureInitialized().defaultBinaryMessenger;
 
-  test('queue counts failures and retries even when its summary notification fails', () async {
-    final directory = await Directory.systemTemp.createTemp('queue-failures-');
-    addTearDown(() => directory.delete(recursive: true));
-    final previousFactory = databaseFactoryOrNull;
-    databaseFactory = databaseFactorySqflitePlugin;
-    addTearDown(() => databaseFactory = previousFactory);
-    AndroidFlutterLocalNotificationsPlugin.registerWith();
-    SharedPreferences.setMockInitialValues({
-      'app_state_migrated_queue_to_sqlite_v1': true,
-    });
-    const backend = MethodChannel('com.spotiflac.app/backend');
-    const sqlite = MethodChannel('com.tekartik.sqflite');
-    const paths = MethodChannel('plugins.flutter.io/path_provider');
-    const notifications = MethodChannel(
-      'dexterous.com/flutter/local_notifications',
-    );
-    const connectivity = MethodChannel(
-      'dev.fluttercommunity.plus/connectivity_status',
-    );
-    const progress = MethodChannel(
-      'com.spotiflac.app/download_progress_stream',
-    );
-    final summaries = <String>[];
-    final attempts = <String>[];
-    final resetIds = <String>[];
-    messenger.setMockMethodCallHandler(paths, (_) async => directory.path);
-    messenger.setMockMethodCallHandler(connectivity, (_) async => null);
-    messenger.setMockMethodCallHandler(progress, (_) async => null);
-    messenger.setMockMethodCallHandler(sqlite, (call) async {
-      if (call.method == 'openDatabase') return {'id': 1};
-      if (call.method != 'query') return null;
-      final sql = (call.arguments as Map)['sql'] as String;
-      return sql.toLowerCase().contains('pragma user_version')
-          ? {
-              'columns': ['user_version'],
-              'rows': [
-                [4],
-              ],
+  test(
+    'queue counts failures and retries even when its summary notification fails',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'queue-failures-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final previousFactory = databaseFactoryOrNull;
+      databaseFactory = databaseFactorySqflitePlugin;
+      addTearDown(() => databaseFactory = previousFactory);
+      AndroidFlutterLocalNotificationsPlugin.registerWith();
+      SharedPreferences.setMockInitialValues({
+        'app_state_migrated_queue_to_sqlite_v1': true,
+      });
+      const backend = MethodChannel('com.spotiflac.app/backend');
+      const sqlite = MethodChannel('com.tekartik.sqflite');
+      const paths = MethodChannel('plugins.flutter.io/path_provider');
+      const notifications = MethodChannel(
+        'dexterous.com/flutter/local_notifications',
+      );
+      const connectivity = MethodChannel(
+        'dev.fluttercommunity.plus/connectivity_status',
+      );
+      const progress = MethodChannel(
+        'com.spotiflac.app/download_progress_stream',
+      );
+      final summaries = <String>[];
+      final attempts = <String>[];
+      final resetIds = <String>[];
+      messenger.setMockMethodCallHandler(paths, (_) async => directory.path);
+      messenger.setMockMethodCallHandler(connectivity, (_) async => null);
+      messenger.setMockMethodCallHandler(progress, (_) async => null);
+      messenger.setMockMethodCallHandler(sqlite, (call) async {
+        if (call.method == 'openDatabase') return {'id': 1};
+        if (call.method != 'query') return null;
+        final sql = (call.arguments as Map)['sql'] as String;
+        return sql.toLowerCase().contains('pragma user_version')
+            ? {
+                'columns': ['user_version'],
+                'rows': [
+                  [4],
+                ],
+              }
+            : {'columns': <String>[], 'rows': <List<Object?>>[]};
+      });
+      messenger.setMockMethodCallHandler(notifications, (call) async {
+        if (call.method == 'initialize') return true;
+        if (call.method == 'show') {
+          final body = (call.arguments as Map)['body'] as String?;
+          if (body != null && body.contains('downloaded,')) {
+            summaries.add(body);
+            if (summaries.length == 1) {
+              throw PlatformException(
+                code: 'notification_unavailable',
+                message: 'Notification server unavailable',
+              );
             }
-          : {'columns': <String>[], 'rows': <List<Object?>>[]};
-    });
-    messenger.setMockMethodCallHandler(notifications, (call) async {
-      if (call.method == 'initialize') return true;
-      if (call.method == 'show') {
-        final body = (call.arguments as Map)['body'] as String?;
-        if (body != null && body.contains('downloaded,')) {
-          summaries.add(body);
-          if (summaries.length == 1) {
-            throw PlatformException(
-              code: 'notification_unavailable',
-              message: 'Notification server unavailable',
-            );
           }
         }
-      }
-      return null;
-    });
-    messenger.setMockMethodCallHandler(backend, (call) async {
-      if (call.method == 'resetDownloadCancel') {
-        resetIds.add((call.arguments as Map)['item_id'] as String);
-      }
-      if (call.method != 'downloadByStrategy') return null;
-      final request = jsonDecode(call.arguments as String) as Map;
-      final id = request['item_id'] as String;
-      attempts.add(id);
-      if (id == 'exception') {
-        throw PlatformException(
-          code: 'fixture',
-          message: 'Fixture processing error',
-        );
-      }
-      return {
-        'success': false,
-        'error': id == 'cancelled' ? 'Cancelled' : 'Fixture track unavailable',
-        'error_type': id == 'cancelled' ? 'cancelled' : 'not_found',
-      };
-    });
-    addTearDown(() {
-      for (final channel in [
-        backend,
-        sqlite,
-        paths,
-        notifications,
-        connectivity,
-        progress,
-      ]) {
-        messenger.setMockMethodCallHandler(channel, null);
-      }
-    });
+        return null;
+      });
+      messenger.setMockMethodCallHandler(backend, (call) async {
+        if (call.method == 'resetDownloadCancel') {
+          resetIds.add((call.arguments as Map)['item_id'] as String);
+        }
+        if (call.method != 'downloadByStrategy') return null;
+        final request = jsonDecode(call.arguments as String) as Map;
+        final id = request['item_id'] as String;
+        attempts.add(id);
+        if (id == 'exception') {
+          throw PlatformException(
+            code: 'fixture',
+            message: 'Fixture processing error',
+          );
+        }
+        return {
+          'success': false,
+          'error': id == 'cancelled'
+              ? 'Cancelled'
+              : 'Fixture track unavailable',
+          'error_type': id == 'cancelled' ? 'cancelled' : 'not_found',
+        };
+      });
+      addTearDown(() {
+        for (final channel in [
+          backend,
+          sqlite,
+          paths,
+          notifications,
+          connectivity,
+          progress,
+        ]) {
+          messenger.setMockMethodCallHandler(channel, null);
+        }
+      });
 
-    final container = ProviderContainer(
-      overrides: [
-        settingsProvider.overrideWith(() => _Settings(directory.path)),
-        extensionProvider.overrideWith(_Extensions.new),
-        downloadQueueProvider.overrideWith(_Queue.new),
-      ],
-    );
-    addTearDown(container.dispose);
-    final queue = container.read(downloadQueueProvider.notifier);
-    queue.pauseQueue(persistAcrossRestarts: false);
-    await queue.flushQueuePersistence();
-    var finished = Completer<void>();
-    container.listen(downloadQueueProvider, (previous, next) {
-      if (previous?.isProcessing == true &&
-          !next.isProcessing &&
-          !finished.isCompleted) {
-        finished.complete();
-      }
-    });
+      final container = ProviderContainer(
+        overrides: [
+          settingsProvider.overrideWith(() => _Settings(directory.path)),
+          extensionProvider.overrideWith(_Extensions.new),
+          downloadQueueProvider.overrideWith(_Queue.new),
+        ],
+      );
+      addTearDown(container.dispose);
+      final queue = container.read(downloadQueueProvider.notifier);
+      queue.pauseQueue(persistAcrossRestarts: false);
+      await queue.flushQueuePersistence();
+      var finished = Completer<void>();
+      container.listen(downloadQueueProvider, (previous, next) {
+        if (previous?.isProcessing == true &&
+            !next.isProcessing &&
+            !finished.isCompleted) {
+          finished.complete();
+        }
+      });
 
-    queue.resumeQueue();
-    await finished.future.timeout(const Duration(seconds: 10));
-    final first = container.read(downloadQueueProvider);
-    expect(attempts, ['backend-failure', 'exception', 'cancelled']);
-    expect(first.lookup.failedCount, 4);
-    expect(first.lookup.byItemId['cancelled']!.status, DownloadStatus.skipped);
-    expect(
-      first.lookup.byItemId['backend-failure']!.errorType,
-      DownloadErrorType.notFound,
-    );
-    expect(
-      first.lookup.byItemId['exception']!.error,
-      contains('Fixture processing error'),
-    );
-    expect(
-      first.lookup.byItemId['network-failure']!.error,
-      startsWith('Network download failed. Retry keeps prepared audio:'),
-    );
-    expect(
-      first.lookup.byItemId['unavailable']!.error,
-      'Download provider is no longer available',
-    );
-    // Provider availability failures and cancellation have never contributed
-    // to the session failure total, even though the queue retains their rows.
-    expect(summaries, ['0 downloaded, 3 failed']);
-    expect(
-      LogBuffer().entries.where(
-        (entry) => entry.message.contains('Download queue processing failed'),
-      ),
-      isEmpty,
-    );
+      queue.resumeQueue();
+      await finished.future.timeout(const Duration(seconds: 10));
+      final first = container.read(downloadQueueProvider);
+      expect(attempts, ['backend-failure', 'exception', 'cancelled']);
+      expect(first.lookup.failedCount, 4);
+      expect(
+        first.lookup.byItemId['cancelled']!.status,
+        DownloadStatus.skipped,
+      );
+      expect(
+        first.lookup.byItemId['backend-failure']!.errorType,
+        DownloadErrorType.notFound,
+      );
+      expect(
+        first.lookup.byItemId['exception']!.error,
+        contains('Fixture processing error'),
+      );
+      expect(
+        first.lookup.byItemId['network-failure']!.error,
+        startsWith('Network download failed. Retry keeps prepared audio:'),
+      );
+      expect(
+        first.lookup.byItemId['unavailable']!.error,
+        'Download provider is no longer available',
+      );
+      // Provider availability failures and cancellation have never contributed
+      // to the session failure total, even though the queue retains their rows.
+      expect(summaries, ['0 downloaded, 3 failed']);
+      expect(
+        LogBuffer().entries.where(
+          (entry) => entry.message.contains('Download queue processing failed'),
+        ),
+        isEmpty,
+      );
 
-    finished = Completer<void>();
-    await queue.retryItem('backend-failure');
-    await finished.future.timeout(const Duration(seconds: 10));
-    expect(resetIds, ['backend-failure']);
-    expect(attempts, [
-      'backend-failure',
-      'exception',
-      'cancelled',
-      'backend-failure',
-    ]);
-    expect(container.read(downloadQueueProvider).lookup.failedCount, 4);
-    expect(summaries, ['0 downloaded, 3 failed', '0 downloaded, 1 failed']);
-    await queue.flushQueuePersistence();
-    await (await AppStateDatabase.instance.database).close();
-  });
+      finished = Completer<void>();
+      await queue.retryItem('backend-failure');
+      await finished.future.timeout(const Duration(seconds: 10));
+      expect(resetIds, ['backend-failure']);
+      expect(attempts, [
+        'backend-failure',
+        'exception',
+        'cancelled',
+        'backend-failure',
+      ]);
+      expect(container.read(downloadQueueProvider).lookup.failedCount, 4);
+      expect(summaries, ['0 downloaded, 3 failed', '0 downloaded, 1 failed']);
+      await queue.flushQueuePersistence();
+      await (await AppStateDatabase.instance.database).close();
+    },
+  );
 }

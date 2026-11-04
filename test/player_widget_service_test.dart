@@ -283,8 +283,9 @@ void main() {
       player.mediaItem.add(media);
       player.playbackState.add(
         PlaybackState(
-          controls: const PlaybackNotification(spotiflac: true)
-              .controls(playing: true, item: media),
+          controls: const PlaybackNotification(
+            spotiflac: true,
+          ).controls(playing: true, item: media),
         ),
       );
       await settle();

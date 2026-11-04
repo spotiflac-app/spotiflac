@@ -246,8 +246,9 @@ void main() {
       final bassBoost = EqualizerPreset.builtIn.firstWhere(
         (preset) => preset.name == 'Bass boost',
       );
-      playbackEqualizer.value = const EqualizerSettings(enabled: true)
-          .withToneOf(bassBoost.settings);
+      playbackEqualizer.value = const EqualizerSettings(
+        enabled: true,
+      ).withToneOf(bassBoost.settings);
       await Future<void>.delayed(const Duration(milliseconds: 500));
       final af = await mpv.debugProperty('af');
       expect(af, contains('@spotiflac_dsp:lavfi'));

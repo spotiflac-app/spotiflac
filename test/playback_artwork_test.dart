@@ -10,58 +10,65 @@ void main() {
   });
   tearDown(() => directory.delete(recursive: true));
 
-  test('SAF artwork recovers from missing scan covers and tolerates provider errors', () async {
-    const source = 'content://example.documents/nas/song.flac';
-    final cover = File('${directory.path}/recovered #1.jpg');
-    await cover.writeAsBytes([1]);
-    for (final missing in [null, '${directory.path}/removed.jpg']) {
-      expect(
-        await resolveEmbeddedArtworkUri(
-          source,
-          missing,
-          extract: (path) async {
-            expect(path, source);
-            return cover.path;
-          },
-        ),
-        cover.uri.toString(),
-      );
-    }
-    var unnecessaryReads = 0;
-    Future<String?> unexpectedRead(String _) async {
-      unnecessaryReads++;
-      return null;
-    }
+  test(
+    'SAF artwork recovers from missing scan covers and tolerates provider errors',
+    () async {
+      const source = 'content://example.documents/nas/song.flac';
+      final cover = File('${directory.path}/recovered #1.jpg');
+      await cover.writeAsBytes([1]);
+      for (final missing in [null, '${directory.path}/removed.jpg']) {
+        expect(
+          await resolveEmbeddedArtworkUri(
+            source,
+            missing,
+            extract: (path) async {
+              expect(path, source);
+              return cover.path;
+            },
+          ),
+          cover.uri.toString(),
+        );
+      }
+      var unnecessaryReads = 0;
+      Future<String?> unexpectedRead(String _) async {
+        unnecessaryReads++;
+        return null;
+      }
 
-    for (final existing in [cover.path, cover.uri.toString()]) {
+      for (final existing in [cover.path, cover.uri.toString()]) {
+        expect(
+          await resolveEmbeddedArtworkUri(
+            source,
+            existing,
+            extract: unexpectedRead,
+          ),
+          isNull,
+        );
+      }
       expect(
         await resolveEmbeddedArtworkUri(
           source,
-          existing,
-          extract: unexpectedRead,
+          null,
+          extract: (_) async => throw const SocketException('NAS offline'),
         ),
         isNull,
       );
-    }
-    expect(
-      await resolveEmbeddedArtworkUri(
-        source,
-        null,
-        extract: (_) async => throw const SocketException('NAS offline'),
-      ),
-      isNull,
-    );
-    for (final remote in [
-      'network://share/song.flac',
-      'https://example.test/song.flac',
-    ]) {
-      expect(
-        await resolveEmbeddedArtworkUri(remote, null, extract: unexpectedRead),
-        isNull,
-      );
-    }
-    expect(unnecessaryReads, 0);
-  });
+      for (final remote in [
+        'network://share/song.flac',
+        'https://example.test/song.flac',
+      ]) {
+        expect(
+          await resolveEmbeddedArtworkUri(
+            remote,
+            null,
+            extract: unexpectedRead,
+          ),
+          isNull,
+        );
+      }
+      expect(unnecessaryReads, 0);
+    },
+  );
 
   test(
     'local files prefer embedded art over an online cover for offline use',
@@ -99,8 +106,9 @@ void main() {
   test(
     'restored queue replaces a removed scan cover with current Library art',
     () async {
-      final removed = File('${directory.path}/old-scan/cover.jpg').uri
-          .toString();
+      final removed = File(
+        '${directory.path}/old-scan/cover.jpg',
+      ).uri.toString();
       final current = File('${directory.path}/current cover #1.jpg');
       await current.writeAsBytes([1]);
       final resolved = await resolveRestoredArtworkUri(

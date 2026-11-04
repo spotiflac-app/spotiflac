@@ -125,10 +125,8 @@ class DesktopFFmpegTools {
 }
 
 /// Starts a tool process; injected by tests.
-typedef FFmpegProcessStarter = Future<Process> Function(
-  String executable,
-  List<String> arguments,
-);
+typedef FFmpegProcessStarter =
+    Future<Process> Function(String executable, List<String> arguments);
 
 /// Builds the probe model FFprobeKit returns from `ffprobe -print_format
 /// json` output. Returns null when ffprobe recognized nothing.

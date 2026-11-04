@@ -268,8 +268,9 @@ class _StartupBenchmark {
 
   Future<void> _write(Map<String, Object?> result) async {
     final support = await getApplicationSupportDirectory();
-    await File('${support.path}/core-backend-probe-result.json')
-        .writeAsString(jsonEncode({'pid': pid, ...result}), flush: true);
+    await File(
+      '${support.path}/core-backend-probe-result.json',
+    ).writeAsString(jsonEncode({'pid': pid, ...result}), flush: true);
   }
 }
 
@@ -311,8 +312,9 @@ Future<bool> _detectInitialSafAccessLoss(AppSettings settings) async {
   }
 
   try {
-    return !await PlatformBridge.validateSafTreeAccess(settings.downloadTreeUri)
-        .timeout(const Duration(seconds: 2));
+    return !await PlatformBridge.validateSafTreeAccess(
+      settings.downloadTreeUri,
+    ).timeout(const Duration(seconds: 2));
   } catch (e) {
     // A transient bridge failure must not trap the user at launch. Download
     // preflight validates strictly again before any write starts.

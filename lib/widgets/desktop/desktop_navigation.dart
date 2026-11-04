@@ -960,8 +960,9 @@ class DesktopSidebar extends ConsumerWidget {
           color: panelColor(context, tint),
           borderRadius: BorderRadius.circular(radius),
           border: Border.all(
-            color: Theme.of(context).colorScheme.onSurface
-                .withValues(alpha: 0.08),
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.08),
             width: 0.5,
           ),
           boxShadow: [
@@ -1151,8 +1152,9 @@ class _SidebarSectionHeader extends StatelessWidget {
       header: true,
       child: Text(
         label,
-        style: Theme.of(context).textTheme.labelSmall
-            ?.copyWith(fontWeight: FontWeight.w600),
+        style: Theme.of(
+          context,
+        ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),

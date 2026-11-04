@@ -2,13 +2,13 @@
 
 use super::{Backend, LyricsRequest};
 use cap_std::fs::OpenOptions;
+use serde_json::json;
 use spotiflac_core::lyrics::{file, lrc};
 use spotiflac_core::metadata::TrackMetadata;
 use spotiflac_core::metadata::reenrich::{self, Request};
 use spotiflac_core::tags::{embed_flac_metadata, extract_cover};
 use spotiflac_providers::deezer::MetadataLookup;
 use spotiflac_providers::resolver::{Check, availability};
-use serde_json::json;
 use std::io::Write;
 use std::sync::Mutex;
 

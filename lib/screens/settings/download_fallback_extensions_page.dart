@@ -106,8 +106,9 @@ class _DownloadFallbackExtensionsPageState
                 ),
                 child: Text(
                   context.l10n.providerPriorityFallbackExtensionsDescription,
-                  style: Theme.of(context).textTheme.bodyMedium
-                      ?.copyWith(color: colorScheme.onSurfaceVariant),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
             ),
@@ -125,8 +126,9 @@ class _DownloadFallbackExtensionsPageState
                     ),
                     child: Text(
                       context.l10n.extensionsNoDownloadProvider,
-                      style: Theme.of(context).textTheme.bodyMedium
-                          ?.copyWith(color: colorScheme.onSurfaceVariant),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ),
                 ),
@@ -174,8 +176,9 @@ class _DownloadFallbackExtensionsPageState
                   ),
                   child: Text(
                     context.l10n.providerPriorityFallbackExtensionsHint,
-                    style: Theme.of(context).textTheme.bodySmall
-                        ?.copyWith(color: colorScheme.onSurfaceVariant),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
               ),

@@ -132,8 +132,9 @@ ScaffoldFeatureController<SnackBar, SnackBarClosedReason> showAppSnackBar(
                     Expanded(child: content),
                     if (!actionBelow) ?action,
                     AppIconButton(
-                      tooltip: MaterialLocalizations.of(context)
-                          .closeButtonTooltip,
+                      tooltip: MaterialLocalizations.of(
+                        context,
+                      ).closeButtonTooltip,
                       color: theme.colorScheme.onSurface,
                       onPressed: messenger.hideCurrentSnackBar,
                       icon: const AppIcon(Icons.close, size: 20),

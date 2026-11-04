@@ -296,8 +296,9 @@ class SelectionBottomBar extends StatelessWidget {
               children: [
                 Text(
                   context.l10n.selectionSelected(selectedCount),
-                  style: Theme.of(context).textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.bold),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 // The tap hint describes touch selection; desktop rows select
                 // with the pointer and modifiers, and the toolbar stays short.
@@ -307,8 +308,9 @@ class SelectionBottomBar extends StatelessWidget {
                         ? allSelectedLabel ?? context.l10n.selectionAllSelected
                         : tapToSelectLabel ??
                               context.l10n.downloadedAlbumTapToSelect,
-                    style: Theme.of(context).textTheme.bodySmall
-                        ?.copyWith(color: colorScheme.onSurfaceVariant),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
                   ),
               ],
             ),
@@ -324,8 +326,9 @@ class SelectionBottomBar extends StatelessWidget {
                       allSelected
                           ? context.l10n.actionDeselect
                           : context.l10n.actionSelectAll,
-                      style: Theme.of(context).textTheme.bodyMedium
-                          ?.copyWith(color: colorScheme.primary),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.primary,
+                      ),
                     ),
                   )
                 : ExpressiveButton(
@@ -652,10 +655,12 @@ class _SelectionPanelDragState extends State<_SelectionPanelDrag>
                         button: true,
                         expanded: _expanded,
                         label: _expanded
-                            ? MaterialLocalizations.of(context)
-                                  .expandedIconTapHint
-                            : MaterialLocalizations.of(context)
-                                  .collapsedIconTapHint,
+                            ? MaterialLocalizations.of(
+                                context,
+                              ).expandedIconTapHint
+                            : MaterialLocalizations.of(
+                                context,
+                              ).collapsedIconTapHint,
                         onTap: _toggleExpanded,
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,

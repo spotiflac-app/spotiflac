@@ -473,8 +473,9 @@ extension _QueueTabNavigation on _QueueTabState {
                     playlistName,
                   )
           : context.l10n.collectionAlreadyInPlaylist(playlistName);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
       _exitSelectionMode();
       return;
     }
@@ -522,8 +523,9 @@ extension _QueueTabNavigation on _QueueTabState {
                 isDraggingMultiple ? '$count tracks' : item.trackName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(fontWeight: FontWeight.w600),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
               ),
             ),
           ],

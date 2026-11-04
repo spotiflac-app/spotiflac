@@ -238,10 +238,9 @@ class LocalTrackRedownloadService {
   }
 
   static String _primaryArtist(String value) {
-    final parts = _normalizedArtistGroup(value)
-        .split(',')
-        .map((part) => part.trim())
-        .where((part) => part.isNotEmpty);
+    final parts = _normalizedArtistGroup(
+      value,
+    ).split(',').map((part) => part.trim()).where((part) => part.isNotEmpty);
     return parts.isEmpty ? value.trim() : parts.first;
   }
 

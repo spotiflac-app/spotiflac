@@ -44,8 +44,9 @@ void main() {
   });
 
   test('preamp and automatic headroom set the input gain', () {
-    final boosted = const EqualizerSettings(enabled: true)
-        .copyWith(gains: [6, 0, 0, 0, 0, 0, 0, 0, 0, 0], preamp: 2);
+    final boosted = const EqualizerSettings(
+      enabled: true,
+    ).copyWith(gains: [6, 0, 0, 0, 0, 0, 0, 0, 0, 0], preamp: 2);
     final chain = MpvAudioFilterChain.fromEqualizer(boosted);
     // preamp 2 dB minus 6 dB headroom for the largest boost.
     expect(chain.filters.first.spec, 'volume@pre=precision=float:volume=-4dB');
@@ -58,8 +59,9 @@ void main() {
   });
 
   test('balance, compressor and limiter follow the bands in order', () {
-    final settings = const EqualizerSettings(enabled: true)
-        .copyWith(balance: 0.25, compressor: true, threshold: -20, ratio: 4);
+    final settings = const EqualizerSettings(
+      enabled: true,
+    ).copyWith(balance: 0.25, compressor: true, threshold: -20, ratio: 4);
     final chain = MpvAudioFilterChain.fromEqualizer(settings);
     final names = chain.filters.map((f) => f.name);
     expect(names.first, 'volume');
@@ -86,8 +88,9 @@ void main() {
   });
 
   test('filters missing from libmpv are left out', () {
-    final settings = const EqualizerSettings(enabled: true)
-        .copyWith(gains: [6, 0, 0, 0, 0, 0, 0, 0, 0, 0], balance: 0.5);
+    final settings = const EqualizerSettings(
+      enabled: true,
+    ).copyWith(gains: [6, 0, 0, 0, 0, 0, 0, 0, 0, 0], balance: 0.5);
     final chain = MpvAudioFilterChain.fromEqualizer(
       settings,
       unavailable: MpvAudioFilterChain.optionalFilters,
@@ -134,8 +137,9 @@ void main() {
 
   test('compressor timing is clamped like the other platforms', () {
     final chain = MpvAudioFilterChain.fromEqualizer(
-      const EqualizerSettings(enabled: true)
-          .copyWith(compressor: true, attack: 0, release: 5000, ratio: 40),
+      const EqualizerSettings(
+        enabled: true,
+      ).copyWith(compressor: true, attack: 0, release: 5000, ratio: 40),
     );
     final compressor = chain.filters.firstWhere((f) => f.name == 'acompressor');
     expect(compressor.options, containsPair('attack', '1'));

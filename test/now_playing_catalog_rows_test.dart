@@ -251,8 +251,9 @@ void main() {
             ),
           )
           .first;
-      final scheme = Theme.of(tester.element(find.text('Current song')))
-          .colorScheme;
+      final scheme = Theme.of(
+        tester.element(find.text('Current song')),
+      ).colorScheme;
       expect(surface.color, scheme.primaryContainer);
       expect(tester.takeException(), isNull);
     });

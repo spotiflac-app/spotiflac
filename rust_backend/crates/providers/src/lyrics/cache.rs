@@ -1,10 +1,10 @@
 //! Go-compatible successful-lyrics cache with bounded, atomic persistence.
 
+use serde::{Deserialize, Serialize};
 use spotiflac_core::fs::{
     DEFAULT_TEMP_PREFIX, DirBuilderPortableExt, OpenOptionsPortableExt, write_atomic,
 };
 use spotiflac_core::lyrics::LyricsResponse;
-use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};

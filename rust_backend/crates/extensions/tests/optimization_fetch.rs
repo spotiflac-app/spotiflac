@@ -1,6 +1,6 @@
+use serde_json::{Value, json};
 use spotiflac_extensions::RuntimeLimits;
 use spotiflac_extensions::environment::ExtensionEnvironment;
-use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
 use std::net::TcpListener;

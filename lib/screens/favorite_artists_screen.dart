@@ -64,8 +64,9 @@ class FavoriteArtistsScreen extends ConsumerWidget {
                       Text(
                         context.l10n.collectionFavoriteArtistsEmptySubtitle,
                         textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyMedium
-                            ?.copyWith(color: colorScheme.onSurfaceVariant),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ],
                   ),

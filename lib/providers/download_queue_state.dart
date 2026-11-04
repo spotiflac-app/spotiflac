@@ -288,8 +288,9 @@ class DownloadQueueState {
   /// Replaces items and updates their lookup from this same queue snapshot.
   DownloadQueueState withItemReplacements(Map<int, DownloadItem> replacements) {
     if (replacements.isEmpty) return this;
-    final nextItems = ChunkedList<DownloadItem>.from(items)
-        .updated(replacements);
+    final nextItems = ChunkedList<DownloadItem>.from(
+      items,
+    ).updated(replacements);
     return copyWith(
       items: nextItems,
       lookup: lookup.updatedForIndices(

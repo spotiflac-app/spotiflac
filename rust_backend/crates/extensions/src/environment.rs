@@ -10,13 +10,13 @@ use crate::storage::{
     ExtensionStore, StorageError, StorageMasterKey, StoreKind, valid_extension_id,
 };
 use crate::{ExtensionError, ExtensionRuntime, ExtensionServices, RuntimeLimits};
+use serde_json::{Map, Value};
 use spotiflac_core::app_version::AppVersion;
 use spotiflac_core::cancellation::{CancellationDomain, CancellationRegistry};
 use spotiflac_core::downloads::DownloadState;
 use spotiflac_core::progress::ProgressRegistry;
 use spotiflac_network::{NetworkService, policy::NetworkPermissions};
 use spotiflac_providers::lyrics::{CallGraph, CallNode, LyricsService};
-use serde_json::{Map, Value};
 use std::cmp::Ordering as Comparison;
 use std::collections::BTreeMap;
 use std::fs;

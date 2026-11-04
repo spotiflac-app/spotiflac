@@ -20,8 +20,9 @@ class AutoMixStatusBadge extends StatelessWidget {
                 : context.l10n.autoMixCrossfading,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelSmall
-                ?.copyWith(color: Theme.of(context).colorScheme.primary),
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: Theme.of(context).colorScheme.primary,
+            ),
           ),
         ),
       );

@@ -83,8 +83,9 @@ class _LoadingOrErrorScaffold extends StatelessWidget {
                   padding: const EdgeInsetsDirectional.only(start: 12),
                   child: HeaderCircleButton(
                     icon: Icons.arrow_back,
-                    tooltip: MaterialLocalizations.of(context)
-                        .backButtonTooltip,
+                    tooltip: MaterialLocalizations.of(
+                      context,
+                    ).backButtonTooltip,
                     onPressed: () => Navigator.pop(context),
                   ),
                 ),
@@ -150,8 +151,9 @@ class _LoadingOrErrorScaffold extends StatelessWidget {
                   padding: const EdgeInsetsDirectional.only(start: 12),
                   child: HeaderCircleButton(
                     icon: Icons.arrow_back,
-                    tooltip: MaterialLocalizations.of(context)
-                        .backButtonTooltip,
+                    tooltip: MaterialLocalizations.of(
+                      context,
+                    ).backButtonTooltip,
                     onPressed: () => Navigator.pop(context),
                   ),
                 )

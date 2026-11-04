@@ -6,8 +6,8 @@
 
 use crate::kind;
 use crate::runtime::{self, Runtime};
-use spotiflac_mobile::DownloadProgressSubscription;
 use serde_json::Value;
+use spotiflac_mobile::DownloadProgressSubscription;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;

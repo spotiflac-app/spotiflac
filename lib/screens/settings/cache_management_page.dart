@@ -252,8 +252,9 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
       await action();
       if (!mounted) return;
       if (successMessage != null && successMessage.isNotEmpty) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(successMessage)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(successMessage)));
       }
     } catch (e) {
       if (!mounted) return;

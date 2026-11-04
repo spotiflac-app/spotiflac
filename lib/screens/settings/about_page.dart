@@ -61,7 +61,8 @@ class AboutPage extends StatelessWidget {
                   ),
                   _ContributorItem(
                     name: 'Ruubiiiii',
-                    description: 'Provided many APIs and backend resources. A huge help for the project!',
+                    description:
+                        'Provided many APIs and backend resources. A huge help for the project!',
                     githubUsername: 'Ruubiiiii',
                     showDivider: false,
                   ),
@@ -209,8 +210,9 @@ class AboutPage extends StatelessWidget {
                         ? AppInfo.copyright
                         : '${AppInfo.copyright} · ${AppInfo.shortGitCommit}',
                     textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodySmall
-                        ?.copyWith(color: colorScheme.onSurfaceVariant),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
               ),
@@ -250,9 +252,9 @@ class _AppHeaderCard extends StatelessWidget {
       builder: (context, constraints) {
         final cardWidth = constraints.maxWidth;
         final shortestSide = MediaQuery.sizeOf(context).shortestSide;
-        final textScale = MediaQuery.textScalerOf(context)
-            .scale(1.0)
-            .clamp(1.0, 1.4);
+        final textScale = MediaQuery.textScalerOf(
+          context,
+        ).scale(1.0).clamp(1.0, 1.4);
         final logoSize = (shortestSide * 0.22).clamp(72.0, 88.0);
         final contentPadding = (cardWidth * 0.06).clamp(16.0, 24.0);
         final titleGap = (16 * (1 + ((textScale - 1) * 0.2))).clamp(12.0, 20.0);
@@ -293,8 +295,9 @@ class _AppHeaderCard extends StatelessWidget {
               Text(
                 AppInfo.appName,
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineSmall
-                    ?.copyWith(fontWeight: FontWeight.bold),
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 4),
               Container(
@@ -318,8 +321,9 @@ class _AppHeaderCard extends StatelessWidget {
               Text(
                 context.l10n.aboutAppDescription,
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium
-                    ?.copyWith(color: colorScheme.onSurfaceVariant),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
               ),
             ],
           ),
@@ -398,8 +402,9 @@ class _ContributorItem extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         description,
-                        style: Theme.of(context).textTheme.bodyMedium
-                            ?.copyWith(color: colorScheme.onSurfaceVariant),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ],
                   ),

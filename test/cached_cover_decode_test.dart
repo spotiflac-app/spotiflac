@@ -266,8 +266,9 @@ void main() {
         });
         try {
           final decoded = await tester.runAsync(() async {
-            final bytes = await File('${directory!.path}/cover.png')
-                .readAsBytes();
+            final bytes = await File(
+              '${directory!.path}/cover.png',
+            ).readAsBytes();
             return _decodedImageSize(
               ResizeImage.resizeIfNeeded(
                 image.memCacheWidth,
@@ -541,8 +542,9 @@ Future<void> _writeCover(Directory directory, Size size) async {
   final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
   image.dispose();
   picture.dispose();
-  await File('${directory.path}/cover.png')
-      .writeAsBytes(bytes!.buffer.asUint8List());
+  await File(
+    '${directory.path}/cover.png',
+  ).writeAsBytes(bytes!.buffer.asUint8List());
 }
 
 Future<Size> _decodedImageSize(ImageProvider provider) async {

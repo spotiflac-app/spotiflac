@@ -99,8 +99,9 @@ void main() {
 
   test('promotion reports publication errors after staging cleanup', () async {
     final target = await Directory('${directory.path}/blocked.opus').create();
-    final original = await File('${target.path}/keep')
-        .writeAsString('original');
+    final original = await File(
+      '${target.path}/keep',
+    ).writeAsString('original');
     final temp = await write('temp.opus', 'tagged');
     Object? error;
     var stagingRemained = true;

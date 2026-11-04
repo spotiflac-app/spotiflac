@@ -130,8 +130,9 @@ class ExtensionRow extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         DefaultTextStyle.merge(
-          style: Theme.of(context).textTheme.bodyLarge!
-              .copyWith(fontWeight: FontWeight.w500),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyLarge!.copyWith(fontWeight: FontWeight.w500),
           child: title,
         ),
         SizedBox(height: tokens.gapXs / 2),
@@ -174,8 +175,9 @@ class ExtensionRow extends StatelessWidget {
                           (avatar == null
                               ? 0
                               : ExtensionAvatar.size + tokens.gapLg);
-                      final minWidth = MediaQuery.textScalerOf(context)
-                          .scale(sideBySideMinTextWidth);
+                      final minWidth = MediaQuery.textScalerOf(
+                        context,
+                      ).scale(sideBySideMinTextWidth);
                       return content(textWidth < minWidth);
                     },
                   ),

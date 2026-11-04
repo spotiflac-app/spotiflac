@@ -183,8 +183,9 @@ extension _TrackMetadataSpotiFLAC on _TrackMetadataScreenState {
         borderRadius: BorderRadius.circular(28),
         clipBehavior: Clip.antiAlias,
         child: DividerTheme(
-          data: DividerTheme.of(context)
-              .copyWith(color: SpotiFLACTheme.metadataDividerColor(context)),
+          data: DividerTheme.of(
+            context,
+          ).copyWith(color: SpotiFLACTheme.metadataDividerColor(context)),
           child: child,
         ),
       );

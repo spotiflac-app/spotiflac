@@ -58,8 +58,9 @@ class PlayerPlaybackControls extends ConsumerWidget {
     final playPauseSize = compact
         ? (isPlaying ? 44.0 : 40.0)
         : (isPlaying ? 60.0 : 54.0);
-    final timeStyle = Theme.of(context).textTheme.bodySmall
-        ?.copyWith(color: colorScheme.onSurfaceVariant);
+    final timeStyle = Theme.of(
+      context,
+    ).textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant);
     // Time runs left to right in every language: the timeline and the
     // transport keep their order in right-to-left layouts, as Material and
     // Apple's guidelines ask for media controls.

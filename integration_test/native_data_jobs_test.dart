@@ -248,8 +248,9 @@ void main() {
         'odd_tail': Uint8List.fromList([..._drums(120), 255]),
       };
       for (final entry in patterns.entries) {
-        final file = await File('${root.path}/${entry.key}.pcm')
-            .writeAsBytes(entry.value);
+        final file = await File(
+          '${root.path}/${entry.key}.pcm',
+        ).writeAsBytes(entry.value);
         final expected = analyzeAutoMixPcm(entry.value);
         final native = await _job('automix', {'path': file.path});
         expect(native['bpm'], expected.bpm, reason: entry.key);
@@ -296,8 +297,9 @@ void main() {
               plane[y * width + x] = value;
             }
           }
-          final file = await File('${root.path}/spectrum.gray')
-              .writeAsBytes(plane);
+          final file = await File(
+            '${root.path}/spectrum.gray',
+          ).writeAsBytes(plane);
           final expected = estimateEffectiveSpectralCutoffHz(
             intensity: plane,
             width: width,
@@ -524,8 +526,9 @@ void main() {
         'directory': '${root.path}/permanent-covers',
       });
       expect(await File(promoted['cover_path'] as String).readAsBytes(), png);
-      final local = await File('${root.path}/upload.flac')
-          .writeAsBytes(payload);
+      final local = await File(
+        '${root.path}/upload.flac',
+      ).writeAsBytes(payload);
       final request = {
         'url': proxy.url,
         'path': local.path,
@@ -597,8 +600,9 @@ void main() {
     'native SQLite import/snapshot and filesystem delta share the app schema',
     (tester) async {
       final media = await Directory('${root.path}/media').create();
-      final first = await File('${media.path}/first.flac')
-          .writeAsBytes(_flac());
+      final first = await File(
+        '${media.path}/first.flac',
+      ).writeAsBytes(_flac());
       final downloadedPath = '${media.path}/downloaded.flac';
       final db = await openDatabase(
         '${root.path}/local_library.db',
@@ -699,8 +703,9 @@ void main() {
       );
       initialized = true;
       await first.delete();
-      final second = await File('${media.path}/second.flac')
-          .writeAsBytes(_flac(title: 'Second native song'));
+      final second = await File(
+        '${media.path}/second.flac',
+      ).writeAsBytes(_flac(title: 'Second native song'));
       final scanned = await _job('library_scan_incremental', {
         ...common,
         'folder_path': media.path,
@@ -778,8 +783,9 @@ void main() {
         hasReplayGain: true,
         replayGainMetadataScanVersion: 1,
       ).toJson();
-      final input = await File('${root.path}/history-input.ndjson')
-          .writeAsString('${jsonEncode(track)}\n');
+      final input = await File(
+        '${root.path}/history-input.ndjson',
+      ).writeAsString('${jsonEncode(track)}\n');
       final common = {
         'history_path': database.path,
         'platform': Platform.isAndroid ? 'android' : 'ios',

@@ -69,8 +69,9 @@ void main() {
         'library-delete-',
       );
       addTearDown(() => directory.delete(recursive: true));
-      final file = await File('${directory.path}/song.flac')
-          .writeAsString('audio');
+      final file = await File(
+        '${directory.path}/song.flac',
+      ).writeAsString('audio');
       expect(await deleteFile('EXISTS:${file.path}'), isTrue);
       expect(await file.exists(), isFalse);
       expect(await deleteFile('EXISTS:'), isFalse);

@@ -713,8 +713,9 @@ class CollectionHeaderSkeletonRows {
   static Widget subtitle(BuildContext context) => ShimmerLoading(
     child: SkeletonBox(
       width: 140,
-      height: MediaQuery.textScalerOf(context)
-          .scale(isDesktopPlatform ? 24 : 18),
+      height: MediaQuery.textScalerOf(
+        context,
+      ).scale(isDesktopPlatform ? 24 : 18),
       borderRadius: 4,
     ),
   );
@@ -874,8 +875,9 @@ class ArtistScreenSkeleton extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.onSurface
-                        .withValues(alpha: 0.10),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.10),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: const Row(

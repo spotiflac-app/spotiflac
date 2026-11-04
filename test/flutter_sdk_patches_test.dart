@@ -72,8 +72,9 @@ void main() {
   test('a new project pin requires review before touching the SDK', () async {
     final project = await Directory.systemTemp.createTemp('flutter-new-pin-');
     addTearDown(() => project.delete(recursive: true));
-    await File('${project.path}/.fvmrc')
-        .writeAsString(jsonEncode({'flutter': '3.47.8'}));
+    await File(
+      '${project.path}/.fvmrc',
+    ).writeAsString(jsonEncode({'flutter': '3.47.8'}));
     await expectLater(
       preparation.prepareFlutterSdk(sdk: sdk, project: project),
       throwsStateError,

@@ -607,8 +607,9 @@ extension _HomeTabExploreUI on _HomeTabState {
                   header: true,
                   child: Text(
                     context.l10n.searchBrowse,
-                    style: Theme.of(context).textTheme.titleLarge
-                        ?.copyWith(fontWeight: FontWeight.w700),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ),
@@ -977,8 +978,9 @@ class _ExploreSectionPage extends StatelessWidget {
                       ),
                       Builder(
                         builder: (buttonContext) => AppIconButton(
-                          tooltip: MaterialLocalizations.of(context)
-                              .moreButtonTooltip,
+                          tooltip: MaterialLocalizations.of(
+                            context,
+                          ).moreButtonTooltip,
                           icon: Icon(
                             Icons.more_horiz,
                             color: colorScheme.onSurfaceVariant,

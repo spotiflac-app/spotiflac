@@ -424,8 +424,9 @@ Future<Uint8List> renderAudioSpectrogramPng({
   canvas.drawRRect(
     RRect.fromRectAndRadius(bar, const Radius.circular(4)),
     Paint()
-      ..shader = LinearGradient(colors: _SpectrogramView._legendColors())
-          .createShader(bar),
+      ..shader = LinearGradient(
+        colors: _SpectrogramView._legendColors(),
+      ).createShader(bar),
   );
 
   final picture = recorder.endRecording();

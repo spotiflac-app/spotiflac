@@ -181,13 +181,15 @@ List<Widget> desktopDetailHeaderSlivers(
           ? (spotiflac
                 ? HeaderCircleButton(
                     icon: CupertinoIcons.back,
-                    tooltip: MaterialLocalizations.of(context)
-                        .backButtonTooltip,
+                    tooltip: MaterialLocalizations.of(
+                      context,
+                    ).backButtonTooltip,
                     onPressed: () => Navigator.maybePop(context),
                   )
                 : AppIconButton(
-                    tooltip: MaterialLocalizations.of(context)
-                        .backButtonTooltip,
+                    tooltip: MaterialLocalizations.of(
+                      context,
+                    ).backButtonTooltip,
                     icon: const AppIcon(Icons.arrow_back),
                     onPressed: () => Navigator.maybePop(context),
                   ))

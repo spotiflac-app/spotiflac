@@ -200,8 +200,9 @@ void main() {
       expect(ThemeSettings.fromJson({}).useSystemFont, isFalse);
       expect(ThemeSettings.fromJson({}).spotiflacAccent, SpotiFLACAccent.red);
       expect(
-        ThemeSettings.fromJson({kSpotiFLACAccentKey: 'unknown'})
-            .spotiflacAccent,
+        ThemeSettings.fromJson({
+          kSpotiFLACAccentKey: 'unknown',
+        }).spotiflacAccent,
         SpotiFLACAccent.red,
       );
       expect(

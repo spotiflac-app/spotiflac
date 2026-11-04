@@ -300,8 +300,10 @@ class AlbumDetailHeader extends StatelessWidget {
         Text(
           title,
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.headlineMedium
-              ?.copyWith(fontSize: 22, fontWeight: FontWeight.w700),
+          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         if (subtitle != null) ...[const SizedBox(height: 5), subtitle!],
         if (meta != null) ...[const SizedBox(height: 5), meta!],

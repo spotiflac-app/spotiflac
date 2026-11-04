@@ -199,8 +199,9 @@ class _DesktopMiniPlayerState extends ConsumerState<DesktopMiniPlayer> {
                     if (mediaItem == null)
                       Text(
                         l10n.desktopPlayerIdle,
-                        style: Theme.of(context).textTheme.titleSmall
-                            ?.copyWith(color: colorScheme.onSurfaceVariant),
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       )

@@ -675,8 +675,9 @@ extension _ArtistScreenSections on _ArtistScreenState {
           padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
           child: Text(
             context.l10n.artistPopular,
-            style: Theme.of(context).textTheme.titleLarge
-                ?.copyWith(fontWeight: FontWeight.bold),
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
           ),
         ),
         SizedBox(
@@ -810,8 +811,9 @@ extension _ArtistScreenSections on _ArtistScreenState {
                       width: 24,
                       child: Text(
                         '$rank',
-                        style: Theme.of(context).textTheme.bodyMedium
-                            ?.copyWith(color: colorScheme.onSurfaceVariant),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -1011,8 +1013,9 @@ extension _ArtistScreenSections on _ArtistScreenState {
           padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
           child: Text(
             '$title (${albums.length})',
-            style: Theme.of(context).textTheme.titleLarge
-                ?.copyWith(fontWeight: FontWeight.bold),
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
           ),
         ),
         NotificationListener<ScrollNotification>(
@@ -1301,8 +1304,9 @@ extension _ArtistScreenSections on _ArtistScreenState {
                     Flexible(
                       child: Text(
                         album.name,
-                        style: Theme.of(context).textTheme.bodyMedium
-                            ?.copyWith(fontWeight: FontWeight.w500),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w500,
+                        ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1314,8 +1318,9 @@ extension _ArtistScreenSections on _ArtistScreenState {
                           : album.releaseDate.length >= 4
                           ? album.releaseDate.substring(0, 4)
                           : album.releaseDate,
-                      style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(color: colorScheme.onSurfaceVariant),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),

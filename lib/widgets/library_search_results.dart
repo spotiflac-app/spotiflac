@@ -489,8 +489,9 @@ class _LibrarySearchResultsState extends ConsumerState<LibrarySearchResults> {
                 children: [
                   Text(
                     _label(kind),
-                    style: Theme.of(context).textTheme.titleLarge
-                        ?.copyWith(fontWeight: FontWeight.w700),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   Icon(
                     Icons.chevron_right,

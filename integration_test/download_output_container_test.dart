@@ -80,8 +80,9 @@ void main() {
             reason: await session.getOutput(),
           );
           final audio = await fixture.readAsBytes();
-          final provider = await Directory('${sources.path}/example.audio')
-              .create();
+          final provider = await Directory(
+            '${sources.path}/example.audio',
+          ).create();
           await File('${provider.path}/manifest.json').writeAsString(
             jsonEncode({
               'name': 'example.audio',

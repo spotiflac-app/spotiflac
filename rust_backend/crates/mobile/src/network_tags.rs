@@ -1,13 +1,13 @@
 //! Bounded, seekable metadata reads through the app's authenticated loopback
 //! proxy. The native reader never receives NAS credentials or external URLs.
 use base64::Engine;
+use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 use spotiflac_core::fs::{DEFAULT_TEMP_PREFIX, write_atomic};
 use spotiflac_core::{lower_hex, tags};
 use spotiflac_network::{
     HttpRequest, NetworkService, NetworkSession, policy::NetworkPermissions, url::UrlParts,
 };
-use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, VecDeque},
     fs::{self, File},

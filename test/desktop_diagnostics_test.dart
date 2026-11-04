@@ -68,8 +68,9 @@ void main() {
     final first = session(1);
     await first.close();
     final executable = p.basenameWithoutExtension(Platform.resolvedExecutable);
-    File(p.join(osReports().path, '$executable-2026-10-20-170000.ips'))
-        .writeAsStringSync('{"exception": "EXC_BAD_ACCESS"}');
+    File(
+      p.join(osReports().path, '$executable-2026-10-20-170000.ips'),
+    ).writeAsStringSync('{"exception": "EXC_BAD_ACCESS"}');
 
     final report = session(2).pendingCrash()!;
     expect(report['reason'], 'App crash');
@@ -103,11 +104,12 @@ void main() {
   test('a Rust panic from that session is the report trace', () async {
     final first = session(1);
     await first.close();
-    File(p.join(directory.path, DesktopDiagnostics.panicLogFileName))
-        .writeAsStringSync(
-          "[2026-10-20T00:00:00Z] thread 'worker' panicked at src/a.rs:1: "
-          'boom\nbacktrace\n',
-        );
+    File(
+      p.join(directory.path, DesktopDiagnostics.panicLogFileName),
+    ).writeAsStringSync(
+      "[2026-10-20T00:00:00Z] thread 'worker' panicked at src/a.rs:1: "
+      'boom\nbacktrace\n',
+    );
 
     final report = session(2).pendingCrash()!;
     expect(report['reason'], 'Rust panic');

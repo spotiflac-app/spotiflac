@@ -38,7 +38,8 @@ class AppInfo {
   );
   static const String remoteConfigApiUrl = String.fromEnvironment(
     'SPOTIFLAC_CONFIG_URL',
-    defaultValue: 'https://raw.githubusercontent.com/spotiflac-app/spotiflac/main/config/app.json',
+    defaultValue:
+        'https://raw.githubusercontent.com/spotiflac-app/spotiflac/main/config/app.json',
   );
 
   /// Enable only after registering and configuring your own Discord application.

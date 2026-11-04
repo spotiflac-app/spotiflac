@@ -51,8 +51,9 @@ class MetadataEditorQuickSelectButton extends StatelessWidget {
         onPressed: fetching ? null : onTap,
         child: Text(
           label,
-          style: Theme.of(context).textTheme.bodySmall
-              ?.copyWith(color: cs.primary),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: cs.primary),
         ),
       );
     }
@@ -105,8 +106,9 @@ class MetadataEditorSwitchField extends StatelessWidget {
               title: Text(label, style: Theme.of(context).textTheme.bodyLarge),
               subtitle: Text(
                 subtitle,
-                style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(color: cs.onSurfaceVariant),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
               ),
             ),
           ),
@@ -146,8 +148,9 @@ class MetadataEditorSelectionField extends StatelessWidget {
               padding: const EdgeInsetsDirectional.only(start: 4, bottom: 6),
               child: Text(
                 label,
-                style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(color: cs.onSurfaceVariant),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
               ),
             ),
             CupertinoButton(
@@ -275,8 +278,10 @@ class MetadataEditorSectionCard extends StatelessWidget {
         Expanded(
           child: Text(
             title,
-            style: Theme.of(context).textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.w600, color: cs.onSurface),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: cs.onSurface,
+            ),
           ),
         ),
         if (collapsible)

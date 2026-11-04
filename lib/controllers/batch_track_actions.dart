@@ -522,8 +522,9 @@ Future<LibraryTrackConversionResult> convertLibraryTrack({
       }
 
       if (!keepOriginal && !isSameContentUri(filePath, safUri)) {
-        final deletedOriginal = await PlatformBridge.safDelete(filePath)
-            .catchError((_) => false);
+        final deletedOriginal = await PlatformBridge.safDelete(
+          filePath,
+        ).catchError((_) => false);
         if (deletedOriginal != true) {
           diagnosticsLog?.w(
             'Converted SAF file created but failed deleting original URI',

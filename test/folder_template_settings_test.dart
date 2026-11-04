@@ -89,9 +89,13 @@ void main() {
       notifier.setFolderPathTemplate('../{album}');
       expect(container.read(settingsProvider), same(settings));
       await pumpEventQueue();
-      final saved = jsonDecode(
-        (await SharedPreferences.getInstance()).getString('app_settings')!,
-      ) as Map<String, dynamic>;
+      final saved =
+          jsonDecode(
+                (await SharedPreferences.getInstance()).getString(
+                  'app_settings',
+                )!,
+              )
+              as Map<String, dynamic>;
       expect(
         AppSettings.fromJson(saved).folderPathTemplate,
         settings.folderPathTemplate,

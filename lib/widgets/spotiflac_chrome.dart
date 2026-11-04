@@ -232,9 +232,9 @@ class SpotiFLACGlass extends ConsumerWidget {
       top: firstInGroup ? Radius.circular(radius) : Radius.zero,
       bottom: lastInGroup ? Radius.circular(radius) : Radius.zero,
     );
-    final artworkTint = Theme.of(context)
-        .extension<SpotiFLACTheme>()
-        ?.chromeSurface;
+    final artworkTint = Theme.of(
+      context,
+    ).extension<SpotiFLACTheme>()?.chromeSurface;
     var tintSource =
         tintColor ?? (dark ? scheme.surfaceContainerHigh : Colors.white);
     var opacity = tintOpacity ?? (strongTint ? 0.80 : 0.60);

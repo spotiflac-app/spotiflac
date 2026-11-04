@@ -92,9 +92,9 @@ void main() {
         // backdrop hues must remain visibly distinct throughout the transition.
         expect(colors![0].b - colors[0].r, greaterThan(0.16));
         expect(colors[1].r - colors[1].b, greaterThan(0.16));
-        final foreground = SpotiFLACTheme.build(brightness)
-            .colorScheme
-            .onSurface;
+        final foreground = SpotiFLACTheme.build(
+          brightness,
+        ).colorScheme.onSurface;
         for (final background in colors) {
           final luminances = [
             foreground.computeLuminance(),
@@ -219,8 +219,9 @@ void main() {
                 ? SpotiFLACTheme.build(Brightness.light)
                 : ThemeData(),
             builder: (context, child) => MediaQuery(
-              data: MediaQuery.of(context)
-                  .copyWith(textScaler: TextScaler.linear(spotiflac ? 2 : 1)),
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: TextScaler.linear(spotiflac ? 2 : 1)),
               child: AppScaffoldMessenger(child: child!),
             ),
             localizationsDelegates: AppLocalizations.localizationsDelegates,

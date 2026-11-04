@@ -734,8 +734,9 @@ class ExtensionNotifier extends Notifier<ExtensionState> {
     Directory? destDir;
     try {
       final tmp = await getTemporaryDirectory();
-      destDir = await Directory('${tmp.path}/spotiflac_restore_ext')
-          .create(recursive: true);
+      destDir = await Directory(
+        '${tmp.path}/spotiflac_restore_ext',
+      ).create(recursive: true);
       await PlatformBridge.initExtensionRepo(destDir.path);
       if (registryUrl.isNotEmpty) {
         await PlatformBridge.setRepoRegistryUrl(registryUrl);

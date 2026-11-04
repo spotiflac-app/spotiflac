@@ -88,8 +88,9 @@ class AppContentCard extends StatelessWidget {
       );
     }
     final content = DividerTheme(
-      data: DividerTheme.of(context)
-          .copyWith(color: SpotiFLACTheme.metadataDividerColor(context)),
+      data: DividerTheme.of(
+        context,
+      ).copyWith(color: SpotiFLACTheme.metadataDividerColor(context)),
       child: child,
     );
     final surface = Material(

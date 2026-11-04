@@ -93,8 +93,9 @@ extension _HomeTabSearchResultsUI on _HomeTabState {
                     const SizedBox(height: 4),
                     Text(
                       l10n.errorUrlNotRecognizedMessage,
-                      style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(color: colorScheme.onErrorContainer),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onErrorContainer,
+                      ),
                     ),
                   ],
                 ),
@@ -195,8 +196,9 @@ extension _HomeTabSearchResultsUI on _HomeTabState {
                     children: [
                       Text(
                         context.l10n.searchSortTitle,
-                        style: Theme.of(context).textTheme.titleLarge
-                            ?.copyWith(fontWeight: FontWeight.bold),
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       const Spacer(),
                       ExpressiveButton(
@@ -481,8 +483,9 @@ extension _HomeTabSearchResultsUI on _HomeTabState {
                           fontWeight: FontWeight.w700,
                           color: colorScheme.onSurface,
                         )
-                      : Theme.of(context).textTheme.titleSmall
-                            ?.copyWith(color: colorScheme.onSurfaceVariant),
+                      : Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                 ),
               ),
               // Keeps ExpressiveButton's 48dp minimum touch target.

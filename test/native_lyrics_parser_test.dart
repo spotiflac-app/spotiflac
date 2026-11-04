@@ -42,9 +42,14 @@ Map<String, dynamic> _dto(ParsedLyrics value) => {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  final fixtures = (jsonDecode(
-    File('test/fixtures/native_lyrics_parsers.json').readAsStringSync(),
-  ) as List).cast<Map<String, dynamic>>();
+  final fixtures =
+      (jsonDecode(
+                File(
+                  'test/fixtures/native_lyrics_parsers.json',
+                ).readAsStringSync(),
+              )
+              as List)
+          .cast<Map<String, dynamic>>();
   const channel = MethodChannel('com.spotiflac.app/backend');
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;

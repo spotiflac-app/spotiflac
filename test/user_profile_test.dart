@@ -63,14 +63,18 @@ void main() {
       name: 'Listener',
       photo: Uint8List.fromList([1]),
     );
-    final relocated = await Directory(p.join(directory.path, 'new-container'))
-        .create();
-    final photoDirectory = await Directory(p.join(relocated.path, 'profile'))
-        .create();
-    await File(profile.photoPath!)
-        .copy(p.join(photoDirectory.path, p.basename(profile.photoPath!)));
-    final restored = await UserProfileStore(documents: () async => relocated)
-        .read();
+    final relocated = await Directory(
+      p.join(directory.path, 'new-container'),
+    ).create();
+    final photoDirectory = await Directory(
+      p.join(relocated.path, 'profile'),
+    ).create();
+    await File(
+      profile.photoPath!,
+    ).copy(p.join(photoDirectory.path, p.basename(profile.photoPath!)));
+    final restored = await UserProfileStore(
+      documents: () async => relocated,
+    ).read();
     expect(restored.photoPath, startsWith(relocated.path));
     expect(restored.name, 'Listener');
   });
@@ -87,9 +91,9 @@ void main() {
     Canvas(recorder).drawColor(Colors.blue, BlendMode.src);
     final picture = recorder.endRecording();
     final image = await picture.toImage(16, 16);
-    final photo = (await image.toByteData(format: ui.ImageByteFormat.png))!
-        .buffer
-        .asUint8List();
+    final photo = (await image.toByteData(
+      format: ui.ImageByteFormat.png,
+    ))!.buffer.asUint8List();
     image.dispose();
     picture.dispose();
 
@@ -185,9 +189,9 @@ void main() {
     Canvas(recorder).drawColor(Colors.blue, BlendMode.src);
     final picture = recorder.endRecording();
     final input = await picture.toImage(1600, 800);
-    final bytes = (await input.toByteData(format: ui.ImageByteFormat.png))!
-        .buffer
-        .asUint8List();
+    final bytes = (await input.toByteData(
+      format: ui.ImageByteFormat.png,
+    ))!.buffer.asUint8List();
     input.dispose();
     picture.dispose();
     final png = await prepareProfilePhoto(bytes);

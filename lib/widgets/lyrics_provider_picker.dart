@@ -11,9 +11,8 @@ import 'package:spotiflac/widgets/app_loading_indicator.dart';
 import 'package:spotiflac/widgets/settings_group.dart';
 
 typedef LyricsProviderLoader = Future<List<String>> Function();
-typedef LyricsProviderFetcher = Future<Map<String, dynamic>> Function(
-  String provider,
-);
+typedef LyricsProviderFetcher =
+    Future<Map<String, dynamic>> Function(String provider);
 
 /// What a lyrics result is, for its label in the picker.
 enum LyricsResultKind { wordSynced, synced, plain, instrumental, none }
@@ -203,8 +202,9 @@ class _LyricsProviderPickerState extends ConsumerState<LyricsProviderPicker> {
       for (final extension in ref.watch(extensionProvider).extensions)
         'extension:${extension.id.toLowerCase()}': extension.displayName,
     };
-    final previewStyle = Theme.of(context).textTheme.bodySmall
-        ?.copyWith(color: colorScheme.onSurfaceVariant);
+    final previewStyle = Theme.of(
+      context,
+    ).textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant);
     return ListView(
       shrinkWrap: true,
       padding: const EdgeInsets.only(bottom: 16),

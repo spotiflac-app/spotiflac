@@ -7,19 +7,21 @@ import 'package:spotiflac/utils/audio_conversion_utils.dart';
 import 'package:spotiflac/utils/audio_format_utils.dart';
 import 'package:spotiflac/utils/file_access.dart';
 
-typedef DecryptDownloadFile = Future<String?> Function({
-  required String inputPath,
-  required DownloadDecryptionDescriptor descriptor,
-  required bool deleteOriginal,
-  Future<void> Function(String)? prepareOutput,
-});
+typedef DecryptDownloadFile =
+    Future<String?> Function({
+      required String inputPath,
+      required DownloadDecryptionDescriptor descriptor,
+      required bool deleteOriginal,
+      Future<void> Function(String)? prepareOutput,
+    });
 
-typedef ConvertDownloadAudio = Future<String?> Function({
-  required String inputPath,
-  required String targetFormat,
-  required String bitrate,
-  required bool deleteOriginal,
-});
+typedef ConvertDownloadAudio =
+    Future<String?> Function({
+      required String inputPath,
+      required String targetFormat,
+      required String bitrate,
+      required bool deleteOriginal,
+    });
 
 enum DownloadDecryptionFailure { safAccess, decrypt, safWrite }
 

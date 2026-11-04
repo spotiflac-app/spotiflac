@@ -610,8 +610,9 @@ class _HistoryViewSelector extends StatelessWidget {
             padding: const EdgeInsetsDirectional.only(start: 8, bottom: 8),
             child: Text(
               context.l10n.appearanceHistoryView,
-              style: Theme.of(context).textTheme.bodyMedium
-                  ?.copyWith(color: colorScheme.onSurfaceVariant),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
           SettingsSegmentedChoice<String>(

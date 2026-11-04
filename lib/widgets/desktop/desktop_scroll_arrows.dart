@@ -5,10 +5,8 @@ import 'package:spotiflac/theme/spotiflac_theme.dart';
 import 'package:spotiflac/utils/desktop_platform.dart';
 
 /// Builds a horizontal list that scrolls with [controller].
-typedef DesktopScrollArrowsBuilder = Widget Function(
-  BuildContext context,
-  ScrollController controller,
-);
+typedef DesktopScrollArrowsBuilder =
+    Widget Function(BuildContext context, ScrollController controller);
 
 /// Back and forward buttons over a horizontal list on desktop, shown while
 /// the pointer is over it and more content lies in that direction.

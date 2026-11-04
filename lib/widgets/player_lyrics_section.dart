@@ -97,8 +97,9 @@ class PlayerLyricsSection extends ConsumerWidget {
           metadata.onlineSearchMissed
               ? context.l10n.nowPlayingNoLyricsOnline
               : context.l10n.nowPlayingNoLyrics,
-          style: Theme.of(context).textTheme.bodyMedium
-              ?.copyWith(color: colorScheme.onSurfaceVariant),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant),
         ),
         if (metadata.canSearchOnline) ...[
           const SizedBox(height: 16),
@@ -153,8 +154,10 @@ class PlayerLyricsSection extends ConsumerWidget {
             child: LyricsTextScale(
               child: Text(
                 metadata.lyrics.plainText,
-                style: Theme.of(context).textTheme.titleMedium
-                    ?.copyWith(height: 1.6, color: colorScheme.onSurface),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  height: 1.6,
+                  color: colorScheme.onSurface,
+                ),
                 textAlign: TextAlign.center,
               ),
             ),

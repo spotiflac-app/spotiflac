@@ -2,11 +2,11 @@
 
 use super::matching::{duration_matches, exact_identity, matches_track, strong_identity};
 use crate::manifest::ExtensionManifest;
+use serde_json::Value;
 use spotiflac_core::downloads::DownloadRequest;
 use spotiflac_core::lyrics::matching::{normalize_loose_artist, normalize_title};
 use spotiflac_core::metadata::reenrich::text;
 use spotiflac_core::resolver::titles_match;
-use serde_json::Value;
 use std::collections::BTreeMap;
 
 pub(super) fn host_track(request: &DownloadRequest) -> Value {

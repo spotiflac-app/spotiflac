@@ -84,8 +84,9 @@ void main() {
           final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
           image.dispose();
           picture.dispose();
-          await File('${directory.path}/cover.png')
-              .writeAsBytes(bytes!.buffer.asUint8List());
+          await File(
+            '${directory.path}/cover.png',
+          ).writeAsBytes(bytes!.buffer.asUint8List());
           return directory;
         });
         final local = UnifiedLibraryItem.fromLocalLibrary(

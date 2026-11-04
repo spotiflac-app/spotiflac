@@ -270,10 +270,11 @@ class SettingsNotifier extends Notifier<AppSettings> {
       _log.w('Failed to sync network compatibility options to backend: $e');
     });
 
-    await PlatformBridge.setAllowPrivateNetwork(state.allowLocalNetwork)
-        .catchError((Object e) {
-          _log.w('Failed to sync allow local network option to backend: $e');
-        });
+    await PlatformBridge.setAllowPrivateNetwork(
+      state.allowLocalNetwork,
+    ).catchError((Object e) {
+      _log.w('Failed to sync allow local network option to backend: $e');
+    });
   }
 
   Future<void> _syncExtensionFallbackSettingsToBackend() async {

@@ -37,8 +37,9 @@ class AppSheetHandle extends StatelessWidget {
               margin ??
               EdgeInsets.only(top: tokens.gapMd, bottom: tokens.gapSm),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.onSurfaceVariant
-                .withValues(alpha: 0.4),
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
             borderRadius: BorderRadius.circular(_height / 2),
           ),
         ),
@@ -493,8 +494,9 @@ class AppSheetDialog extends StatelessWidget {
       // Desktop scrollbars normally fade out when idle. In a dialog the
       // body's bar stays visible, so a cut-off list reads as scrollable.
       content = ScrollbarTheme(
-        data: ScrollbarTheme.of(context)
-            .copyWith(thumbVisibility: const WidgetStatePropertyAll(true)),
+        data: ScrollbarTheme.of(
+          context,
+        ).copyWith(thumbVisibility: const WidgetStatePropertyAll(true)),
         child: content,
       );
     }

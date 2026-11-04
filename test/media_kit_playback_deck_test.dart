@@ -231,8 +231,9 @@ void main() {
     addTearDown(MediaKitPlaybackDeck.debugResetMissingFilters);
     engine.missingFilters = {'volume', 'stereotools', 'alimiter'};
     await deck.setVolume(1);
-    playbackEqualizer.value = const EqualizerSettings(enabled: true)
-        .copyWith(gains: [6, 0, 0, 0, 0, 0, 0, 0, 0, 0], balance: 0.5);
+    playbackEqualizer.value = const EqualizerSettings(
+      enabled: true,
+    ).copyWith(gains: [6, 0, 0, 0, 0, 0, 0, 0, 0, 0], balance: 0.5);
     await _settle();
     final af = engine.properties['af']!;
     expect(af, contains('equalizer@band0'));
@@ -276,8 +277,9 @@ void main() {
   });
 
   test('a new sample rate rebuilds the bands', () async {
-    playbackEqualizer.value = const EqualizerSettings(enabled: true)
-        .withBandCount(31);
+    playbackEqualizer.value = const EqualizerSettings(
+      enabled: true,
+    ).withBandCount(31);
     await _settle();
     expect(engine.properties['af'], contains('f=19845'));
     engine.sampleRateEvents.add(96000);

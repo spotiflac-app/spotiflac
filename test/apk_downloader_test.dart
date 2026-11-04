@@ -36,8 +36,9 @@ void main() {
     final finalPath = p.join(directory.path, 'SpotiFLAC-$version.apk');
     final part = File('$finalPath.part');
     await part.writeAsBytes(payload.sublist(0, 12));
-    await File('$finalPath.part.json')
-        .writeAsString(jsonEncode({'url': url, 'etag': '"release-1"'}));
+    await File(
+      '$finalPath.part.json',
+    ).writeAsString(jsonEncode({'url': url, 'etag': '"release-1"'}));
 
     final client = MockClient((request) async {
       expect(request.headers['range'], 'bytes=12-');

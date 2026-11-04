@@ -6,10 +6,13 @@ import 'package:spotiflac/theme/cover_palette.dart';
 
 void main() {
   test('native ordered counts retain the pinned Material palette seeds', () {
-    final fixtures = jsonDecode(
-      File('rust_backend/crates/core/src/native_palette/fixtures.json')
-          .readAsStringSync(),
-    ) as Map;
+    final fixtures =
+        jsonDecode(
+              File(
+                'rust_backend/crates/core/src/native_palette/fixtures.json',
+              ).readAsStringSync(),
+            )
+            as Map;
     for (final value in fixtures['fixtures'] as List) {
       final fixture = value as Map<String, dynamic>;
       final colors = [

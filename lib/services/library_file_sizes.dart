@@ -99,11 +99,12 @@ class LibraryFileSizes {
         sizes.addAll(
           await Future.wait([
             for (final row in rows.skip(start).take(4))
-              Future.sync(() => _readSize(row['file_path'] as String))
-                  .then<int?>(
-                    (size) => size != null && size >= 0 ? size : null,
-                    onError: (Object _) => null,
-                  ),
+              Future.sync(
+                () => _readSize(row['file_path'] as String),
+              ).then<int?>(
+                (size) => size != null && size >= 0 ? size : null,
+                onError: (Object _) => null,
+              ),
           ]),
         );
       }

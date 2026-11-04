@@ -127,8 +127,9 @@ class WeeklyReleaseService {
         final age = checkedAt == null ? null : date.difference(checkedAt);
         if (refresh || age == null || age.isNegative || age.inHours >= 24) {
           try {
-            final result = await loadArtist(artist)
-                .timeout(const Duration(seconds: 25));
+            final result = await loadArtist(
+              artist,
+            ).timeout(const Duration(seconds: 25));
             final metadata = result.metadata;
             // Missing catalogs mean unsupported, rather than an empty result
             // that silently replaces a previously successful cache.

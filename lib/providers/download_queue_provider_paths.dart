@@ -201,8 +201,9 @@ extension _DownloadQueuePaths on DownloadQueueNotifier {
       return true;
     }
 
-    final normalizedAlbumType = normalizeOptionalString(track.albumType)
-        ?.toLowerCase();
+    final normalizedAlbumType = normalizeOptionalString(
+      track.albumType,
+    )?.toLowerCase();
     if (normalizedAlbumType != null && normalizedAlbumType.isNotEmpty) {
       return false;
     }
@@ -212,8 +213,9 @@ extension _DownloadQueuePaths on DownloadQueueNotifier {
       return true;
     }
 
-    final normalizedAlbumName = normalizeOptionalString(track.albumName)
-        ?.toLowerCase();
+    final normalizedAlbumName = normalizeOptionalString(
+      track.albumName,
+    )?.toLowerCase();
     if (normalizedAlbumName == 'single' || normalizedAlbumName == 'singles') {
       return totalTracks == null || totalTracks <= 2;
     }

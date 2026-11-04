@@ -69,8 +69,9 @@ bool historyItemsReferToSameStoredFile(
   if (first.id == second.id) return true;
   final firstKeys = buildPathMatchKeys(first.filePath);
   if (firstKeys.isEmpty) return false;
-  return buildPathMatchKeys(second.filePath)
-      .any((key) => firstKeys.contains(key));
+  return buildPathMatchKeys(
+    second.filePath,
+  ).any((key) => firstKeys.contains(key));
 }
 
 String? resolvePersistedHistoryQuality({
@@ -166,11 +167,10 @@ class DownloadHistoryNotifier extends Notifier<DownloadHistoryState> {
     }
   }
 
-  Future<void> reloadFromStorage() =>
-      _reloadFuture ??= _enqueueHistoryWrite(_loadFromDatabase)
-          .whenComplete(() {
-            _reloadFuture = null;
-          });
+  Future<void> reloadFromStorage() => _reloadFuture ??=
+      _enqueueHistoryWrite(_loadFromDatabase).whenComplete(() {
+        _reloadFuture = null;
+      });
 
   void _bumpHistoryRevision() {
     state = state.copyWith(loadedIndexVersion: state.loadedIndexVersion + 1);

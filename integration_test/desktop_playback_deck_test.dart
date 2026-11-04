@@ -83,8 +83,9 @@ void main() {
       final bassBoost = EqualizerPreset.builtIn.firstWhere(
         (preset) => preset.name == 'Bass boost',
       );
-      playbackEqualizer.value = const EqualizerSettings(enabled: true)
-          .withToneOf(bassBoost.settings);
+      playbackEqualizer.value = const EqualizerSettings(
+        enabled: true,
+      ).withToneOf(bassBoost.settings);
       final second = await _positionAfter(deck, const Duration(seconds: 1));
       expect(playbackEqualizerError.value, isNull);
       expect(second, greaterThan(first));

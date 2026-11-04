@@ -23,7 +23,8 @@ mod watcher;
 
 pub use call::{Args, BYTES_KEY, CallError, Reply};
 pub use ffi::{
-    spotiflac_call, spotiflac_cancel, spotiflac_free, spotiflac_init, spotiflac_subscribe, spotiflac_unsubscribe,
+    spotiflac_call, spotiflac_cancel, spotiflac_free, spotiflac_init, spotiflac_subscribe,
+    spotiflac_unsubscribe,
 };
 pub use runtime::{Config, SpotiFLACCallback};
 

@@ -155,8 +155,9 @@ extension _TrackMetadataDisplay on _TrackMetadataScreenState {
   }
 
   void _showSnackBarMessage(String message) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _showLongSnackBarMessage(String message) {

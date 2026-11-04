@@ -98,8 +98,9 @@ void main() {
         MaterialApp(
           theme: theme,
           builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context)
-                .copyWith(disableAnimations: reduceMotion),
+            data: MediaQuery.of(
+              context,
+            ).copyWith(disableAnimations: reduceMotion),
             child: child!,
           ),
           home: PlayerArtworkTheme(
@@ -273,8 +274,9 @@ void main() {
       expect(play.style!.foregroundColor!.resolve({}), cover.onPrimary);
       // Downloads are app chrome hosted in the bar.
       expect(
-        Theme.of(tester.element(find.byType(DesktopDownloadsButton)))
-            .colorScheme,
+        Theme.of(
+          tester.element(find.byType(DesktopDownloadsButton)),
+        ).colorScheme,
         AppTheme.light().colorScheme,
       );
     });

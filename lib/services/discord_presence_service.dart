@@ -102,8 +102,9 @@ class DesktopDiscordChannel extends MethodChannel {
     _statusSubscription =
         (_statuses ?? PlatformBridge.discordPresenceStatusEvents()).listen(
           (status) => unawaited(
-            Future<dynamic>.sync(() => handler(MethodCall('status', status)))
-                .catchError((_) {}),
+            Future<dynamic>.sync(
+              () => handler(MethodCall('status', status)),
+            ).catchError((_) {}),
           ),
         );
   }

@@ -37,8 +37,9 @@ void main() {
               supportedLocales: AppLocalizations.supportedLocales,
               home: Builder(
                 builder: (context) => MediaQuery(
-                  data: MediaQuery.of(context)
-                      .copyWith(padding: const EdgeInsets.only(bottom: inset)),
+                  data: MediaQuery.of(
+                    context,
+                  ).copyWith(padding: const EdgeInsets.only(bottom: inset)),
                   child: Stack(
                     fit: StackFit.expand,
                     children: [

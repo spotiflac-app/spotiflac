@@ -2,8 +2,8 @@
 
 use super::*;
 use crate::lyrics::http;
-use spotiflac_core::lyrics::payloads;
 use regex::Regex;
+use spotiflac_core::lyrics::payloads;
 use std::sync::{LazyLock, MutexGuard, TryLockError};
 use std::time::Duration;
 

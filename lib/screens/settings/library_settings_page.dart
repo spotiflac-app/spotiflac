@@ -269,8 +269,9 @@ class _LibrarySettingsPageState extends ConsumerState<LibrarySettingsPage> {
     if (confirmed == true) {
       await ref.read(localLibraryProvider.notifier).clearLibrary();
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(context.l10n.libraryCleared)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(context.l10n.libraryCleared)));
       }
     }
   }

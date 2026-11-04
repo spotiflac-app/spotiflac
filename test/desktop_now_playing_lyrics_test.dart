@@ -32,8 +32,9 @@ String _timestamp(int seconds) =>
     '[${(seconds ~/ 60).toString().padLeft(2, '0')}:'
     '${(seconds % 60).toString().padLeft(2, '0')}.00]';
 
-final _lrc = [for (var i = 0; i < 80; i++) '${_timestamp(i * 3)}Lyric line $i']
-    .join('\n');
+final _lrc = [
+  for (var i = 0; i < 80; i++) '${_timestamp(i * 3)}Lyric line $i',
+].join('\n');
 
 const _ttml = '''
 <tt xmlns="http://www.w3.org/ns/ttml"><body><div>

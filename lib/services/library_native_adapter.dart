@@ -11,10 +11,11 @@ import 'package:spotiflac/services/sqlite_native_snapshot.dart';
 import 'package:spotiflac/utils/logger.dart';
 import 'package:spotiflac/utils/native_platform_name.dart';
 
-typedef NativeLibraryJobRunner = Future<Map<String, dynamic>> Function(
-  Map<String, dynamic> request, {
-  String? requestId,
-});
+typedef NativeLibraryJobRunner =
+    Future<Map<String, dynamic>> Function(
+      Map<String, dynamic> request, {
+      String? requestId,
+    });
 
 final _log = AppLogger('LibraryNativeAdapter');
 var _attachmentSequence = 0;
@@ -280,9 +281,9 @@ class LibraryNativeAdapter {
     return sqlite.transactionWithBusyRetry(database, (txn) async {
       _check(isCancelled);
       await _checkSource(txn, sourceId, sourcePath);
-      final columns = (await txn.rawQuery('PRAGMA main.table_info(library)'))
-          .map((column) => '"${column['name']}"')
-          .join(', ');
+      final columns = (await txn.rawQuery(
+        'PRAGMA main.table_info(library)',
+      )).map((column) => '"${column['name']}"').join(', ');
       final historyMatch =
           'EXISTS(SELECT 1 FROM $alias.library_path_keys sk '
           'JOIN history_db.history_path_keys hk ON hk.path_key = sk.path_key '

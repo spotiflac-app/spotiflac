@@ -291,8 +291,9 @@ class _LogScreenState extends State<LogScreen> {
                   : context.l10n.logTitle,
               leading: _selectionMode
                   ? AppIconButton(
-                      tooltip: MaterialLocalizations.of(context)
-                          .closeButtonTooltip,
+                      tooltip: MaterialLocalizations.of(
+                        context,
+                      ).closeButtonTooltip,
                       icon: const AppIcon(Icons.close),
                       onPressed: _exitSelectionMode,
                     )
@@ -348,8 +349,9 @@ class _LogScreenState extends State<LogScreen> {
                       ),
                       AppMenuButton<String>(
                         icon: const AppIcon(Icons.more_vert),
-                        tooltip: MaterialLocalizations.of(context)
-                            .showMenuTooltip,
+                        tooltip: MaterialLocalizations.of(
+                          context,
+                        ).showMenuTooltip,
                         onSelected: (value) {
                           switch (value) {
                             case 'share':

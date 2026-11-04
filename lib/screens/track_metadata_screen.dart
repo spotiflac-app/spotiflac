@@ -772,8 +772,9 @@ class _TrackMetadataScreenState extends ConsumerState<TrackMetadataScreen>
                 child: Center(
                   child: HeaderCircleButton(
                     icon: Icons.arrow_back,
-                    tooltip: MaterialLocalizations.of(context)
-                        .backButtonTooltip,
+                    tooltip: MaterialLocalizations.of(
+                      context,
+                    ).backButtonTooltip,
                     onPressed: _popWithMetadataResult,
                   ),
                 ),
@@ -963,8 +964,9 @@ class _MetadataOptionTile extends StatelessWidget {
             Expanded(
               child: Text(
                 option.label,
-                style: Theme.of(context).textTheme.bodyLarge
-                    ?.copyWith(color: titleColor ?? colorScheme.onSurface),
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: titleColor ?? colorScheme.onSurface,
+                ),
               ),
             ),
             const SizedBox(width: 16),
@@ -987,8 +989,9 @@ class _MetadataOptionTile extends StatelessWidget {
             Expanded(
               child: Text(
                 option.label,
-                style: Theme.of(context).textTheme.bodyLarge
-                    ?.copyWith(color: titleColor),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyLarge?.copyWith(color: titleColor),
               ),
             ),
           ],

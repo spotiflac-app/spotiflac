@@ -168,8 +168,9 @@ extension _EditMetadataSheetCover on _EditMetadataSheetState {
             padding: const EdgeInsets.only(bottom: 8),
             child: Text(
               context.l10n.trackCoverNoEmbeddedArt,
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: cs.onSurfaceVariant),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
             ),
           ),
         Row(
@@ -242,8 +243,9 @@ extension _EditMetadataSheetCover on _EditMetadataSheetState {
             const SizedBox(height: 8),
             Text(
               context.l10n.trackCoverReplaceNotice,
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: cs.onSurfaceVariant),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
             ),
           ],
           const SizedBox(height: 12),
@@ -260,8 +262,9 @@ extension _EditMetadataSheetCover on _EditMetadataSheetState {
           ),
           Text(
             context.l10n.trackCoverResolutionHint,
-            style: Theme.of(context).textTheme.bodySmall
-                ?.copyWith(color: cs.onSurfaceVariant),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
           ),
         ],
         const SizedBox(height: 8),
@@ -320,8 +323,9 @@ extension _EditMetadataSheetCover on _EditMetadataSheetState {
         const SizedBox(height: 8),
         Text(
           label,
-          style: Theme.of(context).textTheme.labelMedium
-              ?.copyWith(color: cs.onSurfaceVariant),
+          style: Theme.of(
+            context,
+          ).textTheme.labelMedium?.copyWith(color: cs.onSurfaceVariant),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
@@ -330,8 +334,10 @@ extension _EditMetadataSheetCover on _EditMetadataSheetState {
           Text(
             '${details.width} × ${details.height} px · '
             '${_formatCoverBytes(details.bytes)}',
-            style: Theme.of(context).textTheme.labelSmall
-                ?.copyWith(color: cs.primary, fontWeight: FontWeight.w600),
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: cs.primary,
+              fontWeight: FontWeight.w600,
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           )

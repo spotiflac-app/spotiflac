@@ -70,8 +70,9 @@ abstract final class FFmpegReplayGain {
       return null;
     }
 
-    final integratedMatch = RegExp(r'I:\s+(-?\d+\.?\d*)\s+LUFS')
-        .allMatches(output);
+    final integratedMatch = RegExp(
+      r'I:\s+(-?\d+\.?\d*)\s+LUFS',
+    ).allMatches(output);
     if (integratedMatch.isEmpty) {
       _log.w('ReplayGain scan: could not parse integrated loudness');
       return null;
