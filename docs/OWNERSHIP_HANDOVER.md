@@ -64,8 +64,9 @@ available; the separate Intel-runner job above verifies that platform.
   CI artifacts are test builds, not a claim of store distribution or notarization.
 - The repository remains private by owner choice. Public app update checks,
   raw configuration and website downloads cannot read private GitHub assets.
-  Do not embed a GitHub token in the app. Choose a public distribution endpoint
-  when the project is ready for public downloads.
+  Do not embed a GitHub token in the app. A separate downloads repository is
+  prepared at `spotiflac-app/spotiflac-releases`; official release builds point
+  to it while assets remain drafts until validation is complete.
 - Website development is deferred by the owner. Existing website download links
   remain in place until spotiflac.com is ready; this work did not change the site.
 - Optional Discord, OAuth, translation, funding and community integrations stay

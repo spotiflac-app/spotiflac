@@ -125,3 +125,6 @@ key.properties
 
 # Python verification cache
 __pycache__/
+
+# Generated public distribution build settings
+.release-defines.json

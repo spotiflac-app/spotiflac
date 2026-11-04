@@ -36,7 +36,8 @@ your own signing project and policies before enabling that integration.
 
 ## Configuration you control
 
-Edit `config/app.json` for announcements. Funding is disabled until valid
+Official releases read `config/app.json` from `spotiflac-app/spotiflac-releases`
+for announcements. The private source copy is the initial template. Funding is disabled until valid
 project-owned methods are explicitly supplied. No old wallet or sponsorship
 account is used. The repository configuration contains no credentials.
 
@@ -61,7 +62,7 @@ The release workflow then derives its bundle ID, size, date and asset URL from
 the actual IPA. Do not advertise nonexistent packages or inherited versions.
 
 Point the website's release feed at
-`https://api.github.com/repos/spotiflac-app/spotiflac/releases` and remove its
+`https://api.github.com/repos/spotiflac-app/spotiflac-releases/releases` and remove its
 inherited download URLs after verified releases exist. An empty release feed
 should display that the first release is being prepared, without falling back
 to another project's packages. Website deployment requires access to its source
@@ -77,12 +78,44 @@ configuration tests cover disabled funding, no network requests when remote
 configuration is disabled, and no native account initialization for disabled
 Discord. A source audit is not a substitute for running those builds.
 
-## Private repository
+## Private development and public downloads
 
-The repository remains private by owner preference. Public update checks, raw
-configuration URLs and website downloads cannot access its private releases.
-Do not embed a GitHub token in the application. Keep releases as drafts until
-builds are verified and a distribution destination is explicitly chosen.
+The development repository stays private. Public download hosting is prepared at
+https://github.com/spotiflac-app/spotiflac-releases. Only its README, safe
+announcement configuration, icon and empty placeholder feed are initially public.
+Release packages and matching source snapshots stay in drafts during validation.
+The existing website download links are unchanged while the website is developed.
+
+Every official Release build generates `.release-defines.json` using
+`scripts/prepare_release_config.py`. The `DISTRIBUTION_REPO` Actions variable can
+override the default `spotiflac-app/spotiflac-releases` host. Mobile and desktop
+updates and announcements use that host; no GitHub token is compiled into the app.
+For a reproducible local distribution build, generate the file with
+`python scripts/prepare_release_config.py --repository spotiflac-app/spotiflac-releases`
+and pass `--dart-define-from-file=.release-defines.json` to Flutter.
+
+After the signed private draft finishes, stage its audited assets from a local
+checkout with the project owner's Git credentials:
+
+```text
+python scripts/publish_distribution.py --tag v1.0.0 --directory PATH_TO_REVIEW_PACKAGES
+```
+
+This tool never publishes or changes repository visibility. It verifies every
+package against the private build's checksum manifest, resolves the exact tagged
+source commit, includes the matching source archive and license notices, and
+creates a draft in the downloads repository. Existing different assets cannot
+be silently overwritten. Credentials remain in the environment or local Git
+credential manager. Do not store a broad personal token in the application.
+
+Once the owner completes installation and update tests, publish the downloads
+draft explicitly. Its public release API becomes the app's unauthenticated update
+feed. The AltStore source is the stable release asset URL
+`https://github.com/spotiflac-app/spotiflac-releases/releases/latest/download/apps.json`;
+it is generated from the actual IPA. No production download is advertised before
+a release is published. Trusted signing still requires owner-held Apple or
+Windows signing credentials; a self-signed certificate does not establish public
+distribution trust.
 
 ## Build verification (2026-11-05)
 

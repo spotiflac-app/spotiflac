@@ -14,6 +14,9 @@ on:
 permissions:
   contents: read
 
+env:
+  SPOTIFLAC_DISTRIBUTION_REPO: ${{ vars.DISTRIBUTION_REPO || 'spotiflac-app/spotiflac-releases' }}
+
 jobs:
   get-version:
     runs-on: ubuntu-latest
@@ -69,6 +72,9 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Configure public release endpoints
+        run: python scripts/prepare_release_config.py
 
       - name: Setup Java
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
@@ -143,7 +149,7 @@ jobs:
 
       - name: Build release APKs
         run: |
-          bash scripts/build_android.sh --lite --target lib/main.dart
+          bash scripts/build_android.sh --lite --target lib/main.dart --dart-define-from-file=.release-defines.json
           ls -la build/app/outputs/flutter-apk/
 
       - name: Sign and verify release APKs (V1/V2/V3/V4)
@@ -266,6 +272,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Configure public release endpoints
+        run: python scripts/prepare_release_config.py
+
       - name: Select Xcode 26.1.1
         run: |
           sudo xcode-select -s /Applications/Xcode_26.1.1.app
@@ -321,7 +330,7 @@ jobs:
       - name: Build iOS (unsigned)
         run: |
           flutter build ios --release --no-codesign --config-only --target lib/main.dart \
-            --dart-define="GIT_COMMIT=$(git rev-parse --short=8 HEAD)"
+            --dart-define="GIT_COMMIT=$(git rev-parse --short=8 HEAD)" --dart-define-from-file=.release-defines.json
 
           cd ios
           xcodebuild -workspace Runner.xcworkspace \
@@ -384,6 +393,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Configure public release endpoints
+        run: python scripts/prepare_release_config.py
 
       - name: Select Xcode 26.1.1
         run: |
@@ -448,7 +460,7 @@ jobs:
           SPOTIFLAC_REQUIRE_FFMPEG: "1"
         run: |
           flutter build macos --release --target lib/main.dart \
-            --dart-define="GIT_COMMIT=$(git rev-parse --short=8 HEAD)"
+            --dart-define="GIT_COMMIT=$(git rev-parse --short=8 HEAD)" --dart-define-from-file=.release-defines.json
 
       - name: Package disk image
         env:
@@ -497,6 +509,9 @@ jobs:
 
       # Same build dependencies as desktop.yml, plus the desktop entry and
       # AppStream validators and dpkg-shlibdeps for the deb.
+      - name: Configure public release endpoints
+        run: python scripts/prepare_release_config.py
+
       - name: Install Linux build dependencies
         run: |
           sudo apt-get update
@@ -565,7 +580,7 @@ jobs:
       - name: Build Linux bundle
         run: |
           flutter build linux --release --target lib/main.dart \
-            --dart-define="GIT_COMMIT=$(git rev-parse --short=8 HEAD)"
+            --dart-define="GIT_COMMIT=$(git rev-parse --short=8 HEAD)" --dart-define-from-file=.release-defines.json
 
       - name: Validate desktop entry and AppStream metadata
         run: |
@@ -638,6 +653,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Configure public release endpoints
+        run: python scripts/prepare_release_config.py
+
       - name: Activate pinned Rust toolchain
         working-directory: rust_backend
         run: rustup show
@@ -680,7 +698,7 @@ jobs:
       - name: Build Windows app
         run: |
           $commit = git rev-parse --short=8 HEAD
-          flutter build windows --release --target lib/main.dart --dart-define="GIT_COMMIT=$commit"
+          flutter build windows --release --target lib/main.dart --dart-define="GIT_COMMIT=$commit" --dart-define-from-file=.release-defines.json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $bundle = 'build\windows\${{ matrix.arch }}\runner\Release'
           ./scripts/check_windows_bundle.ps1 -BundleDir $bundle -Arch ${{ matrix.arch }}
