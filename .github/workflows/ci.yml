@@ -10,6 +10,7 @@ on:
         options:
           - all
           - flutter
+          - ios
   pull_request:
   push:
     branches:
@@ -30,10 +31,10 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      dart: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.dart == 'true' }}
-      android: ${{ (github.event_name == 'workflow_dispatch' && inputs.checks != 'flutter') || (github.event_name != 'workflow_dispatch' && steps.filter.outputs.android == 'true') }}
+      dart: ${{ (github.event_name == 'workflow_dispatch' && inputs.checks != 'ios') || (github.event_name != 'workflow_dispatch' && steps.filter.outputs.dart == 'true') }}
+      android: ${{ (github.event_name == 'workflow_dispatch' && inputs.checks == 'all') || (github.event_name != 'workflow_dispatch' && steps.filter.outputs.android == 'true') }}
       ios: ${{ (github.event_name == 'workflow_dispatch' && inputs.checks != 'flutter') || (github.event_name != 'workflow_dispatch' && steps.filter.outputs.ios == 'true') }}
-      rust: ${{ (github.event_name == 'workflow_dispatch' && inputs.checks != 'flutter') || (github.event_name != 'workflow_dispatch' && steps.filter.outputs.rust == 'true') }}
+      rust: ${{ (github.event_name == 'workflow_dispatch' && inputs.checks == 'all') || (github.event_name != 'workflow_dispatch' && steps.filter.outputs.rust == 'true') }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -194,7 +195,7 @@ jobs:
 
   rust-ios:
     name: Rust iOS libraries & release application
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     needs: changes
     if: needs.changes.outputs.rust == 'true' || needs.changes.outputs.ios == 'true'
     env:
@@ -203,6 +204,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Select Xcode 26.1.1
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.1.1.app
+          xcodebuild -version
 
       - name: Activate pinned Rust toolchain
         working-directory: rust_backend
