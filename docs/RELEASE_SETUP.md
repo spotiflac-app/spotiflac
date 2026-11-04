@@ -83,3 +83,12 @@ The repository remains private by owner preference. Public update checks, raw
 configuration URLs and website downloads cannot access its private releases.
 Do not embed a GitHub token in the application. Keep releases as drafts until
 builds are verified and a distribution destination is explicitly chosen.
+
+## Build verification (2026-11-05)
+
+Android, iOS, Windows x64/ARM64, Linux x64/ARM64 and universal macOS builds
+passed their CI checks. Flutter analysis and 3,557 tests passed; Rust Clippy
+and 475 tests passed. See [ownership status](OWNERSHIP_HANDOVER.md) for run links,
+skipped-test counts and distribution limitations. A successful CI build is not
+a published production release. Existing website download links remain in place
+while the website is under development, as requested by the owner.

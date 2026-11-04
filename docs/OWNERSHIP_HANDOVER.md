@@ -1,10 +1,10 @@
 # SpotiFLAC ownership status
 
-Updated 2026-11-04.
+Updated 2026-11-05.
 Website: https://spotiflac.com
 Repository: https://github.com/spotiflac-app/spotiflac
 
-## Implemented in the local source
+## Implemented
 
 - Project-owned namespace `com.spotiflac.app`, including native/JNI channels,
   bundle identifiers, app groups, Android package directories, Linux packaging,
@@ -30,19 +30,46 @@ Repository: https://github.com/spotiflac-app/spotiflac
 - A new encrypted Android release-signing key is generated privately outside
   the source tree and excluded by Git ignore rules. No key is embedded here.
 
-## Requires external access or verification
+## Verified builds and checks
 
-- Source is uploaded to the private project repository on `main`.
-- All four Android signing secrets are configured in GitHub Actions.
-- Run CI and compile on the intended operating systems. Local source checks and
-  packaging tests can pass without proving Flutter/native builds work.
-- Configure Apple/Windows trusted signing using accounts and certificates you
-  own if required. No certificate purchase or external account creation occurred.
-- Update and deploy the existing website after its source/hosting is accessible.
-  It must use this repository's release feed and stop advertising inherited
-  downloads. The website itself is not modified by changes to this source tree.
-- Register any optional Discord, OAuth, translation, payment or community
-  accounts you wish to enable. They are not fabricated or silently reused.
+- Flutter formatting and analysis passed; 3,557 Flutter tests passed and 12 were
+  skipped by the existing suite.
+- Rust formatting, Clippy and workspace tests passed: 475 tests passed, with
+  7 ignored by the existing suite.
+- Android debug compilation, native unit tests, both release APK architectures,
+  payload audits, package signatures and symbol provenance passed.
+- iOS device and universal simulator XCFrameworks compiled. The unsigned iOS
+  release application built and passed its payload audit.
+- Desktop application builds and package audits passed for Windows x64/ARM64,
+  Linux x64/ARM64 and universal macOS. Windows CI failures now fail the workflow
+  instead of being treated as informational failures.
+- All 23 local packaging and release-integrity tests passed.
+- The local repository root and Git metadata are owned by the Windows user;
+  ordinary Git commands work without a safe-directory override.
+
+Evidence: [Android, Flutter and Rust checks](https://github.com/spotiflac-app/spotiflac/actions/runs/41910773816),
+[iOS retry on the Intel runner](https://github.com/spotiflac-app/spotiflac/actions/runs/41913691452),
+[desktop builds](https://github.com/spotiflac-app/spotiflac/actions/runs/41916044799).
+The first run's iOS job was cancelled by GitHub because no ARM Mac runner was
+available; the separate Intel-runner job above verifies that platform.
+
+## Distribution still to complete
+
+- No production release has been published. Run the Release workflow for the
+  first draft, validate fresh installation, playback, downloads and an upgrade,
+  then decide when to publish. Android CI uses a test key; production releases
+  use the four configured project-owned signing secrets.
+- Apple/Windows trusted distribution signing remains optional and requires
+  project-owned certificates/accounts. The iOS CI build is unsigned; desktop
+  CI artifacts are test builds, not a claim of store distribution or notarization.
+- The repository remains private by owner choice. Public app update checks,
+  raw configuration and website downloads cannot read private GitHub assets.
+  Do not embed a GitHub token in the app. Choose a public distribution endpoint
+  when the project is ready for public downloads.
+- Website development is deferred by the owner. Existing website download links
+  remain in place until spotiflac.com is ready; this work did not change the site.
+- Optional Discord, OAuth, translation, funding and community integrations stay
+  disabled or unconfigured until project-owned accounts are supplied.
 
 ## Licensing
 
