@@ -1,0 +1,41 @@
+name: Format source
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: format-main
+  cancel-in-progress: false
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: main
+      - name: Setup pinned Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          channel: stable
+          flutter-version-file: .fvmrc
+          cache: true
+      - name: Get Flutter dependencies
+        run: flutter pub get
+      - name: Format Dart
+        run: dart format lib test integration_test scripts/prepare_flutter_sdk.dart
+      - name: Format Rust
+        working-directory: rust_backend
+        run: cargo fmt --all
+      - name: Prepare formatting patch
+        run: |
+          git diff --binary -- lib test integration_test scripts/prepare_flutter_sdk.dart rust_backend > formatting.patch
+      - name: Upload formatting patch
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: formatting-patch
+          path: formatting.patch

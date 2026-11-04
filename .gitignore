@@ -97,7 +97,9 @@ DerivedData/
 /tool/
 
 # Local documentation, migration archives, fixtures, and benchmark evidence.
-/docs/
+/docs/*
+!/docs/RELEASE_SETUP.md
+!/docs/OWNERSHIP_HANDOVER.md
 
 # Temporary files and logs
 /.tmp/
@@ -120,3 +122,6 @@ flutter_*.log
 *.keystore
 key.properties
 *signing-secrets*.json
+
+# Python verification cache
+__pycache__/

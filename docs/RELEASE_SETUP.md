@@ -1,0 +1,85 @@
+# SpotiFLAC release setup
+
+## Repository and first release
+
+The source is maintained at `spotiflac-app/spotiflac` on `main`. Use tag `v1.0.0`
+for the first release. The pinned Flutter/Rust toolchains and operating-system
+runners build the mobile and desktop packages. Draft releases combine every
+successful platform, with one set of release notes and SHA256SUMS.txt.
+
+The default is a draft release. Validate builds, signatures, fresh installation,
+playback and downloads, then test an upgrade before setting the GitHub Actions
+repository variable `PUBLISH_RELEASES` to `true` for future public releases.
+Do not enable it merely to make a failed workflow appear successful.
+
+## Android signing
+
+A newly generated encrypted PKCS#12 key has been saved privately outside the
+source tree. Back up that key and password securely. Configure these Actions
+secrets using the private signing bundle: `KEYSTORE_BASE64`, `KEY_ALIAS`,
+`KEYSTORE_PASSWORD`, `KEY_PASSWORD`. Keep the same key for future updates.
+The workflow fails if signing credentials are missing; it does not publish a
+debug-signed Android package. Do not commit signing keys or passwords.
+
+## Apple and Windows signing
+
+The iOS artifact is an unsigned IPA for signing/sideloading; publishing it is
+not App Store distribution. Configure your Apple Developer team, certificates,
+bundle IDs, provisioning, app groups and notarization if distributing signed
+Apple builds. Current unsigned/ad-hoc desktop artifacts must be described as
+such. Apple accounts and trusted certificates cannot be created from source.
+
+macOS optionally reads `MACOS_SIGNING_P12_BASE64` and
+`MACOS_SIGNING_P12_PASSWORD`. Windows optionally reads `SIGNPATH_API_TOKEN`
+and the SignPath repository variables referenced in the workflow. Register
+your own signing project and policies before enabling that integration.
+
+## Configuration you control
+
+Edit `config/app.json` for announcements. Funding is disabled until valid
+project-owned methods are explicitly supplied. No old wallet or sponsorship
+account is used. The repository configuration contains no credentials.
+
+Discord is disabled. To restore it, obtain an authorized SDK and register your
+own Discord application. Set the native application IDs and callbacks, build
+with `SPOTIFLAC_DISCORD_SDK=1`, and enable the Dart integration with
+`--dart-define=SPOTIFLAC_DISCORD_ENABLED=true`. Desktop uses the Rust build-time
+environment variable `SPOTIFLAC_DISCORD_CLIENT_ID`; mobile native builds need
+the `SPOTIFLAC_DISCORD_APPLICATION_ID` definition. All must refer to your same
+registered application. The release jobs intentionally omit the SDK by default.
+
+The optional built-in Apple lyrics backup is unavailable unless Rust is built
+with a project-controlled HTTPS `SPOTIFLAC_APPLE_LYRICS_URL`. Implement the
+expected API contract before configuring it. Other third-party providers can
+still function independently. Extension OAuth applications must likewise use
+accounts you control, with the `spotiflac://` callbacks registered as required.
+
+## Feed and website
+
+`apps.json` intentionally contains no apps until the first public iOS release.
+The release workflow then derives its bundle ID, size, date and asset URL from
+the actual IPA. Do not advertise nonexistent packages or inherited versions.
+
+Point the website's release feed at
+`https://api.github.com/repos/spotiflac-app/spotiflac/releases` and remove its
+inherited download URLs after verified releases exist. An empty release feed
+should display that the first release is being prepared, without falling back
+to another project's packages. Website deployment requires access to its source
+and hosting; changing this app repository does not modify the existing website.
+
+## Verification
+
+Run `flutter pub get`, regenerate localization and bindings, `flutter analyze`,
+`flutter test`, and the relevant native build/audit jobs. The four tests in
+`scripts/test_owned_release.py` cover mixed-platform manifests, corrupted assets,
+actual IPA metadata, and rejection of a different bundle ID. The Dart ownership
+configuration tests cover disabled funding, no network requests when remote
+configuration is disabled, and no native account initialization for disabled
+Discord. A source audit is not a substitute for running those builds.
+
+## Private repository
+
+The repository remains private by owner preference. Public update checks, raw
+configuration URLs and website downloads cannot access its private releases.
+Do not embed a GitHub token in the application. Keep releases as drafts until
+builds are verified and a distribution destination is explicitly chosen.
