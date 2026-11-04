@@ -184,7 +184,7 @@ Project setup: [release and signing instructions](docs/RELEASE_SETUP.md) · [own
       <p>
         Add metadata and lyrics sources from community extension
         repositories, then choose their priority. Building one? See the
-        <a href="https://github.com/spotiflac-app/spotiflac/blob/main/docs/EXTENSION_DEVELOPMENT.md">extension documentation</a>.
+        <a href="https://github.com/spotiflac-app/spotiflac/blob/main/CONTRIBUTING.md#an-extension-facing-api">extension documentation</a>.
       </p>
       <p></p>
     </td>

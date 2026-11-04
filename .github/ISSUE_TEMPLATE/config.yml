@@ -4,5 +4,5 @@ contact_links:
     url: https://github.com/spotiflac-app/spotiflac#readme
     about: Check the README for setup instructions and FAQ
   - name: Extension Development Guide
-    url: https://github.com/spotiflac-app/spotiflac/blob/main/docs/EXTENSION_DEVELOPMENT.md
+    url: https://github.com/spotiflac-app/spotiflac/blob/main/CONTRIBUTING.md#an-extension-facing-api
     about: Documentation for building SpotiFLAC extensions

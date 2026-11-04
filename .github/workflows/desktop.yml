@@ -287,9 +287,6 @@ jobs:
           - arch: arm64
             runner: windows-11-arm
             rust_target: aarch64-pc-windows-msvc
-    # Informational until the Windows build is proven in CI. Remove this once
-    # a run of this job is green.
-    continue-on-error: true
     defaults:
       run:
         shell: pwsh
