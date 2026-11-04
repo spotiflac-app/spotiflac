@@ -197,7 +197,7 @@ void main() {
       final metadata = (await property('Metadata')).asStringVariantDict();
       final track = metadata['mpris:trackid']!;
       await call('SetPosition', [
-        DBusObjectPath('/com/zarz/spotiflac/track/999'),
+        DBusObjectPath('/com/spotiflac/app/track/999'),
         DBusInt64(1000000),
       ]);
       expect(callbacks.requests, isEmpty);

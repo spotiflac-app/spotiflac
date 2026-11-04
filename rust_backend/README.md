@@ -140,7 +140,7 @@ The binding names come from `rust_backend/crates/mobile/uniffi.toml`.
 
 | Platform | Generated | Consumed by |
 | --- | --- | --- |
-| Android | Kotlin package `com.spotiflac.backend`, loading `spotiflac_mobile` through JNA | `android/app/build.gradle.kts` adds `target/bindings/kotlin` and `target/android/jniLibs` as source dirs; used by `android/app/src/rust/kotlin/com/zarz/spotiflac/SelectedCoreBackend.kt` and its neighbors |
+| Android | Kotlin package `com.spotiflac.backend`, loading `spotiflac_mobile` through JNA | `android/app/build.gradle.kts` adds `target/bindings/kotlin` and `target/android/jniLibs` as source dirs; used by `android/app/src/rust/kotlin/com/spotiflac/app/SelectedCoreBackend.kt` and its neighbors |
 | iOS | Swift module `SpotiFLACBackend` with FFI module `SpotiFLACBackendFFI` | `ios/Podfile` pod `SpotiFLACBackend` at `../rust_backend/target/ios`; imported by `ios/Runner/CoreBackend.swift` |
 
 The generated files are build output under `target/` and are not tracked.

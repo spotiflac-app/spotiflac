@@ -569,7 +569,12 @@ class AppSettings {
     );
   }
 
-  factory AppSettings.fromJson(Map<String, dynamic> json) =>
-      _$AppSettingsFromJson(json);
+  factory AppSettings.fromJson(Map<String, dynamic> json) {
+    final providers = json['lyricsProviders'];
+    return _$AppSettingsFromJson({
+      ...json,
+      if (providers is List) 'lyricsProviders': providers.toSet().toList(),
+    });
+  }
   Map<String, dynamic> toJson() => _$AppSettingsToJson(this);
 }

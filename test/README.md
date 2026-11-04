@@ -88,7 +88,7 @@ only for that:
     notifying Dart, which pauses and requeues.
   - `NativeDownloadFinalizer.kt`, `NativeFinalizerHistory.kt`,
     `NativeHistoryStore.kt` and `DownloadServiceSnapshot.kt` (in
-    `android/app/src/main/kotlin/com/zarz/spotiflac/`), with
+    `android/app/src/main/kotlin/com/spotiflac/app/`), with
     `lib/services/history_schema.dart` and
     `lib/providers/download_queue_provider_native_worker.dart`: the native
     worker contract version, the history schema version, columns and

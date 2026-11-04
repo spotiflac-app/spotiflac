@@ -258,6 +258,13 @@ jobs:
       SPOTIFLAC_DISCORD_SDK: "0"
 
     steps:
+      - name: Free disk space for Android and Rust builds
+        run: |
+          # Hosted runners include large toolchains this Android job never uses.
+          sudo rm -rf /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/local/share/boost /usr/share/swift /usr/local/.ghcup
+          df -h
+
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

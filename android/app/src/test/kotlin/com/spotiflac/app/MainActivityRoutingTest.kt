@@ -38,7 +38,7 @@ class MainActivityRoutingTest {
     }
 
     private fun mainActivitySource(): String {
-        val relative = "src/main/kotlin/com/zarz/spotiflac/MainActivity.kt"
+        val relative = "src/main/kotlin/com/spotiflac/app/MainActivity.kt"
         val candidates = listOf(
             File(relative),
             File("app/$relative"),

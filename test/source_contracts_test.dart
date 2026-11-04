@@ -84,22 +84,22 @@ void main() {
 
   group('native worker contracts', () {
     final finalizerSource = File(
-      'android/app/src/main/kotlin/com/zarz/spotiflac/'
+      'android/app/src/main/kotlin/com/spotiflac/app/'
       'NativeDownloadFinalizer.kt',
     ).readAsStringSync();
     final finalizerHistorySource = File(
-      'android/app/src/main/kotlin/com/zarz/spotiflac/'
+      'android/app/src/main/kotlin/com/spotiflac/app/'
       'NativeFinalizerHistory.kt',
     ).readAsStringSync();
     final historyStoreSource = File(
-      'android/app/src/main/kotlin/com/zarz/spotiflac/'
+      'android/app/src/main/kotlin/com/spotiflac/app/'
       'NativeHistoryStore.kt',
     ).readAsStringSync();
     final historyDatabaseSource = File(
       'lib/services/history_schema.dart',
     ).readAsStringSync();
     final workerSnapshotSource = File(
-      'android/app/src/main/kotlin/com/zarz/spotiflac/'
+      'android/app/src/main/kotlin/com/spotiflac/app/'
       'DownloadServiceSnapshot.kt',
     ).readAsStringSync();
     final nativeWorkerProviderSource = File(

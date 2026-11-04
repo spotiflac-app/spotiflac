@@ -4,7 +4,7 @@ How the Flutter app talks to the Android and iOS hosts. Channel names, method
 names, argument keys and reply keys below are a compatibility contract: Dart,
 Kotlin and Swift must change together.
 
-Kotlin sources live in `android/app/src/main/kotlin/com/zarz/spotiflac/`
+Kotlin sources live in `android/app/src/main/kotlin/com/spotiflac/app/`
 (abbreviated `kotlin/` below). Swift sources live in `ios/Runner/`.
 
 ## The Backend Channel
@@ -14,10 +14,10 @@ All app-level calls use one `MethodChannel` named `com.spotiflac.app/backend`.
 | Side | Where |
 | --- | --- |
 | Dart caller | `lib/services/platform_bridge.dart` (`PlatformBridge`) and its `part` files in `lib/services/platform_bridge/` |
-| Android dispatcher | `android/app/src/main/kotlin/com/zarz/spotiflac/MainActivity.kt`, `configureFlutterEngine` |
+| Android dispatcher | `android/app/src/main/kotlin/com/spotiflac/app/MainActivity.kt`, `configureFlutterEngine` |
 | Android handlers | `MainActivity*.kt` extension functions in `kotlin/` (table below) |
-| Android Rust route | `android/app/src/rust/kotlin/com/zarz/spotiflac/SelectedCoreBackend.kt` |
-| Routing test | `android/app/src/test/kotlin/com/zarz/spotiflac/MainActivityRoutingTest.kt` |
+| Android Rust route | `android/app/src/rust/kotlin/com/spotiflac/app/SelectedCoreBackend.kt` |
+| Routing test | `android/app/src/test/kotlin/com/spotiflac/app/MainActivityRoutingTest.kt` |
 | iOS dispatcher | `ios/Runner/AppDelegate.swift`, `handleMethodCall` |
 
 ### Routing on Android
@@ -45,12 +45,12 @@ gradle -p android :app:testDebugUnitTest --tests 'com.spotiflac.app.MainActivity
 
 ### Native Method Table
 
-Handler file key: Lifecycle = `android/app/src/main/kotlin/com/zarz/spotiflac/MainActivityLifecycleCalls.kt`,
-Service = `android/app/src/main/kotlin/com/zarz/spotiflac/MainActivityServiceCalls.kt`,
-Scan = `android/app/src/main/kotlin/com/zarz/spotiflac/MainActivityLibraryScanCalls.kt`,
-SAF = `android/app/src/main/kotlin/com/zarz/spotiflac/MainActivitySafCalls.kt`,
-Metadata = `android/app/src/main/kotlin/com/zarz/spotiflac/MainActivityMetadataCalls.kt`,
-Picker = `android/app/src/main/kotlin/com/zarz/spotiflac/MainActivitySafTreePicker.kt`,
+Handler file key: Lifecycle = `android/app/src/main/kotlin/com/spotiflac/app/MainActivityLifecycleCalls.kt`,
+Service = `android/app/src/main/kotlin/com/spotiflac/app/MainActivityServiceCalls.kt`,
+Scan = `android/app/src/main/kotlin/com/spotiflac/app/MainActivityLibraryScanCalls.kt`,
+SAF = `android/app/src/main/kotlin/com/spotiflac/app/MainActivitySafCalls.kt`,
+Metadata = `android/app/src/main/kotlin/com/spotiflac/app/MainActivityMetadataCalls.kt`,
+Picker = `android/app/src/main/kotlin/com/spotiflac/app/MainActivitySafTreePicker.kt`,
 inline = a case body in MainActivity.kt.
 
 Reply key: "JSON text" is a `String` that Dart decodes; "spill" means the
@@ -159,7 +159,7 @@ Large JSON replies are written to a file and the reply becomes
   `bridgeJsonResult` or the streaming `SpillJsonWriter` (which inlines a small
   result and deletes its file). Users: `scanLibraryFolderIncremental`,
   `scanSafTreeIncremental`, and `runNativeDataJob`
-  (`android/app/src/rust/kotlin/com/zarz/spotiflac/NativeDataJobs.kt`).
+  (`android/app/src/rust/kotlin/com/spotiflac/app/NativeDataJobs.kt`).
 - iOS writes a `bridge_json_` file (UUID suffix) in the temporary directory. Users:
   `scanLibraryFolderIncremental` and `runNativeDataJob`.
 - Dart reads and deletes the file in `_decodeJsonResultAsync`
@@ -171,7 +171,7 @@ Large JSON replies are written to a file and the reply becomes
 ## Progress Streams
 
 Two `EventChannel`s, registered on Android in
-`android/app/src/main/kotlin/com/zarz/spotiflac/MainActivityProgressStreams.kt`
+`android/app/src/main/kotlin/com/spotiflac/app/MainActivityProgressStreams.kt`
 and on iOS in AppDelegate.swift. Dart listens in platform_bridge.dart.
 
 | Channel | Payload | Emission |
@@ -187,11 +187,11 @@ without checking with the maintainer.
 
 | Channel | Owner |
 | --- | --- |
-| `com.spotiflac.app/concert_calendar`, `com.spotiflac.app/audio_output` | `android/app/src/main/kotlin/com/zarz/spotiflac/MainActivitySmallChannels.kt` |
-| `com.spotiflac.app/usb_pcm`, `com.spotiflac.app/usb_pcm/events` (EventChannel), `com.spotiflac.app/audio_route` | `android/app/src/main/kotlin/com/zarz/spotiflac/UsbBitPerfectPlugin.kt` |
-| `com.spotiflac.app/haptics` | `android/app/src/main/kotlin/com/zarz/spotiflac/MusicHapticsPlugin.kt` |
-| `com.spotiflac.app/local_network` | `android/app/src/main/kotlin/com/zarz/spotiflac/LocalNetworkPlugin.kt` |
-| `com.spotiflac.app/player_widget` | `android/app/src/main/kotlin/com/zarz/spotiflac/PlayerWidgetProvider.kt` |
+| `com.spotiflac.app/concert_calendar`, `com.spotiflac.app/audio_output` | `android/app/src/main/kotlin/com/spotiflac/app/MainActivitySmallChannels.kt` |
+| `com.spotiflac.app/usb_pcm`, `com.spotiflac.app/usb_pcm/events` (EventChannel), `com.spotiflac.app/audio_route` | `android/app/src/main/kotlin/com/spotiflac/app/UsbBitPerfectPlugin.kt` |
+| `com.spotiflac.app/haptics` | `android/app/src/main/kotlin/com/spotiflac/app/MusicHapticsPlugin.kt` |
+| `com.spotiflac.app/local_network` | `android/app/src/main/kotlin/com/spotiflac/app/LocalNetworkPlugin.kt` |
+| `com.spotiflac.app/player_widget` | `android/app/src/main/kotlin/com/spotiflac/app/PlayerWidgetProvider.kt` |
 
 ## Foreground Services
 
@@ -201,7 +201,7 @@ Both services are declared with `foregroundServiceType="dataSync"` in
 
 | | `DownloadService` | `BackgroundWorkService` |
 | --- | --- | --- |
-| File | `android/app/src/main/kotlin/com/zarz/spotiflac/DownloadService.kt` | `android/app/src/main/kotlin/com/zarz/spotiflac/BackgroundWorkService.kt` |
+| File | `android/app/src/main/kotlin/com/spotiflac/app/DownloadService.kt` | `android/app/src/main/kotlin/com/spotiflac/app/BackgroundWorkService.kt` |
 | Channels | `download_channel` (progress), `download_alerts_v1` (alerts) | `background_work` |
 | Notification IDs | 1001 (foreground), 1 (result), 4 (verification required) | 1002 |
 | Wake lock tag | `SpotiFLAC:DownloadWakeLock` | `SpotiFLAC:BackgroundWorkWakeLock` |
@@ -231,13 +231,13 @@ its state to native_download_worker_state.json in `filesDir` for
 - Playback leases: `safOpenPlaybackLease` opens a seekable read descriptor and
   returns its `/proc/self/fd/<fd>` path and a `token`. At most four leases stay
   open (the oldest is closed first) and all are closed in `onDestroy`
-  (`android/app/src/main/kotlin/com/zarz/spotiflac/MainActivitySafLeases.kt`).
+  (`android/app/src/main/kotlin/com/spotiflac/app/MainActivitySafLeases.kt`).
 - Temp copies: metadata calls that need a file path copy the document to a
   temp file, run the backend, and write the result back. For MP3 and Opus the
   backend replies with `method: "ffmpeg"`; Android then returns `temp_path`
   and `saf_uri` and Dart finishes with FFmpeg and `writeTempToSaf`.
 - Scanning: the full and incremental scans and their progress state live in
-  `android/app/src/main/kotlin/com/zarz/spotiflac/MainActivitySafScan.kt`. The
+  `android/app/src/main/kotlin/com/spotiflac/app/MainActivitySafScan.kt`. The
   helpers sit beside it: `SafTreeListing.kt` (tree walking and thread pools),
   `SafFileInspection.kt` (resolving download history files inside a tree),
   `SafScanCheckpoint.kt` (resume checkpoints), `SafCueScan.kt` (CUE sheet
@@ -253,12 +253,12 @@ the native libraries in `rust_backend/target/android/jniLibs/`. The
 `buildRustBackend` task runs `scripts/build_rust_backend.sh android` before
 `preBuild`.
 
-- `android/app/src/rust/kotlin/com/zarz/spotiflac/SelectedCoreBackend.kt`:
+- `android/app/src/rust/kotlin/com/spotiflac/app/SelectedCoreBackend.kt`:
   `createCoreBackend`, `dispatchBackendApplication`, and `RustCoreBackend`,
   the `CoreBackend` implementation over the generated bindings.
-- `android/app/src/rust/kotlin/com/zarz/spotiflac/RustCoreBackendApplication.kt`:
+- `android/app/src/rust/kotlin/com/spotiflac/app/RustCoreBackendApplication.kt`:
   `dispatchApplication`, the method-name switch behind `invokeApplication`.
-- `android/app/src/rust/kotlin/com/zarz/spotiflac/NativeDataJobs.kt`:
+- `android/app/src/rust/kotlin/com/spotiflac/app/NativeDataJobs.kt`:
   `runNativeDataJob` and its cancellation registry.
 
 The generated bindings load `libspotiflac_mobile.so` through JNA

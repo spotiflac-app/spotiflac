@@ -60,7 +60,7 @@ void main() {
       );
     });
 
-    test('normalizes the old lyrics provider without duplicating it', () {
+    test('deduplicates saved lyrics providers while preserving priority', () {
       final settings = AppSettings.fromJson({
         'lyricsProviders': [
           'lrclib',

@@ -212,8 +212,8 @@ Workspace dependencies point only downward:
 
 ### Native
 
-Android Kotlin lives in `android/app/src/main/kotlin/com/zarz/spotiflac/`.
-`android/app/build.gradle.kts` adds `android/app/src/rust/kotlin/com/zarz/spotiflac/`
+Android Kotlin lives in `android/app/src/main/kotlin/com/spotiflac/app/`.
+`android/app/build.gradle.kts` adds `android/app/src/rust/kotlin/com/spotiflac/app/`
 and the generated bindings to the same source set.
 
 | Files | Role |
@@ -450,7 +450,7 @@ Commands are in [Validation](#validation).
 | --- | --- | --- |
 | Dart unit and widget | `test/` | [test/README.md](test/README.md); fixtures in `test/fixtures/`, helpers in `test/support/` |
 | Device and performance | `integration_test/` | [integration_test/README.md](integration_test/README.md) |
-| Kotlin JVM | `android/app/src/test/kotlin/com/zarz/spotiflac/` | Case tables in `android/app/src/test/resources/` are also read by Dart tests |
+| Kotlin JVM | `android/app/src/test/kotlin/com/spotiflac/app/` | Case tables in `android/app/src/test/resources/` are also read by Dart tests |
 | Rust | `tests.rs` modules beside the code, `rust_backend/crates/extensions/tests/` | For example `rust_backend/crates/extensions/src/runtime/tests.rs` |
 | iOS | `ios/RunnerTests/` | `RunnerTests.swift` |
 

@@ -85,7 +85,7 @@ class MprisPlayerObject extends DBusObject {
 
   DBusObjectPath get _trackId => _item == null
       ? _noTrack
-      : DBusObjectPath('/com/zarz/spotiflac/track/$_track');
+      : DBusObjectPath('/com/spotiflac/app/track/$_track');
 
   /// The position now, advanced from the last state at its speed.
   Duration get position {
