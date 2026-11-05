@@ -133,3 +133,11 @@ The target is 5.2.6+165, matching the downloaded source version and build number
 The standalone provider smoke script exercises a shipped native library and bundled FFmpeg tools with an isolated synthetic HTTP provider. Pass `--library`, `--ffmpeg`, `--ffprobe` and `--report-dir` paths. It checks search, downloaded bytes, decoding and output-directory protection. Windows x64 and Linux x64 executions passed locally. Desktop and Release jobs now include those checks. This does not replace commercial-provider, GUI, physical phone or version-upgrade tests.
 
 Release preflight checks `pubspec.yaml`, `AppInfo.version` and the requested tag before expensive platform jobs start. The build number must be present and positive. The new version checks have four passing unit tests.
+
+## Local Windows build requirements
+
+Windows x64 5.2.6+165 was compiled, packaged and installer-upgrade tested locally. Hosted Actions billing is not required for that local build. Other platforms still need corrected builds.
+
+Use the Flutter version pinned in `.fvmrc`, Visual Studio 2022 C++ Build Tools with `Microsoft.VisualStudio.Workload.VCTools` and `Microsoft.VisualStudio.Component.VC.ATL`, Rust for the media-control plugin, and Inno Setup 6 for the installer. Flutter plugins also require working plugin-folder links. Apply `scripts/prepare_flutter_sdk.dart`, generate `.release-defines.json` and run `scripts/check_release_version.py --version v5.2.6` before building.
+
+Build with `flutter build windows --release --build-name=5.2.6 --build-number=165 --dart-define-from-file=.release-defines.json`, audit with `scripts/check_windows_bundle.ps1`, then package with `scripts/package_windows.ps1 -Version v5.2.6 -Arch x64`. Core native libraries may only be reused if their exact source and verified binary provenance are unchanged; otherwise rebuild them with the existing Rust/FFmpeg scripts.

@@ -67,9 +67,17 @@ available; the separate Intel-runner job above verifies that platform.
 
 Corrected-version build attempt: [5.2.6 build](https://github.com/spotiflac-app/spotiflac/actions/runs/41964910209). GitHub refused to start even the version-preflight job because recent account payments failed or the Actions spending limit needs attention. No platform compiler ran. This is an account restriction, not a compile error. After account access is restored, rerun this workflow or dispatch Release with version `v5.2.6`; never relabel the retired validation binaries.
 
+## Local Windows 5.2.6+165 build
+
+The corrected Windows x64 app was successfully compiled locally from commit `7364d30e62b1d06987a468b7cd4e1f09164abf60`. Installer, portable ZIP, matching source archive and SHA-256 checksums were generated. All 62 native binaries and the AOT snapshot passed their audit. Synthetic provider search/download, full audio decoding and output-directory protection passed against the finished bundle.
+
+The installer upgraded the earlier local QA installation to 5.2.6+165 and preserved its preferences byte for byte before launch. The updated app started with its prior queue intact. The packages remain unsigned and unpublished. This is Windows x64 coverage; it does not establish physical phone behavior, other-platform compatibility or commercial-provider/GUI downloads.
+
+The unchanged core Rust backend and LGPL audio tools were reused from checksum-verified validation components after source-tree equality checks. The Windows media-control plugin was compiled locally. Initial setup required Flutter 3.47.7, Microsoft C++ Build Tools including ATL, Rust and Inno Setup 6. Plugins used scoped directory junctions in ignored build folders; Developer Mode was not changed.
+
 ## Remaining external work
 
-- Build the corrected 5.2.6+165 source, then complete commercial-provider/GUI download and version-upgrade tests, plus physical Android/iPhone installation and playback tests. No authorized phone was connected; an emulator test is not being claimed. Linux, macOS and Windows ARM64 have build/audit results, but native installation and playback were not exercised on this Windows x64 host.
+- Build corrected 5.2.6+165 packages for the other platforms, then complete commercial-provider/GUI download and physical Android/iPhone installation/playback tests. The Windows x64 version-change installer test has passed. No authorized phone was connected; an emulator test is not being claimed. Linux, macOS and Windows ARM64 have build/audit results, but native installation and playback were not exercised on this Windows x64 host.
 - Trusted Apple distribution/notarization and Windows signing require owner-held certificates or verified service accounts. Available Apple Developer and SignPath pages required sign-in, and no usable certificates were supplied. Self-signed certificates do not establish public distribution trust.
 - Restore GitHub Actions availability through the account's Billing and plans settings. No payment or spending-limit change was made.
 - Stage and publish a corrected-version downloads draft after the remaining validation. The retired QA drafts must stay unpublished; public download/update assets are not available yet. The development repository remains private, and no GitHub token is embedded in the app.
