@@ -105,6 +105,26 @@ class GitHub:
         if uploaded.get('digest') != 'sha256:' + digest:
             raise ValueError(f'Uploaded asset digest mismatch: {path.name}')
 
+def resolve_source_commit(github, repository, source, tag):
+    try:
+        ref = github.api('GET', f'/repos/{repository}/git/ref/tags/{tag}')['object']
+    except urllib.error.HTTPError as error:
+        # GitHub may defer creating a draft release's tag until publication.
+        # Only an immutable full commit SHA can stand in for that missing tag.
+        if error.code != 404 or not source['draft'] or not re.fullmatch(r'[0-9a-f]{40}', source['target_commitish']):
+            raise
+        commit = github.api('GET', f'/repos/{repository}/git/commits/{source["target_commitish"]}')
+        if commit['sha'] != source['target_commitish']:
+            raise ValueError('Draft source commit mismatch')
+        ref = {'type': 'commit', 'sha': commit['sha']}
+    for _ in range(8):
+        if ref['type'] == 'commit':
+            break
+        ref = github.api('GET', f'/repos/{repository}/git/tags/{ref["sha"]}')['object']
+    if ref['type'] != 'commit':
+        raise ValueError('Release tag did not resolve to a source commit')
+    return ref["sha"]
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--repository', default='spotiflac-app/spotiflac')
@@ -140,15 +160,9 @@ def main():
             github.download(f'/repos/{args.repository}/releases/assets/{assets[name]["id"]}', path, 'application/octet-stream')
         if checksum(path) != digest:
             raise ValueError(f'Build checksum mismatch: {name}')
-    ref = github.api('GET', f'/repos/{args.repository}/git/ref/tags/{args.tag}')['object']
-    for _ in range(8):
-        if ref['type'] == 'commit':
-            break
-        ref = github.api('GET', f'/repos/{args.repository}/git/tags/{ref["sha"]}')['object']
-    if ref['type'] != 'commit':
-        raise ValueError('Release tag did not resolve to a source commit')
+    source_commit = resolve_source_commit(github, args.repository, source, args.tag)
     source_zip = args.directory / f'SpotiFLAC-{args.tag}-source.zip'
-    github.download(f'/repos/{args.repository}/zipball/{ref["sha"]}', source_zip, 'application/vnd.github+json')
+    github.download(f'/repos/{args.repository}/zipball/{source_commit}', source_zip, 'application/vnd.github+json')
     with zipfile.ZipFile(source_zip) as archive:
         relative = {name.split('/', 1)[1] for name in archive.namelist() if '/' in name}
         if not {'LICENSE', 'COPYING', 'NOTICE'} <= relative:
@@ -169,7 +183,7 @@ def main():
         expected[feed.name] = checksum(feed)
         manifest.write_text(''.join(f'{digest}  {name}\n' for name, digest in sorted(expected.items())), encoding='utf-8')
     body = (source['body'] or '').replace(f'https://github.com/{args.repository}', f'https://github.com/{args.downloads_repository}')
-    body += f'\n\nMatching source: `{source_zip.name}`\nSource commit: `{ref["sha"]}`\n\nThis is a validation draft. Publishing is a separate explicit step.\n'
+    body += f'\n\nMatching source: `{source_zip.name}`\nSource commit: `{source_commit}`\n\nThis is a validation draft. Publishing is a separate explicit step.\n'
     draft = next((release for release in github.api('GET', f'/repos/{args.downloads_repository}/releases?per_page=100') if release['tag_name'] == args.tag), None)
     if draft:
         if not draft['draft']:
@@ -182,7 +196,7 @@ def main():
     verified = github.api('GET', f'/repos/{args.downloads_repository}/releases/{draft["id"]}')
     assert verified['draft'] and {asset['name'] for asset in verified['assets']} == set(expected) | {'SHA256SUMS.txt'}
     assert github.api('GET', f'/repos/{args.repository}')['private']
-    print(json.dumps({'draft_url': verified['html_url'], 'source_commit': ref['sha'], 'verified_assets': len(verified['assets']), 'published': False}))
+    print(json.dumps({'draft_url': verified['html_url'], 'source_commit': source_commit, 'verified_assets': len(verified['assets']), 'published': False}))
 
 if __name__ == '__main__':
     main()

@@ -16,7 +16,7 @@
 </div>
 
 <p align="center">
-  <a href="https://github.com/spotiflac-app/spotiflac/releases/latest">
+  <a href="https://github.com/spotiflac-app/spotiflac-releases/releases/latest">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="assets/readme/badges/badge-release-dark.svg">
       <img alt="Download the latest release" src="assets/readme/badges/badge-release-light.svg" height="56">
@@ -375,7 +375,7 @@ another country's recommendations without a VPN.
 Yes! Add the official source to receive updates directly within the app. Copy this link:
 
 ```
-https://raw.githubusercontent.com/spotiflac-app/spotiflac/refs/heads/main/apps.json
+https://github.com/spotiflac-app/spotiflac-releases/releases/latest/download/apps.json
 ```
 
 In AltStore/SideStore, go to **Browse > Sources**, tap **+**, and paste the link.

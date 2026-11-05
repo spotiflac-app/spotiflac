@@ -635,9 +635,6 @@ jobs:
             runner: windows-11-arm
             rust_target: aarch64-pc-windows-msvc
     needs: get-version
-    # The release goes out without Windows assets if this job fails. Remove
-    # once a release run of this job is green.
-    continue-on-error: true
     permissions:
       contents: read
       actions: read
