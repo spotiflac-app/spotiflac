@@ -65,6 +65,8 @@ available; the separate Intel-runner job above verifies that platform.
 - Linux backend execution was checked in Ubuntu 26.04 under WSL. Its full desktop UI was not launched; the extracted package's declared desktop dependencies are not all installed in that environment. macOS and ARM64 runtime checks remain outstanding.
 - Android validation APKs used the configured project signing key. The earlier iOS IPA is unsigned, macOS is ad-hoc signed and Windows is unsigned. Future corrected builds retain these signing prerequisites.
 
+Corrected-version build attempt: [5.2.6 build](https://github.com/spotiflac-app/spotiflac/actions/runs/41964910209). GitHub refused to start even the version-preflight job because recent account payments failed or the Actions spending limit needs attention. No platform compiler ran. This is an account restriction, not a compile error. After account access is restored, rerun this workflow or dispatch Release with version `v5.2.6`; never relabel the retired validation binaries.
+
 ## Remaining external work
 
 - Build the corrected 5.2.6+165 source, then complete commercial-provider/GUI download and version-upgrade tests, plus physical Android/iPhone installation and playback tests. No authorized phone was connected; an emulator test is not being claimed. Linux, macOS and Windows ARM64 have build/audit results, but native installation and playback were not exercised on this Windows x64 host.
