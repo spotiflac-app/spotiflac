@@ -388,9 +388,7 @@ In AltStore/SideStore, go to **Browse > Sources**, tap **+**, and paste the link
 
 Thanks to everyone who has contributed to SpotiFLAC!
 
-<a href="https://github.com/spotiflac-app/spotiflac/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=spotiflac-app/spotiflac" />
-</a>
+[View contributors](https://github.com/spotiflac-app/spotiflac/graphs/contributors).
 
 We also appreciate everyone who helped with translations, reported bugs, suggested features, and spread the word.
 

@@ -5,12 +5,14 @@ This command never publishes a release and never changes repository visibility.
 Authentication stays in the environment or the local Git credential manager.
 """
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 import os
 from pathlib import Path
 import re
 import subprocess
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -76,11 +78,14 @@ class GitHub:
         })
 
     def api(self, method, path, data=None):
+        if method == 'GET':
+            path += ('&' if '?' in path else '?') + 'fresh=' + str(time.time_ns())
         with self.opener.open(self.request(method, 'https://api.github.com' + path, data), timeout=90) as response:
             body = response.read()
             return json.loads(body) if body else None
 
     def download(self, path, target, accept):
+        path += ('&' if '?' in path else '?') + 'fresh=' + str(time.time_ns())
         request = self.request('GET', 'https://api.github.com' + path)
         request.headers['Accept'] = accept
         temporary = target.with_name(target.name + '.partial')
@@ -191,8 +196,13 @@ def main():
         draft = github.api('PATCH', f'/repos/{args.downloads_repository}/releases/{draft["id"]}', {'body': body, 'draft': True})
     else:
         draft = github.api('POST', f'/repos/{args.downloads_repository}/releases', {'tag_name': args.tag, 'target_commitish': destination['default_branch'], 'name': f'SpotiFLAC {args.tag}', 'body': body, 'draft': True, 'prerelease': source['prerelease']})
-    for path in [args.directory / name for name in sorted(expected)] + [manifest]:
-        github.upload(draft, path)
+    paths = [args.directory / name for name in sorted(expected)] + [manifest]
+    def upload(path):
+        # Separate HTTP clients avoid shared redirect-handler state.
+        GitHub(github.token).upload(draft, path)
+        print('Verified upload: ' + path.name, flush=True)
+    with ThreadPoolExecutor(max_workers=6) as uploads:
+        list(uploads.map(upload, paths))
     verified = github.api('GET', f'/repos/{args.downloads_repository}/releases/{draft["id"]}')
     assert verified['draft'] and {asset['name'] for asset in verified['assets']} == set(expected) | {'SHA256SUMS.txt'}
     assert github.api('GET', f'/repos/{args.repository}')['private']

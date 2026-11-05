@@ -125,3 +125,7 @@ and 475 tests passed. See [ownership status](OWNERSHIP_HANDOVER.md) for run link
 skipped-test counts and distribution limitations. A successful CI build is not
 a published production release. Existing website download links remain in place
 while the website is under development, as requested by the owner.
+
+## First release staging status
+
+v1.0.0 packages are staged as restricted drafts with matching source and checksums. All platform build jobs passed; GitHub blocked the final assembly runner because account billing or its Actions spending limit needs attention, so assembly and checksum verification were completed locally. No spending limit or payment method was changed. Windows x64 installation, same-version reinstall persistence and synthetic local-track playback state were checked. Provider downloads, a version-number upgrade and physical phone tests remain. See the ownership status for evidence and the remaining signing prerequisites.
