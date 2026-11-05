@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version tag (e.g., v1.0.0)"
+        description: "Version tag (e.g., v5.2.6)"
         required: true
-        default: "v1.0.0"
+        default: "v5.2.6"
 
 permissions:
   contents: read
@@ -24,6 +24,8 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       is_prerelease: ${{ steps.version.outputs.is_prerelease }}
     steps:
+      - name: Checkout release configuration
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Get version
         id: version
         env:
@@ -39,6 +41,8 @@ jobs:
             echo "Invalid release version" >&2
             exit 1
           fi
+          VERSION="v${VERSION#v}"
+          python3 scripts/check_release_version.py --version "$VERSION"
           printf 'version=%s\n' "$VERSION" >> "$GITHUB_OUTPUT"
 
           # Check if version contains -preview, -beta, -rc, or -alpha (NOT -hotfix)
@@ -588,6 +592,22 @@ jobs:
           appstreamcli validate --no-net --explain linux/packaging/com.spotiflac.app.metainfo.xml ||
             echo "::warning::AppStream metadata has validation issues"
 
+      - name: Test isolated search and audio download provider
+        if: matrix.flutter_arch == 'x64'
+        timeout-minutes: 3
+        run: |
+          bundle="build/linux/x64/release/bundle"
+          python3 scripts/smoke_test_desktop_provider.py --library "$bundle/lib/libspotiflac_desktop.so" --ffmpeg "$bundle/lib/ffmpeg/ffmpeg" --ffprobe "$bundle/lib/ffmpeg/ffprobe" --report-dir "${{ runner.temp }}/spotiflac-provider-smoke"
+
+      - name: Save isolated provider test report
+        if: ${{ always() && matrix.flutter_arch == 'x64' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: provider-smoke-linux-x64
+          if-no-files-found: warn
+          retention-days: 7
+          path: ${{ runner.temp }}/spotiflac-provider-smoke/**/result.json
+
       - name: Package AppImage and deb
         env:
           VERSION: ${{ needs.get-version.outputs.version }}
@@ -700,6 +720,23 @@ jobs:
           $bundle = 'build\windows\${{ matrix.arch }}\runner\Release'
           ./scripts/check_windows_bundle.ps1 -BundleDir $bundle -Arch ${{ matrix.arch }}
           "SPOTIFLAC_WINDOWS_BUNDLE=$bundle" >> $env:GITHUB_ENV
+
+      - name: Test isolated search and audio download provider
+        if: matrix.arch == 'x64'
+        timeout-minutes: 3
+        run: |
+          $bundle = 'build\windows\x64\runner\Release'
+          python scripts/smoke_test_desktop_provider.py --library "$bundle\spotiflac_desktop.dll" --ffmpeg "$bundle\ffmpeg\ffmpeg.exe" --ffprobe "$bundle\ffmpeg\ffprobe.exe" --report-dir "${{ runner.temp }}/spotiflac-provider-smoke"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Save isolated provider test report
+        if: ${{ always() && matrix.arch == 'x64' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: provider-smoke-windows-x64
+          if-no-files-found: warn
+          retention-days: 7
+          path: ${{ runner.temp }}/spotiflac-provider-smoke/**/result.json
 
       - name: Upload unsigned app for signing
         id: unsigned-app

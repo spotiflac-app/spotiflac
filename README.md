@@ -1,6 +1,6 @@
 <div align="center">
 
-<p><b>SpotiFLAC 1.0.0 is being prepared. Download links become available after the first verified release.</b></p>
+<p><b>SpotiFLAC 5.2.6 is being prepared. Download links become available after the first verified release.</b></p>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/brand/logo/svg/spotiflac-lockup-horizontal-dark.svg">

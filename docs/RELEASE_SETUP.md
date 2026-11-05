@@ -2,7 +2,7 @@
 
 ## Repository and first release
 
-The source is maintained at `spotiflac-app/spotiflac` on `main`. Use tag `v1.0.0`
+The source is maintained at `spotiflac-app/spotiflac` on `main`. Use tag `v5.2.6`
 for the first release. The pinned Flutter/Rust toolchains and operating-system
 runners build the mobile and desktop packages. Draft releases combine every
 successful platform, with one set of release notes and SHA256SUMS.txt.
@@ -98,7 +98,7 @@ After the signed private draft finishes, stage its audited assets from a local
 checkout with the project owner's Git credentials:
 
 ```text
-python scripts/publish_distribution.py --tag v1.0.0 --directory PATH_TO_REVIEW_PACKAGES
+python scripts/publish_distribution.py --tag v5.2.6 --directory PATH_TO_REVIEW_PACKAGES
 ```
 
 This tool never publishes or changes repository visibility. It verifies every
@@ -126,6 +126,10 @@ skipped-test counts and distribution limitations. A successful CI build is not
 a published production release. Existing website download links remain in place
 while the website is under development, as requested by the owner.
 
-## First release staging status
+## Current release status
 
-v1.0.0 packages are staged as restricted drafts with matching source and checksums. All platform build jobs passed; GitHub blocked the final assembly runner because account billing or its Actions spending limit needs attention, so assembly and checksum verification were completed locally. No spending limit or payment method was changed. Windows x64 installation, same-version reinstall persistence and synthetic local-track playback state were checked. Provider downloads, a version-number upgrade and physical phone tests remain. See the ownership status for evidence and the remaining signing prerequisites.
+The target is 5.2.6+165, matching the downloaded source version and build number. Previous test binaries embed an incorrect initial version and are retired QA artifacts, not 5.2.6 packages. Do not rename those binaries or reuse their source archive for the corrected release. Rebuild each platform from the corrected source. GitHub Actions billing or its spending limit must be resolved before hosted builds can run. No payment or spending-limit change was made.
+
+The standalone provider smoke script exercises a shipped native library and bundled FFmpeg tools with an isolated synthetic HTTP provider. Pass `--library`, `--ffmpeg`, `--ffprobe` and `--report-dir` paths. It checks search, downloaded bytes, decoding and output-directory protection. Windows x64 and Linux x64 executions passed locally. Desktop and Release jobs now include those checks. This does not replace commercial-provider, GUI, physical phone or version-upgrade tests.
+
+Release preflight checks `pubspec.yaml`, `AppInfo.version` and the requested tag before expensive platform jobs start. The build number must be present and positive. The new version checks have four passing unit tests.

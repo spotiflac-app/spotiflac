@@ -20,6 +20,7 @@ on:
       - "test/flutter_sdk_patches_test.dart"
       - "test/semantics_geometry_regression_test.dart"
       - "scripts/check_windows_bundle.ps1"
+      - "scripts/smoke_test_desktop_provider.py"
       - "scripts/embed_rust_backend_macos.sh"
       - "scripts/fetch_desktop_ffmpeg.sh"
       - "scripts/embed_ffmpeg_macos.sh"
@@ -248,6 +249,22 @@ jobs:
           flutter build linux --release --target lib/main.dart \
             --dart-define="GIT_COMMIT=$(git rev-parse --short=8 HEAD)"
 
+      - name: Test isolated search and audio download provider
+        if: matrix.flutter_arch == 'x64'
+        timeout-minutes: 3
+        run: |
+          bundle="build/linux/x64/release/bundle"
+          python3 scripts/smoke_test_desktop_provider.py --library "$bundle/lib/libspotiflac_desktop.so" --ffmpeg "$bundle/lib/ffmpeg/ffmpeg" --ffprobe "$bundle/lib/ffmpeg/ffprobe" --report-dir "${{ runner.temp }}/spotiflac-provider-smoke"
+
+      - name: Save isolated provider test report
+        if: ${{ always() && matrix.flutter_arch == 'x64' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: provider-smoke-linux-x64
+          if-no-files-found: warn
+          retention-days: 7
+          path: ${{ runner.temp }}/spotiflac-provider-smoke/**/result.json
+
       - name: Verify and package Linux bundle
         run: |
           bundle="build/linux/${{ matrix.flutter_arch }}/release/bundle"
@@ -362,6 +379,23 @@ jobs:
           $commit = git rev-parse --short=8 HEAD
           flutter build windows --release --target lib/main.dart --dart-define="GIT_COMMIT=$commit"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Test isolated search and audio download provider
+        if: matrix.arch == 'x64'
+        timeout-minutes: 3
+        run: |
+          $bundle = 'build\windows\x64\runner\Release'
+          python scripts/smoke_test_desktop_provider.py --library "$bundle\spotiflac_desktop.dll" --ffmpeg "$bundle\ffmpeg\ffmpeg.exe" --ffprobe "$bundle\ffmpeg\ffprobe.exe" --report-dir "${{ runner.temp }}/spotiflac-provider-smoke"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Save isolated provider test report
+        if: ${{ always() && matrix.arch == 'x64' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: provider-smoke-windows-x64
+          if-no-files-found: warn
+          retention-days: 7
+          path: ${{ runner.temp }}/spotiflac-provider-smoke/**/result.json
 
       - name: Verify and package Windows app
         run: |

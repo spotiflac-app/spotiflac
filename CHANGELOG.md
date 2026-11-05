@@ -1,4 +1,4 @@
-## 1.0.0 - 2026-10-27
+## 5.2.6 - SpotiFLAC adaptation - 2026-11-05
 
 - Establish independent SpotiFLAC branding, namespace, release configuration, and repository-controlled announcements.
 - Disable unconfigured funding and account integrations.
@@ -1870,4 +1870,4 @@ SpotiFLAC 3.0 introduces a powerful extension system that allows third-party int
 
 ---
 
-_Entries below version 1.0.0 describe inherited development history; independent SpotiFLAC releases are published from this repository._
+_Earlier entries describe inherited development history. SpotiFLAC retains the downloaded source version numbering and publishes its own builds from this repository._
