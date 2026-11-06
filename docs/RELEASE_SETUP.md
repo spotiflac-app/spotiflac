@@ -37,7 +37,7 @@ your own signing project and policies before enabling that integration.
 ## Configuration you control
 
 Official releases read `config/app.json` from `spotiflac-app/spotiflac-releases`
-for announcements. The private source copy is the initial template. Funding is disabled until valid
+for announcements. The source copy is the initial template. Funding is disabled until valid
 project-owned methods are explicitly supplied. No old wallet or sponsorship
 account is used. The repository configuration contains no credentials.
 
@@ -78,9 +78,11 @@ configuration tests cover disabled funding, no network requests when remote
 configuration is disabled, and no native account initialization for disabled
 Discord. A source audit is not a substitute for running those builds.
 
-## Private development and public downloads
+## Public development and downloads
 
-The development repository stays private. Public download hosting is prepared at
+The owner approved making the development repository public on 2026-11-06.
+Its standard GitHub-hosted build runners use the free public-repository tier.
+Public download hosting remains at
 https://github.com/spotiflac-app/spotiflac-releases. Only its README, safe
 announcement configuration, icon and empty placeholder feed are initially public.
 Release packages and matching source snapshots stay in drafts during validation.
@@ -94,7 +96,7 @@ For a reproducible local distribution build, generate the file with
 `python scripts/prepare_release_config.py --repository spotiflac-app/spotiflac-releases`
 and pass `--dart-define-from-file=.release-defines.json` to Flutter.
 
-After the signed private draft finishes, stage its audited assets from a local
+After the release draft finishes, stage its audited assets from a local
 checkout with the project owner's Git credentials:
 
 ```text
@@ -102,7 +104,7 @@ python scripts/publish_distribution.py --tag v5.2.6 --directory PATH_TO_REVIEW_P
 ```
 
 This tool never publishes or changes repository visibility. It verifies every
-package against the private build's checksum manifest, resolves the exact tagged
+package against the build's checksum manifest, resolves the exact tagged
 source commit, includes the matching source archive and license notices, and
 creates a draft in the downloads repository. Existing different assets cannot
 be silently overwritten. Credentials remain in the environment or local Git
@@ -128,7 +130,7 @@ while the website is under development, as requested by the owner.
 
 ## Current release status
 
-The target is 5.2.6+165, matching the downloaded source version and build number. Previous test binaries embed an incorrect initial version and are retired QA artifacts, not 5.2.6 packages. Do not rename those binaries or reuse their source archive for the corrected release. Rebuild each platform from the corrected source. GitHub Actions billing or its spending limit must be resolved before hosted builds can run. No payment or spending-limit change was made.
+The target is 5.2.6+165, matching the downloaded source version and build number. Previous test binaries embed an incorrect initial version and are retired QA artifacts, not 5.2.6 packages. Do not rename those binaries or reuse their source archive for the corrected release. Rebuild each platform from the corrected source. The earlier private-repository builds were blocked by account billing or its spending limit. With owner approval, the source repository is now public and the standard-runner release build has started successfully. No payment or spending-limit change was made.
 
 The standalone provider smoke script exercises a shipped native library and bundled FFmpeg tools with an isolated synthetic HTTP provider. Pass `--library`, `--ffmpeg`, `--ffprobe` and `--report-dir` paths. It checks search, downloaded bytes, decoding and output-directory protection. Windows x64 and Linux x64 executions passed locally. Desktop and Release jobs now include those checks. This does not replace commercial-provider, GUI, physical phone or version-upgrade tests.
 
