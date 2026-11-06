@@ -1,6 +1,6 @@
 # SpotiFLAC ownership status
 
-Updated 2026-11-05.
+Updated 2026-11-06.
 Website: https://spotiflac.com
 Repository: https://github.com/spotiflac-app/spotiflac
 
@@ -57,7 +57,7 @@ available; the separate Intel-runner job above verifies that platform.
 ## Version correction and validation
 
 - The target release is `v5.2.6`, build `165`. These are the exact numbers in the downloaded source snapshot. The version counter is not being reset.
-- Previous validation binaries embed an incorrect initial version. They remain historical test evidence and must not be renamed or published as 5.2.6. Their unpublished drafts are retired under a QA tag. All platforms require fresh builds from the corrected source.
+- Previous validation binaries embed an incorrect initial version. They remain historical test evidence and must not be renamed or published as 5.2.6. Their unpublished drafts are retired under a QA tag. Fresh corrected-version Windows x64 and Android builds are documented below; the other platforms still require rebuilding.
 - All seven platform jobs in [the earlier build run](https://github.com/spotiflac-app/spotiflac/actions/runs/41927209307) passed. The final assembly runner was blocked by GitHub account billing or its Actions limit. Local assembly and both draft uploads were verified before retirement. Nothing was published.
 - Windows x64 installation and same-version reinstall settings persistence were checked against that earlier binary. Local synthetic-track import and playback state worked. Those results are not a version-number upgrade test or validation of a new 5.2.6 binary.
 - The shipped Windows x64 backend and the Linux x64 backend extracted from the verified Debian package passed isolated provider tests: HTTP catalog search, FLAC download, exact byte matching, full audio decoding and rejection of an ungranted output directory. Only synthetic audio on loopback was used. No installed app settings or music accounts were used.
@@ -75,9 +75,15 @@ The installer upgraded the earlier local QA installation to 5.2.6+165 and preser
 
 The unchanged core Rust backend and LGPL audio tools were reused from checksum-verified validation components after source-tree equality checks. The Windows media-control plugin was compiled locally. Initial setup required Flutter 3.47.7, Microsoft C++ Build Tools including ATL, Rust and Inno Setup 6. Plugins used scoped directory junctions in ignored build folders; Developer Mode was not changed.
 
+## Local Android 5.2.6+165 build
+
+Both ARM64 and ARM32 release APKs were successfully compiled locally under WSL from commit `db6267a9e4b6e26e7217b18d72e656902beeadae`. Each uses `com.spotiflac.app`, version name 5.2.6 and base build number 165, and is signed with the existing project release key. Flutter's existing architecture-specific Android version codes are retained: 2165 for ARM64 and 1165 for ARM32. V1-V4 signatures, the expected certificate, native payload contents and 16 KB APK alignment passed verification. Matching source, checksums and private crash symbols were saved. Nothing was published.
+
+The Rust mobile libraries and Android native audio code were compiled locally. The toolchain uses Flutter 3.47.7, Rust 1.99.0, Java 25, NDK 30 and CMake 4.1.2; Android plugins also required NDK 28.2 and older SDK platforms. Cargo lockfile normalization changed package ordering only: all 386 package records, versions, checksums and dependency relationships were compared. The normalized ordering is now committed to keep future builds stable. A phone was not connected, so physical installation, playback and commercial-provider/GUI tests remain pending.
+
 ## Remaining external work
 
-- Build corrected 5.2.6+165 packages for the other platforms, then complete commercial-provider/GUI download and physical Android/iPhone installation/playback tests. The Windows x64 version-change installer test has passed. No authorized phone was connected; an emulator test is not being claimed. Linux, macOS and Windows ARM64 have build/audit results, but native installation and playback were not exercised on this Windows x64 host.
+- Build corrected 5.2.6+165 packages for Windows ARM64, Linux and Apple platforms, then complete commercial-provider/GUI download and physical Android/iPhone installation/playback tests. Signed Android ARM64 and ARM32 packages are built and audited. The Windows x64 version-change installer test has passed. No authorized phone was connected; an emulator test is not being claimed. Linux, macOS and Windows ARM64 have build/audit results, but native installation and playback were not exercised on this Windows x64 host.
 - Trusted Apple distribution/notarization and Windows signing require owner-held certificates or verified service accounts. Available Apple Developer and SignPath pages required sign-in, and no usable certificates were supplied. Self-signed certificates do not establish public distribution trust.
 - Restore GitHub Actions availability through the account's Billing and plans settings. No payment or spending-limit change was made.
 - Stage and publish a corrected-version downloads draft after the remaining validation. The retired QA drafts must stay unpublished; public download/update assets are not available yet. The development repository remains private, and no GitHub token is embedded in the app.
