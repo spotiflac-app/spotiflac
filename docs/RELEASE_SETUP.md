@@ -138,7 +138,7 @@ Release preflight checks `pubspec.yaml`, `AppInfo.version` and the requested tag
 
 ## Local Windows build requirements
 
-Windows x64 5.2.6+165 was compiled, packaged and installer-upgrade tested locally. Hosted Actions billing is not required for that local build. Other platforms still need corrected builds.
+Windows x64 5.2.6+165 was compiled, packaged and installer-upgrade tested locally. Hosted Actions billing is not required for that local build. Corrected hosted builds have now passed for all platforms; see the completed-build status below.
 
 Use the Flutter version pinned in `.fvmrc`, Visual Studio 2022 C++ Build Tools with `Microsoft.VisualStudio.Workload.VCTools` and `Microsoft.VisualStudio.Component.VC.ATL`, Rust for the media-control plugin, and Inno Setup 6 for the installer. Flutter plugins also require working plugin-folder links. Apply `scripts/prepare_flutter_sdk.dart`, generate `.release-defines.json` and run `scripts/check_release_version.py --version v5.2.6` before building.
 
@@ -151,3 +151,10 @@ The Android scripts run in Linux under WSL. Use the pinned Flutter 3.47.7 and Ru
 Prepare public endpoints with `python3 scripts/prepare_release_config.py --repository spotiflac-app/spotiflac-releases`, fetch the locked Flutter dependencies, and run `dart scripts/prepare_flutter_sdk.dart`. Set `ANDROID_NDK_HOME` to NDK 30 and build with `bash scripts/build_android.sh --lite --target lib/main.dart --dart-define-from-file=.release-defines.json`. The checked-in launcher assets are already branded. With pinned Flutter 3.47.7, allow the release build's pub step to regenerate native plugin registration; using `--no-pub` after a generic pub get can leave a test-only plugin in the release registrant.
 
 Use the existing project signing key and the release workflow's signing procedure, then verify the signer certificate, all required signature schemes, version name/code, package identity, APK alignment and `scripts/check_backend_apk.py` results. A release build can use a debug key when no local release signing configuration is present; verify the actual certificate before distribution. Store signing material outside the repository, and retain the exact commit, checksums, Dart symbols and shrinking map privately. Physical phone and live-provider tests remain separate from package verification.
+
+
+## Corrected release build completed
+
+All seven platform builds and release assembly passed in [run 42238210013](https://github.com/spotiflac-app/spotiflac/actions/runs/42238210013), using source commit `9553af072d78936efe03ea80e3d3ae69b041d4f8`. The draft contains Android ARM32/ARM64, Windows x64/ARM64, Linux x64/ARM64, universal macOS and the unsigned iOS IPA. Version remains 5.2.6+165. Standard public-repository runners were used; no billing settings were changed.
+
+The draft is not approved for distribution. A deeper local Ubuntu 22.04 runtime audit found that the pinned dart_smb2 0.1.3 library requires GLIBC 2.38, although the Linux Debian fallback dependency list advertises libc6 >= 2.35. AMR runtime dependencies also need package verification. Linux compatibility and package metadata must be resolved before publication. Build success alone does not establish installation or playback on every platform. Phone tests and trusted Apple/Windows distribution signing remain outstanding.

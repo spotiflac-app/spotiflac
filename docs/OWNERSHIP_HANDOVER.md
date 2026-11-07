@@ -83,7 +83,7 @@ The Rust mobile libraries and Android native audio code were compiled locally. T
 
 ## Remaining external work
 
-- Build corrected 5.2.6+165 packages for Windows ARM64, Linux and Apple platforms, then complete commercial-provider/GUI download and physical Android/iPhone installation/playback tests. Signed Android ARM64 and ARM32 packages are built and audited. The Windows x64 version-change installer test has passed. No authorized phone was connected; an emulator test is not being claimed. Linux, macOS and Windows ARM64 have build/audit results, but native installation and playback were not exercised on this Windows x64 host.
+- Corrected hosted 5.2.6+165 builds have passed for all platforms. Resolve the Linux compatibility issue below, then complete commercial-provider/GUI download and physical Android/iPhone installation/playback tests. Signed Android ARM64 and ARM32 packages are built and audited. The Windows x64 version-change installer test has passed. No authorized phone was connected; an emulator test is not being claimed. Linux, macOS and Windows ARM64 have build/audit results, but native installation and playback were not exercised on this Windows x64 host.
 - Trusted Apple distribution/notarization and Windows signing require owner-held certificates or verified service accounts. Available Apple Developer and SignPath pages required sign-in, and no usable certificates were supplied. Self-signed certificates do not establish public distribution trust.
 - The owner approved public source hosting on 2026-11-06. Anonymous access was verified, and the corrected-version release build started on standard free public-repository runners. No payment or spending-limit change was made. Build run: https://github.com/spotiflac-app/spotiflac/actions/runs/42238210013
 - Stage and publish a corrected-version downloads draft after the remaining validation. The retired QA drafts must stay unpublished; public download/update assets are not available yet. The development repository is public with owner approval, and no GitHub token is embedded in the app.
@@ -98,3 +98,10 @@ third-party notices remain. Dated modifications are recorded. Distribute source
 and notices as required by the existing license when distributing binaries.
 
 See [Release setup](RELEASE_SETUP.md) for operational instructions.
+
+
+## Corrected release build completed
+
+All seven platform builds and release assembly passed in [run 42238210013](https://github.com/spotiflac-app/spotiflac/actions/runs/42238210013), using source commit `9553af072d78936efe03ea80e3d3ae69b041d4f8`. The draft contains Android ARM32/ARM64, Windows x64/ARM64, Linux x64/ARM64, universal macOS and the unsigned iOS IPA. Version remains 5.2.6+165. Standard public-repository runners were used; no billing settings were changed.
+
+The draft is not approved for distribution. A deeper local Ubuntu 22.04 runtime audit found that the pinned dart_smb2 0.1.3 library requires GLIBC 2.38, although the Linux Debian fallback dependency list advertises libc6 >= 2.35. AMR runtime dependencies also need package verification. Linux compatibility and package metadata must be resolved before publication. Build success alone does not establish installation or playback on every platform. Phone tests and trusted Apple/Windows distribution signing remain outstanding.
