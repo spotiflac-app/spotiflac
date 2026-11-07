@@ -102,8 +102,10 @@ install(FILES "${FLUTTER_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
 foreach(bundled_library ${PLUGIN_BUNDLED_LIBRARIES})
   # dart_smb2 0.1.3's prebuilt requires glibc 2.38. Install the same r8
   # source rebuilt on our Linux baseline instead (see below).
+  # JNI is pulled in by path_provider_android. Linux uses path_provider_linux
+  # and has no Java calls; do not ship the unused libjvm-dependent bridge.
   get_filename_component(bundled_name "${bundled_library}" NAME)
-  if(bundled_name STREQUAL "libsmb2.so")
+  if(bundled_name STREQUAL "libsmb2.so" OR bundled_name STREQUAL "libdartjni.so")
     continue()
   endif()
   install(FILES "${bundled_library}"
@@ -169,7 +171,7 @@ endif()
 set(NATIVE_ASSETS_DIR "${PROJECT_BUILD_DIR}native_assets/linux/")
 install(DIRECTORY "${NATIVE_ASSETS_DIR}"
    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
-   COMPONENT Runtime)
+   COMPONENT Runtime PATTERN "libdartjni.so" EXCLUDE)
 
 # Fully re-copy the assets directory on each build to avoid having stale files
 # from a previous install.
