@@ -17,7 +17,7 @@
 # The AppImage is built with a pinned appimagetool and type2 runtime that are
 # checked against SHA-256 sums. It uses the host's GTK 3, GLib and
 # libsecret, like the Flutter bundle itself. The deb computes its Depends
-# with dpkg-shlibdeps and falls back to a fixed list.
+# with dpkg-shlibdeps; unresolved runtime dependencies fail packaging.
 
 set -euo pipefail
 
@@ -184,9 +184,12 @@ build_deb() {
   chmod -R u+rwX,go+rX,go-w "$root"
 
   local deb_version="${UPSTREAM_VERSION//-/\~}"
-  local fallback_depends="libc6 (>= 2.35), libgcc-s1, libstdc++6, libgtk-3-0 | libgtk-3-0t64, libglib2.0-0 | libglib2.0-0t64, libsecret-1-0, libjson-glib-1.0-0, libgstreamer1.0-0, libgstreamer-plugins-base1.0-0, libasound2 | libasound2t64, liblzma5"
   local depends=""
 
+  if ! command -v dpkg-shlibdeps >/dev/null 2>&1; then
+    echo "Error: dpkg-shlibdeps is required to determine runtime dependencies." >&2
+    exit 1
+  fi
   if command -v dpkg-shlibdeps >/dev/null 2>&1; then
     local shlib_dir="$WORK_DIR/shlibdeps"
     mkdir -p "$shlib_dir/debian"
@@ -203,11 +206,32 @@ build_deb() {
         -l"$root/usr/lib/$BINARY_NAME/lib" "${elf_files[@]}" 2>"$WORK_DIR/shlibdeps.log")"; then
       depends="$(sed -n 's/^shlibs:Depends=//p' <<< "$substvars")"
     else
-      echo "Warning: dpkg-shlibdeps failed; using the fixed dependency list." >&2
+      echo "Error: runtime dependencies could not be resolved; refusing to create a misleading package." >&2
       cat "$WORK_DIR/shlibdeps.log" >&2
+      exit 1
     fi
   fi
-  depends="${depends:-$fallback_depends}"
+  if [[ -z "$depends" ]]; then
+    echo "Error: runtime dependency calculation returned an empty list." >&2
+    exit 1
+  fi
+
+  # Read the ABI floor from the shipped binaries, including prebuilt plugins.
+  # The packaging host's libc symbol table can be older than a bundled library.
+  command -v readelf >/dev/null 2>&1 || { echo "Error: readelf is required." >&2; exit 1; }
+  local glibc_floor
+  glibc_floor="$(for candidate in "${elf_files[@]}"; do
+    readelf --version-info "$candidate"
+  done | sed -n 's/.*Name: GLIBC_\([0-9][0-9.]*\).*/\1/p' | sort -Vu | tail -n 1)"
+  if [[ -n "$glibc_floor" ]]; then
+    local libc_upper
+    libc_upper="$(sed -n 's/.*libc6 (<< \([^)]*\)).*/\1/p' <<< "$depends")"
+    if [[ -n "$libc_upper" ]] && dpkg --compare-versions "$glibc_floor" ge "$libc_upper"; then
+      echo "Error: bundled libraries have conflicting libc requirements: >= $glibc_floor and < $libc_upper. Rebuild the incompatible native components." >&2
+      exit 1
+    fi
+    depends="$depends, libc6 (>= $glibc_floor)"
+  fi
 
   local installed_size
   installed_size="$(du -sk --exclude=DEBIAN "$root" | cut -f1)"
