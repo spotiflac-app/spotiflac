@@ -643,6 +643,17 @@ jobs:
           file "build/desktop/SpotiFLAC-${VERSION}-linux-${ARCH}.AppImage"
           (cd build/desktop && sha256sum SpotiFLAC-* > "SHA256SUMS-linux-${ARCH}.txt")
 
+      - name: Verify Debian installation on Ubuntu 24.04
+        run: |
+          docker run --rm \
+            -v "$PWD/build/desktop:/packages:ro" \
+            -v "$PWD/scripts:/checks:ro" \
+            ubuntu:24.04 bash -euc '
+              apt-get update -qq
+              DEBIAN_FRONTEND=noninteractive apt-get install -y /packages/*.deb python3 binutils
+              LD_LIBRARY_PATH=/usr/lib/spotiflac/lib python3 /checks/verify_linux_installed.py
+            '
+
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
