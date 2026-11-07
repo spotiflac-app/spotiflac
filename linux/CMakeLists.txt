@@ -105,7 +105,8 @@ foreach(bundled_library ${PLUGIN_BUNDLED_LIBRARIES})
   # JNI is pulled in by path_provider_android. Linux uses path_provider_linux
   # and has no Java calls; do not ship the unused libjvm-dependent bridge.
   get_filename_component(bundled_name "${bundled_library}" NAME)
-  if(bundled_name STREQUAL "libsmb2.so" OR bundled_name STREQUAL "libdartjni.so")
+  if(bundled_name STREQUAL "libsmb2.so" OR bundled_name STREQUAL "libdartjni.so"
+      OR bundled_library STREQUAL "$<TARGET_FILE:jni>")
     continue()
   endif()
   install(FILES "${bundled_library}"
