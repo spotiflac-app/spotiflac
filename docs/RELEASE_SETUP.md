@@ -194,3 +194,9 @@ draft. Non-Linux artifacts retain source commit
 `9553af072d78936efe03ea80e3d3ae69b041d4f8`; distribute both matching source
 archives and identify their platform scope. The source tag/commit must
 not imply that the new Linux packages came from the original build.
+
+Downloads draft 437551007 in `spotiflac-app/spotiflac-releases` now contains
+18 assets verified against local SHA-256 digests, including both source
+archives and unified checksums. It remains unpublished. No billing settings
+or website download links were changed. Physical devices, commercial-provider
+GUI tests and trusted distribution signing remain external work.
