@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage verified private-build assets and matching source in a downloads draft.
+"""Stage verified build assets and matching source in a downloads draft.
 
 This command never publishes a release and never changes repository visibility.
 Authentication stays in the environment or the local Git credential manager.
@@ -145,7 +145,8 @@ def main():
     if not re.fullmatch(r'v\d+\.\d+\.\d+(?:[.-][A-Za-z0-9.-]+)?', args.tag):
         parser.error('Invalid version tag')
     github = GitHub(credentials(args.repository.split('/')[0]))
-    assert github.api('GET', f'/repos/{args.repository}')['private'], 'Source repository must stay private'
+    source_repository = github.api('GET', f'/repos/{args.repository}')
+    assert source_repository['owner']['login'].lower() == args.repository.split('/')[0].lower()
     destination = github.api('GET', f'/repos/{args.downloads_repository}')
     assert not destination['private'], 'Downloads metadata host must be public; draft assets remain restricted'
     assert destination['owner']['login'].lower() == args.repository.split('/')[0].lower()
@@ -205,7 +206,7 @@ def main():
         list(uploads.map(upload, paths))
     verified = github.api('GET', f'/repos/{args.downloads_repository}/releases/{draft["id"]}')
     assert verified['draft'] and {asset['name'] for asset in verified['assets']} == set(expected) | {'SHA256SUMS.txt'}
-    assert github.api('GET', f'/repos/{args.repository}')['private']
+    assert github.api('GET', f'/repos/{args.repository}')['private'] == source_repository['private'], 'Repository visibility changed during staging'
     print(json.dumps({'draft_url': verified['html_url'], 'source_commit': source_commit, 'verified_assets': len(verified['assets']), 'published': False}))
 
 if __name__ == '__main__':

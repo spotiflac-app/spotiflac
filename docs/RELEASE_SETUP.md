@@ -162,7 +162,8 @@ The draft is not approved for distribution. A deeper local Ubuntu 22.04 runtime 
 ## Linux dependency validation
 
 Debian packaging now requires dpkg-shlibdeps and fails if dependency resolution fails or returns an empty result. The previous fixed fallback could advertise libc6 >= 2.35 despite a bundled SMB library requiring GLIBC 2.38, and could omit codec runtime dependencies. Install the actual bundle runtime dependencies on the packaging host and resolve ABI compatibility before packaging. Do not publish the existing Linux draft assets based solely on a successful compilation. AppImage also uses system libraries and does not remove the bundled library's GLIBC requirement.
-# Linux compatibility rebuild (2026-11-07)
+
+## Linux compatibility rebuild (2026-11-07)
 
 The Ubuntu 22.04 bundle audit identified three incompatible ELF files:
 `libsmb2.so` required GLIBC 2.38, while the static-glibc `ffmpeg` and
@@ -176,4 +177,3 @@ above 2.35 before either AppImage or Debian packaging. Manual Release
 runs can select `linux_only` to build both Linux architectures without
 rebuilding successful platforms or changing the existing draft release.
 The new artifacts still require hosted build and package verification.
-
