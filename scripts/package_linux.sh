@@ -244,7 +244,7 @@ Version: $deb_version
 Architecture: $DEB_ARCH
 Maintainer: SpotiFLAC <spotiflac-app@users.noreply.github.com>
 Installed-Size: $installed_size
-Depends: $depends, libmpv2
+Depends: $depends, libmpv2 | libmpv1
 Recommends: gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, xdg-utils, xdg-desktop-portal
 Section: sound
 Priority: optional
