@@ -19,6 +19,17 @@ fi
 echo "$SHA  $WORK/kit.tar.gz" | sha256sum -c -
 mkdir -p "$WORK/kit"
 tar -xf "$WORK/kit.tar.gz" -C "$WORK/kit" --strip-components=1
+# The r8 script ends with `test && cleanup`, which returns 1 when keeping
+# sources. Use an explicit conditional so a successful build returns 0.
+python3 - "$WORK/kit/scripts/build_libsmb2_linux.sh" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+text = path.read_text()
+old = '[ "${KEEP_BUILD:-0}" != "1" ] && rm -rf "$BUILD_DIR"'
+assert text.count(old) == 1
+path.write_text(text.replace(old, 'if [ "${KEEP_BUILD:-0}" != "1" ]; then rm -rf "$BUILD_DIR"; fi'))
+PY
 if [[ "$ARCH" == aarch64 ]]; then
   # Upstream's old recipe assumes an x64 host for ARM. Use the native GCC.
   sed -i 's/aarch64-linux-gnu-gcc/gcc/g' "$WORK/kit/scripts/build_libsmb2_linux.sh"
