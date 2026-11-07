@@ -176,4 +176,21 @@ the native Ubuntu 22.04 release runners. No Dart dependency is upgraded.
 above 2.35 before either AppImage or Debian packaging. Manual Release
 runs can select `linux_only` to build both Linux architectures without
 rebuilding successful platforms or changing the existing draft release.
-The new artifacts still require hosted build and package verification.
+Both corrected Linux architectures passed in
+[run 42369265356](https://github.com/spotiflac-app/spotiflac/actions/runs/42369265356),
+source `fa7b65a91bf76e55e273c56cf8efe5ba3c783eda`. The AppImage and Debian
+bundles passed the glibc audit; Debian packages installed on clean Ubuntu
+24.04 containers and resolved their native dependencies, loaded playback,
+SMB and backend libraries, and ran both FFmpeg CLI tools. The x64 isolated
+provider search/download/full FLAC decode and permission guard passed.
+The unused Android path-provider JNI bridge is excluded from Linux.
+Desktop uses the FFmpeg CLI on both architectures; the upstream ARM64
+plugin does not supply FFmpegKit, which is therefore checked only when
+present. No application features or dependency versions were changed.
+
+Keep the original Linux assets in draft release 436671583 quarantined;
+only the new run's verified artifacts are candidates for the downloads
+draft. Non-Linux artifacts retain source commit
+`9553af072d78936efe03ea80e3d3ae69b041d4f8`; distribute both matching source
+archives and identify their platform scope. The source tag/commit must
+not imply that the new Linux packages came from the original build.

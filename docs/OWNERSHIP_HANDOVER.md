@@ -102,6 +102,19 @@ See [Release setup](RELEASE_SETUP.md) for operational instructions.
 
 ## Corrected release build completed
 
+Linux compatibility was resolved on 2026-11-07 in
+[run 42369265356](https://github.com/spotiflac-app/spotiflac/actions/runs/42369265356),
+commit `fa7b65a91bf76e55e273c56cf8efe5ba3c783eda`. Both native architectures
+passed glibc auditing, AppImage/Debian packaging, clean Ubuntu 24.04
+installation and native-library/FFmpeg CLI execution. SMB retains the
+dart_smb2 0.1.3/r8 source and patch set; the FFmpeg tools are rebuilt from
+pinned LGPL sources. Original Linux assets in draft 436671583 remain
+quarantined. Non-Linux packages below retain their original immutable
+source; the downloads draft must include both corresponding archives.
+Package inspection verified product versions/identities, Windows PE/AOT
+architectures, universal macOS Mach-O files, and Android JAR signatures
+against the project certificate. This does not replace device/GUI tests.
+
 All seven platform builds and release assembly passed in [run 42238210013](https://github.com/spotiflac-app/spotiflac/actions/runs/42238210013), using source commit `9553af072d78936efe03ea80e3d3ae69b041d4f8`. The draft contains Android ARM32/ARM64, Windows x64/ARM64, Linux x64/ARM64, universal macOS and the unsigned iOS IPA. Version remains 5.2.6+165. Standard public-repository runners were used; no billing settings were changed.
 
 The draft is not approved for distribution. A deeper local Ubuntu 22.04 runtime audit found that the pinned dart_smb2 0.1.3 library requires GLIBC 2.38, although the Linux Debian fallback dependency list advertises libc6 >= 2.35. AMR runtime dependencies also need package verification. Linux compatibility and package metadata must be resolved before publication. Build success alone does not establish installation or playback on every platform. Phone tests and trusted Apple/Windows distribution signing remain outstanding.
