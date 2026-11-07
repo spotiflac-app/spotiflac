@@ -56,6 +56,7 @@ OPTIONS=(
   --disable-doc --disable-ffplay --disable-debug
   --enable-zlib --enable-gnutls --enable-libmp3lame --enable-libopus --enable-libsoxr
   --extra-cflags="-I$PREFIX/include" --extra-ldflags="-L$PREFIX/lib"
+  --extra-libs=-lm
 )
 (
   cd "$WORK/ffmpeg-9.0.2"
