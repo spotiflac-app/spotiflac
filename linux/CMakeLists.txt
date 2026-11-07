@@ -155,6 +155,10 @@ if(EXISTS "${SPOTIFLAC_FFMPEG_DIR}/ffmpeg" AND EXISTS "${SPOTIFLAC_FFMPEG_DIR}/f
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}/ffmpeg" COMPONENT Runtime)
   install(FILES "${SPOTIFLAC_FFMPEG_DIR}/LICENSE.txt" "${SPOTIFLAC_FFMPEG_DIR}/SOURCE.txt"
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}/ffmpeg" COMPONENT Runtime)
+  if(EXISTS "${SPOTIFLAC_FFMPEG_DIR}/licenses")
+    install(DIRECTORY "${SPOTIFLAC_FFMPEG_DIR}/licenses"
+      DESTINATION "${INSTALL_BUNDLE_LIB_DIR}/ffmpeg" COMPONENT Runtime)
+  endif()
 else()
   message(WARNING
     "No LGPL FFmpeg is staged in ${SPOTIFLAC_FFMPEG_DIR}; the bundle will use "

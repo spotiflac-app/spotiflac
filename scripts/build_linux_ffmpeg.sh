@@ -56,15 +56,21 @@ OPTIONS=(
   --disable-doc --disable-ffplay --disable-debug
   --enable-zlib --enable-gnutls --enable-libmp3lame --enable-libopus --enable-libsoxr
   --extra-cflags="-I$PREFIX/include" --extra-ldflags="-L$PREFIX/lib"
-  --pkg-config-flags=--static
 )
 (
   cd "$WORK/ffmpeg-9.0.2"
-  ./configure "${OPTIONS[@]}"
+  if ! ./configure "${OPTIONS[@]}"; then
+    tail -80 ffbuild/config.log >&2
+    exit 1
+  fi
   make -j"$JOBS" ffmpeg ffprobe
 )
 install -m755 "$WORK/ffmpeg-9.0.2/ffmpeg" "$WORK/ffmpeg-9.0.2/ffprobe" "$OUT/"
 cp "$WORK/ffmpeg-9.0.2/COPYING.LGPLv2.1" "$OUT/LICENSE.txt"
+mkdir -p "$OUT/licenses"
+cp "$WORK/lame-3.100/COPYING" "$OUT/licenses/LAME-COPYING.txt"
+cp "$WORK/opus-1.5.2/COPYING" "$OUT/licenses/OPUS-COPYING.txt"
+cp "$WORK/soxr-0.1.3-Source/LICENCE" "$OUT/licenses/SOXR-LICENCE.txt"
 {
   echo 'FFmpeg 9.0.2 LGPL build on the Linux release baseline (dynamic system glibc and GnuTLS).'
   echo 'Recipe: scripts/build_linux_ffmpeg.sh; all source URLs and SHA-256 pins are in that script.'
