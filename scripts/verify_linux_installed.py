@@ -18,10 +18,14 @@ for record in records:
     assert 'not found' not in result.stdout + result.stderr, (record, result.stdout, result.stderr)
 ctypes.CDLL('libstdc++.so.6', mode=ctypes.RTLD_GLOBAL)
 ctypes.CDLL('libmpv.so.2')
-for name in ('libsmb2.so', 'libspotiflac_desktop.so', 'libffmpegkit.so'):
+for name in ('libsmb2.so', 'libspotiflac_desktop.so'):
     ctypes.CDLL(str(root / 'lib' / name))
+# The upstream ARM64 plugin intentionally supplies no FFmpegKit library.
+# Desktop FFmpegSupport uses the mandatory CLI tools on both architectures.
+if (root / 'lib/libffmpegkit.so').exists():
+    ctypes.CDLL(str(root / 'lib/libffmpegkit.so'))
 for tool in ('ffmpeg', 'ffprobe'):
     result = subprocess.run([str(root / 'lib/ffmpeg' / tool), '-hide_banner', '-version'],
                             check=True, capture_output=True, text=True)
     assert '--enable-gpl' not in result.stdout and '--enable-nonfree' not in result.stdout
-print(f'Installed bundle: {len(records)} ELF files resolved; playback, SMB, backend, FFmpegKit and CLI libraries loaded.')
+print(f'Installed bundle: {len(records)} ELF files resolved; playback, SMB and backend libraries loaded; FFmpeg CLI tools ran.')
