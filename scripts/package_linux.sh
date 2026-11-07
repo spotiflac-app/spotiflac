@@ -79,6 +79,8 @@ for required in "$BINARY_NAME" lib/libapp.so lib/libflutter_linux_gtk.so data/fl
   fi
 done
 
+python3 "$SCRIPT_DIR/verify_linux_runtime.py" "$BUNDLE_DIR"
+
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/spotiflac-package.XXXXXX")"
 trap 'rm -rf "$WORK_DIR"' EXIT
 

@@ -23,6 +23,9 @@ on:
       - "scripts/smoke_test_desktop_provider.py"
       - "scripts/embed_rust_backend_macos.sh"
       - "scripts/fetch_desktop_ffmpeg.sh"
+      - "scripts/build_linux_ffmpeg.sh"
+      - "scripts/build_linux_smb2.sh"
+      - "scripts/verify_linux_runtime.py"
       - "scripts/embed_ffmpeg_macos.sh"
       - "pubspec.yaml"
       - "pubspec.lock"
@@ -172,7 +175,7 @@ jobs:
           # dependency; asking for it first lets apt replace the LLVM one.
           sudo apt-get install -y libunwind-dev
           sudo apt-get install -y \
-            clang cmake ninja-build pkg-config zip \
+            clang gcc g++ make nasm cmake ninja-build pkg-config zip libgnutls28-dev \
             libgtk-3-dev liblzma-dev libsecret-1-dev libstdc++-12-dev \
             libjson-glib-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
             libasound2-dev libclang-dev libmpv-dev
@@ -206,6 +209,9 @@ jobs:
 
       - name: Fetch LGPL FFmpeg
         run: bash scripts/fetch_desktop_ffmpeg.sh "linux-${{ matrix.flutter_arch }}"
+
+      - name: Build baseline-compatible SMB library
+        run: bash scripts/build_linux_smb2.sh
 
       - name: Setup Flutter
         if: matrix.flutter_arch == 'x64'

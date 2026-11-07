@@ -100,10 +100,29 @@ install(FILES "${FLUTTER_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 
 foreach(bundled_library ${PLUGIN_BUNDLED_LIBRARIES})
+  # dart_smb2 0.1.3's prebuilt requires glibc 2.38. Install the same r8
+  # source rebuilt on our Linux baseline instead (see below).
+  get_filename_component(bundled_name "${bundled_library}" NAME)
+  if(bundled_name STREQUAL "libsmb2.so")
+    continue()
+  endif()
   install(FILES "${bundled_library}"
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
     COMPONENT Runtime)
 endforeach(bundled_library)
+
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
+  set(SPOTIFLAC_SMB2_TARGET "linux-arm64")
+else()
+  set(SPOTIFLAC_SMB2_TARGET "linux-x64")
+endif()
+set(SPOTIFLAC_SMB2_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../build/smb2/${SPOTIFLAC_SMB2_TARGET}")
+if(NOT EXISTS "${SPOTIFLAC_SMB2_DIR}/libsmb2.so")
+  message(FATAL_ERROR "Run bash scripts/build_linux_smb2.sh before building Linux.")
+endif()
+install(FILES "${SPOTIFLAC_SMB2_DIR}/libsmb2.so" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}" COMPONENT Runtime)
+install(DIRECTORY "${SPOTIFLAC_SMB2_DIR}/" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}/smb2"
+  COMPONENT Runtime PATTERN "*.so" EXCLUDE)
 
 # Rust desktop backend, loaded by dart:ffi from the bundle's lib/ directory.
 # It is prebuilt by `bash scripts/build_rust_backend.sh desktop`.

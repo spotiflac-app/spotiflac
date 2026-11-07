@@ -12,7 +12,9 @@
 # and SOURCE.txt (where the build came from, for the LGPL source offer).
 #
 # Sources:
-#   Linux, Windows: BtbN/FFmpeg-Builds static "lgpl" variants (no GPL or
+#   Linux: build_linux_ffmpeg.sh builds pinned LGPL sources against the
+#     native runner baseline, avoiding static glibc's private resolver ABI.
+#   Windows: BtbN/FFmpeg-Builds static "lgpl" variants (no GPL or
 #     nonfree parts; includes libmp3lame, libopus, libsoxr and TLS). The
 #     archive is checked against the checksums.sha256 file of the same
 #     release. SPOTIFLAC_FFMPEG_BTBN_TAG (default: latest) selects the release
@@ -380,7 +382,8 @@ mkdir -p "$OUT_DIR" "$WORK_DIR"
 rm -f "$OUT_DIR/ffmpeg$EXE" "$OUT_DIR/ffprobe$EXE"
 case "$OS" in
   macos) build_macos ;;
-  linux|windows) fetch_btbn ;;
+  linux) bash "$SCRIPT_DIR/build_linux_ffmpeg.sh" "$TARGET" ;;
+  windows) fetch_btbn ;;
 esac
 chmod +x "$OUT_DIR/ffmpeg$EXE" "$OUT_DIR/ffprobe$EXE"
 check_license
