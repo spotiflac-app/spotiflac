@@ -2,6 +2,18 @@
   "name": "SpotiFLAC Source",
   "identifier": "com.spotiflac.app.source",
   "subtitle": "FLAC Downloader for iOS",
-  "apps": [],
+  "apps": [
+    {
+      "name": "SpotiFLAC",
+      "bundleIdentifier": "com.spotiflac.app",
+      "developerName": "SpotiFLAC",
+      "version": "5.2.6",
+      "versionDate": "2026-11-08",
+      "downloadURL": "https://github.com/spotiflac-app/spotiflac-releases/releases/download/v5.2.6/SpotiFLAC-v5.2.6-ios-unsigned.ipa",
+      "localizedDescription": "SpotiFLAC music player and library manager. https://spotiflac.com",
+      "iconURL": "https://raw.githubusercontent.com/spotiflac-app/spotiflac-releases/main/assets/images/logo.png",
+      "size": 32834179
+    }
+  ],
   "website": "https://spotiflac.com"
 }
