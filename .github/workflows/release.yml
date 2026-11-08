@@ -18,6 +18,10 @@ on:
         description: "Build packages without modifying an existing release draft"
         type: boolean
         default: false
+      windows_only:
+        description: "Build Windows packages only without updating the release"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -64,7 +68,7 @@ jobs:
           fi
 
   build-android:
-    if: ${{ !inputs.linux_only }}
+    if: ${{ !inputs.linux_only && !inputs.windows_only }}
     runs-on: ubuntu-latest
     needs: get-version
     env:
@@ -276,7 +280,7 @@ jobs:
             build/app/outputs/flutter-apk/SHA256SUMS.txt
 
   build-ios:
-    if: ${{ !inputs.linux_only }}
+    if: ${{ !inputs.linux_only && !inputs.windows_only }}
     runs-on: macos-15-intel
     needs: get-version # Only depends on version, NOT android build!
     env:
@@ -400,7 +404,7 @@ jobs:
   # AppImage and deb per Linux architecture, and a Windows installer and
   # portable zip. Each job uploads SHA256SUMS-<target>.txt for create-release.
   build-macos:
-    if: ${{ !inputs.linux_only }}
+    if: ${{ !inputs.linux_only && !inputs.windows_only }}
     name: Build macOS (universal)
     runs-on: macos-15-intel
     needs: get-version
@@ -502,6 +506,7 @@ jobs:
             build/desktop/SHA256SUMS-macos.txt
 
   build-linux:
+    if: ${{ !inputs.windows_only }}
     name: Build Linux (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     needs: get-version
@@ -712,6 +717,8 @@ jobs:
       # Git Bash provides curl, unzip and sha256sum for the fetch script.
       - name: Fetch LGPL FFmpeg
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: bash scripts/fetch_desktop_ffmpeg.sh windows-${{ matrix.arch }}
 
       - name: Setup Flutter
@@ -848,7 +855,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [get-version, build-android, build-ios, build-macos, build-linux, build-windows]
     if: >-
-      ${{ !inputs.build_only && !inputs.linux_only && !cancelled() && (needs.build-android.result == 'success'
+      ${{ !inputs.build_only && !inputs.windows_only && !inputs.linux_only && !cancelled() && (needs.build-android.result == 'success'
       || needs.build-ios.result == 'success' || needs.build-macos.result == 'success'
       || needs.build-linux.result == 'success' || needs.build-windows.result == 'success') }}
     permissions:

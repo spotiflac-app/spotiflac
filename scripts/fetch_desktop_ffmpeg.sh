@@ -127,7 +127,17 @@ download() {
   local url="$1" dest="$2"
   if [[ ! -f "$dest" ]]; then
     echo "Downloading $url"
-    curl -fL --retry 3 -o "$dest.part" "$url"
+    if ! curl -fL --retry 3 -o "$dest.part" "$url"; then
+      if command -v gh >/dev/null 2>&1 &&
+          [[ -n "${GH_TOKEN:-${GITHUB_TOKEN:-}}" ]] &&
+          [[ "$url" =~ ^https://github.com/([^/]+/[^/]+)/releases/download/([^/]+)/([^/]+)$ ]]; then
+        gh release download "${BASH_REMATCH[2]}" --repo "${BASH_REMATCH[1]}" \
+          --pattern "${BASH_REMATCH[3]}" --output "$dest.part" --clobber
+      else
+        echo "Error: unable to download the verified FFmpeg source or package." >&2
+        exit 1
+      fi
+    fi
     mv "$dest.part" "$dest"
   fi
 }
