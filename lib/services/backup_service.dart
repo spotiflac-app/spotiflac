@@ -158,7 +158,7 @@ class BackupService {
   static final _log = AppLogger('BackupService');
 
   static const String magic = 'spotiflac-backup';
-  static const String _legacyMagic = 'spotiflac-backup';
+  static const String _legacyMagic = 'mornye-backup';
   // V3 permits omitted categories. Older readers reject it instead of treating
   // an omitted history as an empty history and clearing existing downloads.
   static const int formatVersion = 3;
