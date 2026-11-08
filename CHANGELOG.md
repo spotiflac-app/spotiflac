@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.3.1] - Unreleased
+
+- Update application features, platform integrations, extension runtime and tests to the stable 5.3.1 baseline.
+- Keep semantic update ordering and compatibility with existing backup formats and lyrics identifiers.
+- Configure project-owned Discord and Last.fm integrations, and require their settings before a full release.
+- Keep source and issue links independent of the downloads host; make community destinations configurable.
+
 ## [5.2.7] - 2026-11-08
 
 ### Security

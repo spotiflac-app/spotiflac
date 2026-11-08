@@ -135,9 +135,16 @@ class AboutPage extends StatelessWidget {
               connected: true,
               children: [
                 _AboutSettingsItem(
+                  icon: Icons.language,
+                  title: 'spotiflac.com',
+                  subtitle: AppInfo.websiteUrl,
+                  onTap: () => _launchUrl(AppInfo.websiteUrl),
+                  showDivider: true,
+                ),
+                _AboutSettingsItem(
                   icon: Icons.phone_android,
                   title: context.l10n.aboutMobileSource,
-                  subtitle: 'github.com/${AppInfo.githubRepo}',
+                  subtitle: 'github.com/${AppInfo.sourceGithubRepo}',
                   onTap: () => _launchUrl(AppInfo.githubUrl),
                   showDivider: true,
                 ),
@@ -172,26 +179,30 @@ class AboutPage extends StatelessWidget {
               ],
             ),
 
-            ...settingsSectionSlivers(
-              title: context.l10n.aboutSocial,
-              connected: true,
-              children: [
-                _AboutSettingsItem(
-                  icon: Icons.telegram,
-                  title: context.l10n.aboutTelegramChannel,
-                  subtitle: context.l10n.aboutTelegramChannelSubtitle,
-                  onTap: () => _launchUrl('https://t.me/spotiflacupdates'),
-                  showDivider: true,
-                ),
-                _AboutSettingsItem(
-                  icon: Icons.forum_outlined,
-                  title: context.l10n.aboutTelegramChat,
-                  subtitle: context.l10n.aboutTelegramChatSubtitle,
-                  onTap: () => _launchUrl('https://t.me/spotiflaccommunity'),
-                  showDivider: false,
-                ),
-              ],
-            ),
+            if (AppInfo.telegramChannelUrl.isNotEmpty ||
+                AppInfo.telegramChatUrl.isNotEmpty)
+              ...settingsSectionSlivers(
+                title: context.l10n.aboutSocial,
+                connected: true,
+                children: [
+                  if (AppInfo.telegramChannelUrl.isNotEmpty)
+                    _AboutSettingsItem(
+                      icon: Icons.telegram,
+                      title: context.l10n.aboutTelegramChannel,
+                      subtitle: context.l10n.aboutTelegramChannelSubtitle,
+                      onTap: () => _launchUrl(AppInfo.telegramChannelUrl),
+                      showDivider: AppInfo.telegramChatUrl.isNotEmpty,
+                    ),
+                  if (AppInfo.telegramChatUrl.isNotEmpty)
+                    _AboutSettingsItem(
+                      icon: Icons.forum_outlined,
+                      title: context.l10n.aboutTelegramChat,
+                      subtitle: context.l10n.aboutTelegramChatSubtitle,
+                      onTap: () => _launchUrl(AppInfo.telegramChatUrl),
+                      showDivider: false,
+                    ),
+                ],
+              ),
 
             ...settingsSectionSlivers(
               title: context.l10n.aboutApp,

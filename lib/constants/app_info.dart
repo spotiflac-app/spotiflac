@@ -34,7 +34,14 @@ class AppInfo {
     'SPOTIFLAC_GITHUB_REPO',
     defaultValue: 'spotiflac-app/spotiflac',
   );
-  static const String githubUrl = 'https://github.com/$githubRepo';
+  static const String sourceGithubRepo = 'spotiflac-app/spotiflac';
+  static const String githubUrl = 'https://github.com/$sourceGithubRepo';
+  static const String telegramChannelUrl = String.fromEnvironment(
+    'SPOTIFLAC_TELEGRAM_CHANNEL_URL',
+  );
+  static const String telegramChatUrl = String.fromEnvironment(
+    'SPOTIFLAC_TELEGRAM_CHAT_URL',
+  );
 
   /// Public downloads for every platform.
   static const String desktopGithubRepo = String.fromEnvironment(

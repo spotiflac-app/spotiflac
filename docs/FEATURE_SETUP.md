@@ -48,6 +48,11 @@ required together. Use the project's own registration for its builds.
 
 ## Release and verification
 
+Community links can be configured with the optional repository variables
+`TELEGRAM_CHANNEL_URL` and `TELEGRAM_CHAT_URL`. Supply HTTPS links to the
+project's actual channels. Unconfigured links are hidden rather than guessed.
+The official website, source and issue links remain available independently.
+
 After configuring the accounts, run the normal Release workflow for the
 version in `pubspec.yaml`. The existing Android project signing key remains
 required for compatible updates. Apple/Windows signing follows the documented

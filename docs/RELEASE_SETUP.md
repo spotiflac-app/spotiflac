@@ -6,6 +6,8 @@ Source: `spotiflac-app/spotiflac`, branch `main`.
 Downloads: [SpotiFLAC v5.2.7](https://github.com/spotiflac-app/spotiflac-releases/releases/tag/v5.2.7),
 product version **5.2.7+166**. See [project status](OWNERSHIP_HANDOVER.md) for
 exact build provenance, validation and signing status.
+Development source targets **5.3.1+167**. Complete [account integration setup](FEATURE_SETUP.md)
+before building a full release; the examples below target that development version.
 
 Use the Flutter and Rust versions pinned in `.fvmrc` and
 `rust_backend/rust-toolchain.toml`. Keep the lockfiles and existing license
@@ -13,7 +15,7 @@ notices. Update `pubspec.yaml`, `AppInfo.version`, `AppInfo.buildNumber` and the
 changelog together. Release preflight rejects inconsistent versions:
 
 ```text
-python scripts/check_release_version.py --version v5.2.7
+python scripts/check_release_version.py --version v5.3.1
 ```
 
 ## Release workflow
@@ -69,7 +71,7 @@ commercial-provider GUI coverage. See their uploaded evidence for exact results.
 Stage a downloads draft using an authenticated owner checkout:
 
 ```text
-python scripts/publish_distribution.py --tag v5.2.7 --directory PATH_TO_REVIEW_PACKAGES
+python scripts/publish_distribution.py --tag v5.3.1 --directory PATH_TO_REVIEW_PACKAGES
 ```
 
 The publisher verifies every package digest, resolves the exact source commit,
@@ -80,7 +82,7 @@ Credentials stay in the environment or Git credential manager.
 After the chosen package checks pass, publish the verified draft:
 
 ```text
-python scripts/publish_distribution.py --tag v5.2.7 --directory PATH_TO_REVIEW_PACKAGES --publish
+python scripts/publish_distribution.py --tag v5.3.1 --directory PATH_TO_REVIEW_PACKAGES --publish
 ```
 
 Replace the example version with the version actually built. `--publish`
@@ -130,11 +132,11 @@ Rust, Inno Setup 6, and working Flutter plugin links. Apply
 preflight before building. For x64:
 
 ```text
-flutter build windows --release --build-name=5.2.7 --build-number=166 --dart-define-from-file=.release-defines.json
+flutter build windows --release --build-name=5.3.1 --build-number=167 --dart-define-from-file=.release-defines.json
 ```
 
 Audit with `scripts/check_windows_bundle.ps1`, then package with
-`scripts/package_windows.ps1 -Version v5.2.7 -Arch x64`.
+`scripts/package_windows.ps1 -Version v5.3.1 -Arch x64`.
 
 Android scripts run in Linux or WSL. Use the toolchain versions configured in
 the release workflow, keep the checkout and caches on a Linux filesystem, fetch
