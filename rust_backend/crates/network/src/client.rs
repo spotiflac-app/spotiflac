@@ -10,7 +10,7 @@ pub use stream::HttpStream;
 
 use crate::cookies::CookieJar;
 use crate::dns::{Dns, Lookup, Resolver, SystemLookup};
-use crate::policy::{GrantedOrigin, NetworkPermissions, private_literal_or_local};
+use crate::policy::{NetworkPermissions, private_literal_or_local};
 use crate::url::UrlParts;
 use async_compression::tokio::bufread::GzipDecoder;
 use bytes::Bytes;
@@ -25,7 +25,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
 use std::io;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, RwLock, Weak};
+use std::sync::{Arc, Mutex, Weak};
 use std::task::{Context, Poll, Wake, Waker};
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncRead, AsyncReadExt, BufReader};
@@ -237,7 +237,6 @@ impl NetworkService {
             follow_redirects: true,
             timeout,
             cookies: Mutex::default(),
-            grants: Arc::default(),
         })
     }
 
@@ -251,7 +250,6 @@ impl NetworkService {
             follow_redirects: true,
             timeout,
             cookies: Mutex::default(),
-            grants: Arc::default(),
         })
     }
 
@@ -266,7 +264,6 @@ impl NetworkService {
             follow_redirects: true,
             timeout,
             cookies: Mutex::default(),
-            grants: Arc::default(),
         })
     }
 }
@@ -316,16 +313,9 @@ pub struct NetworkSession {
     follow_redirects: bool,
     timeout: Duration,
     cookies: Mutex<CookieJar>,
-    /// Shared with `direct_media` copies so a settings change reaches them.
-    grants: Arc<RwLock<Vec<GrantedOrigin>>>,
 }
 
 impl NetworkSession {
-    /// Replaces the hosts granted by the extension's `grantsNetwork` settings.
-    pub fn set_grants(&self, grants: Vec<GrantedOrigin>) {
-        *self.grants.write().expect("network grants lock") = grants;
-    }
-
     /// Account-owned media must not carry metadata cookies or follow a redirect
     /// outside its descriptor. Keep the original manifest/DNS/TLS permissions.
     pub fn direct_media(&self) -> Self {
@@ -336,7 +326,6 @@ impl NetworkSession {
             follow_redirects: false,
             timeout: self.timeout,
             cookies: Mutex::default(),
-            grants: Arc::clone(&self.grants),
         }
     }
 
@@ -405,8 +394,7 @@ impl NetworkSession {
         redirect: bool,
     ) -> Result<UrlParts, String> {
         if let Some(permissions) = &self.permissions {
-            let grants = self.grants.read().expect("network grants lock");
-            return permissions.validate_with_grants(input, allow_private, redirect, &grants);
+            return permissions.validate(input, allow_private, redirect);
         }
         let url = UrlParts::parse(input).ok_or_else(|| "invalid URL".to_owned())?;
         NetworkPermissions {
