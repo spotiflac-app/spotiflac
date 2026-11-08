@@ -42,6 +42,36 @@ void main() {
   });
   tearDown(() => LogBuffer.loggingEnabled = false);
 
+  for (final (installed, available, expected) in [
+    ('5.2.7-preview.1', '5.2.7-preview.2', true),
+    ('5.2.7-beta.2', '5.2.7-beta.10', true),
+    ('5.2.7-beta.10', '5.2.7-beta.2', false),
+    ('5.2.7-beta.2', '5.2.7-rc.1', true),
+    ('5.2.7-rc.1', '5.2.7', true),
+    ('5.2.7', '5.2.7-rc.1', false),
+    ('5.2.7+1', '5.2.7+2', false),
+    ('5.2.7-preview.2', '5.2.7-preview.2', false),
+  ]) {
+    test('preview update ordering: $installed to $available', () async {
+      final checker = UpdateChecker(
+        installedVersion: installed,
+        isAndroid: true,
+        supportedAbis: ['arm64-v8a'],
+        client: MockClient(
+          (_) async => http.Response(
+            jsonEncode([
+              {...release(available), 'prerelease': available.contains('-')},
+            ]),
+            200,
+          ),
+        ),
+      );
+      final update = await checker.checkForUpdate(channel: 'preview');
+      expect(update != null, expected);
+      if (expected) expect(update!.version, available);
+    });
+  }
+
   for (final (abi, asset) in [
     ('arm64-v8a', 'arm64'),
     ('armeabi-v7a', 'arm32'),
@@ -87,7 +117,7 @@ void main() {
     });
   }
 
-  test('discovers SpotiFLAC release assets after the app rename', () async {
+  test('discovers release assets with supported filename variants', () async {
     final renamedRelease = release('5.2.1')
       ..['assets'] = [
         for (final abi in ['arm32', 'arm64'])

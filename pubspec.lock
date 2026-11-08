@@ -1007,13 +1007,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.0"
-  spotiflac_discord:
-    dependency: "direct main"
-    description:
-      path: "third_party/spotiflac_discord"
-      relative: true
-    source: path
-    version: "0.1.0"
   motor:
     dependency: transitive
     description:
@@ -1223,7 +1216,7 @@ packages:
     source: hosted
     version: "5.0.6"
   pub_semver:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: pub_semver
       sha256: "261236774e8b1d69cfc6b9eabbc96c40f25e7a2d6b171f3385d4f65d5734fb24"
@@ -1419,6 +1412,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.10.2"
+  spotiflac_discord:
+    dependency: "direct main"
+    description:
+      path: "third_party/spotiflac_discord"
+      relative: true
+    source: path
+    version: "0.1.0"
   sqflite:
     dependency: "direct main"
     description:

@@ -10,10 +10,10 @@ The pinned Flutter/Rust toolchains and operating-system runners build the
 mobile and desktop packages. Draft releases combine every
 successful platform, with one set of release notes and SHA256SUMS.txt.
 
-The default is a draft release. Validate builds, signatures, fresh installation,
-playback and downloads, then test an upgrade before setting the GitHub Actions
-repository variable `PUBLISH_RELEASES` to `true` for future public releases.
-Do not enable it merely to make a failed workflow appear successful.
+The Release workflow always creates a source build draft at its immutable commit.
+It does not publish application updates directly. After validation, use the
+downloads publisher below. The former `PUBLISH_RELEASES` variable has no effect;
+there is no automatic source-repository publication or source-feed write job.
 
 ## Android signing
 
@@ -111,15 +111,29 @@ checkout with the project owner's Git credentials:
 python scripts/publish_distribution.py --tag v5.2.6 --directory PATH_TO_REVIEW_PACKAGES
 ```
 
-This tool never publishes or changes repository visibility. It verifies every
+Without `--publish`, this tool only stages a draft. It never changes repository
+visibility. It verifies every
 package against the build's checksum manifest, resolves the exact tagged
 source commit, includes the matching source archive and license notices, and
 creates a draft in the downloads repository. Existing different assets cannot
 be silently overwritten. Credentials remain in the environment or local Git
 credential manager. Do not store a broad personal token in the application.
 
-For future releases, publish the verified downloads draft explicitly after the
-chosen release checks. The v5.2.6 downloads release is already published. Its public release API becomes the app's unauthenticated update
+For a future version, complete the chosen package checks, then publish using the
+same publisher with the explicit flag:
+
+```text
+python scripts/publish_distribution.py --tag v5.2.7 --directory PATH_TO_REVIEW_PACKAGES --publish
+```
+
+Replace the example tag with the version actually built. The publisher rechecks
+the exact uploaded names and SHA-256 digests before publishing to the downloads
+repository. It then refreshes that repository's stable `apps.json` from the
+verified IPA. Preview releases do not replace the stable feed. Repeating
+`--publish` can resume a failed feed write only when every published asset still
+matches; it does not replace an existing published binary.
+
+The v5.2.6 downloads release is already published. Its public release API is the app's unauthenticated update
 feed. The AltStore source is the stable release asset URL
 `https://github.com/spotiflac-app/spotiflac-releases/releases/latest/download/apps.json`;
 it is generated from the actual IPA. No production download is advertised before

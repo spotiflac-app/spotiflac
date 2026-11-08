@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:http/http.dart' as http;
+import 'package:pub_semver/pub_semver.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:spotiflac/constants/app_info.dart';
 import 'package:spotiflac/utils/desktop_platform.dart';
@@ -456,30 +457,9 @@ class UpdateChecker {
 
   static bool _isNewerVersion(String latest, String current) {
     try {
-      final latestBase = latest.split('-').first;
-      final currentBase = current.split('-').first;
-
-      final latestParts = latestBase.split('.').map(int.parse).toList();
-      final currentParts = currentBase.split('.').map(int.parse).toList();
-
-      while (latestParts.length < 3) {
-        latestParts.add(0);
-      }
-      while (currentParts.length < 3) {
-        currentParts.add(0);
-      }
-
-      for (int i = 0; i < 3; i++) {
-        if (latestParts[i] > currentParts[i]) return true;
-        if (latestParts[i] < currentParts[i]) return false;
-      }
-
-      final latestHasSuffix = latest.contains('-');
-      final currentHasSuffix = current.contains('-');
-
-      if (!latestHasSuffix && currentHasSuffix) return true;
-
-      return false;
+      // Build metadata does not affect SemVer update precedence.
+      return Version.parse(latest.split('+').first) >
+          Version.parse(current.split('+').first);
     } catch (e) {
       _log.e('Error comparing versions: $e');
       return false;
