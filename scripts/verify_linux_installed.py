@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Check an installed Debian bundle without requiring a display or audio device."""
 import ctypes
+import ctypes.util
 import os
 from pathlib import Path
 import subprocess
@@ -17,7 +18,9 @@ for record in records:
                             capture_output=True, text=True, env=env)
     assert 'not found' not in result.stdout + result.stderr, (record, result.stdout, result.stderr)
 ctypes.CDLL('libstdc++.so.6', mode=ctypes.RTLD_GLOBAL)
-ctypes.CDLL('libmpv.so.2')
+playback_library = ctypes.util.find_library('mpv')
+assert playback_library, 'Installed playback library could not be found'
+ctypes.CDLL(playback_library)
 for name in ('libsmb2.so', 'libspotiflac_desktop.so'):
     ctypes.CDLL(str(root / 'lib' / name))
 # The upstream ARM64 plugin intentionally supplies no FFmpegKit library.

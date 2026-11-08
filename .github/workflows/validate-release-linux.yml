@@ -1,0 +1,58 @@
+name: Validate existing Linux release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    name: Validate Ubuntu 22.04 (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-22.04
+          - arch: aarch64
+            runner: ubuntu-22.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Verify immutable build provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/spotiflac-app/spotiflac/actions/runs/42369265356 > "$RUNNER_TEMP/build-run.json"
+          python3 -c 'import json,os; d=json.load(open(os.environ["RUNNER_TEMP"]+"/build-run.json")); assert d["head_sha"]=="fa7b65a91bf76e55e273c56cf8efe5ba3c783eda" and d["conclusion"]=="success"'
+      - name: Download corrected Linux package
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          github-token: ${{ github.token }}
+          run-id: 42369265356
+          name: desktop-release-linux-${{ matrix.arch }}
+          path: package
+      - name: Check manifest
+        run: cd package && sha256sum -c SHA256SUMS-linux-*.txt
+      - name: Verify baseline installation and native startup
+        run: |
+          mkdir evidence
+          docker run --rm \
+            -v "$PWD/package:/packages:ro" -v "$PWD/scripts:/checks:ro" \
+            -v "$PWD/evidence:/evidence" ubuntu:22.04 bash -euc '
+              apt-get update -qq
+              DEBIAN_FRONTEND=noninteractive apt-get install -y /packages/*.deb python3 binutils xvfb x11-utils imagemagick
+              export LD_LIBRARY_PATH=/usr/lib/spotiflac/lib
+              python3 /checks/verify_linux_installed.py
+              dbus-run-session -- xvfb-run -a python3 /checks/validate_linux_startup.py
+            '
+      - name: Save validation evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: linux-release-validation-${{ matrix.arch }}
+          if-no-files-found: warn
+          path: evidence
