@@ -42,8 +42,9 @@ class AppInfo {
         'https://raw.githubusercontent.com/spotiflac-app/spotiflac/main/config/app.json',
   );
 
-  /// Enable only after registering and configuring your own Discord application.
+  /// Native SDK availability and the user's setting control Discord presence.
   static const bool discordEnabled = bool.fromEnvironment(
     'SPOTIFLAC_DISCORD_ENABLED',
+    defaultValue: true,
   );
 }
