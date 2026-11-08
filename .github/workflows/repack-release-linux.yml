@@ -1,0 +1,86 @@
+name: Repack verified Linux release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  repack:
+    name: Repack Linux (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            deb_arch: amd64
+            runner: ubuntu-22.04
+          - arch: aarch64
+            deb_arch: arm64
+            runner: ubuntu-22.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - name: Verify unchanged compiled sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/spotiflac-app/spotiflac/actions/runs/42369265356 > "$RUNNER_TEMP/build-run.json"
+          python3 -c 'import json,os; d=json.load(open(os.environ["RUNNER_TEMP"]+"/build-run.json")); assert d["head_sha"]=="fa7b65a91bf76e55e273c56cf8efe5ba3c783eda" and d["conclusion"]=="success"'
+          git diff --exit-code fa7b65a91bf76e55e273c56cf8efe5ba3c783eda HEAD -- lib assets rust_backend pubspec.yaml pubspec.lock
+      - name: Download verified native package
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          github-token: ${{ github.token }}
+          run-id: 42369265356
+          name: desktop-release-linux-${{ matrix.arch }}
+          path: original
+      - name: Verify and extract bundle
+        run: |
+          (cd original && sha256sum -c SHA256SUMS-linux-*.txt)
+          dpkg-deb -x original/SpotiFLAC-v5.2.6-linux-${{ matrix.deb_arch }}.deb extracted
+          python3 scripts/verify_linux_runtime.py extracted/usr/lib/spotiflac
+      - name: Install dependency resolver inputs
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ./original/*.deb dpkg-dev
+      - name: Repack without changing binaries
+        run: |
+          mkdir package
+          export SPOTIFLAC_PACKAGE_ARCH='${{ matrix.arch }}'
+          bash scripts/package_linux.sh appimage extracted/usr/lib/spotiflac v5.2.6 package/SpotiFLAC-v5.2.6-linux-${{ matrix.arch }}.AppImage
+          bash scripts/package_linux.sh deb extracted/usr/lib/spotiflac v5.2.6 package/SpotiFLAC-v5.2.6-linux-${{ matrix.deb_arch }}.deb
+          dpkg-deb -x package/*.deb verified
+          diff -qr extracted/usr/lib/spotiflac verified/usr/lib/spotiflac
+          (cd package && sha256sum SpotiFLAC-* > SHA256SUMS-linux-${{ matrix.arch }}.txt)
+      - name: Validate clean installation and startup on both Ubuntu baselines
+        run: |
+          for baseline in 22.04 24.04; do
+            mkdir -p "evidence/$baseline"
+            docker run --rm \
+              -v "$PWD/package:/packages:ro" -v "$PWD/scripts:/checks:ro" \
+              -v "$PWD/evidence/$baseline:/evidence" "ubuntu:$baseline" bash -euc '
+                apt-get update -qq
+                DEBIAN_FRONTEND=noninteractive apt-get install -y /packages/*.deb python3 binutils xvfb x11-utils imagemagick
+                export LD_LIBRARY_PATH=/usr/lib/spotiflac/lib
+                python3 /checks/verify_linux_installed.py
+                dbus-run-session -- xvfb-run -a python3 /checks/validate_linux_startup.py
+              '
+          done
+      - name: Upload verified packages
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: desktop-release-linux-${{ matrix.arch }}
+          path: package/*
+      - name: Save validation evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: linux-release-validation-${{ matrix.arch }}
+          if-no-files-found: warn
+          path: evidence
