@@ -28,6 +28,8 @@
 
 Project setup: [release and signing instructions](docs/RELEASE_SETUP.md) · [ownership status](docs/OWNERSHIP_HANDOVER.md).
 
+Account integrations: [Discord and Last.fm setup](docs/FEATURE_SETUP.md).
+
 ## <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/sections/section-screenshots-dark.svg"><img src="assets/readme/sections/section-screenshots-light.svg" height="32" align="top" alt=""></picture> Screenshots
 
 <picture>

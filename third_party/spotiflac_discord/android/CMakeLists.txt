@@ -3,6 +3,12 @@ project(spotiflac_discord LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 option(SPOTIFLAC_DISCORD_SDK "Include the staged Discord Social SDK" ON)
 add_library(spotiflac_discord SHARED src/main/cpp/presence.cpp)
+set(SPOTIFLAC_DISCORD_APPLICATION_ID "0" CACHE STRING "Project Discord application ID")
+if(NOT SPOTIFLAC_DISCORD_APPLICATION_ID MATCHES "^[0-9]+$")
+    message(FATAL_ERROR "Discord application ID must contain decimal digits")
+endif()
+target_compile_definitions(spotiflac_discord PRIVATE
+    SPOTIFLAC_DISCORD_APPLICATION_ID=${SPOTIFLAC_DISCORD_APPLICATION_ID}ULL)
 target_compile_options(spotiflac_discord PRIVATE -Wall -Wextra -Werror -fvisibility=hidden)
 # Keep every JNI entry point while hiding the wrapper's static C++ runtime.
 target_link_options(spotiflac_discord PRIVATE

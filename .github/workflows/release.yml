@@ -32,6 +32,8 @@ permissions:
 
 env:
   SPOTIFLAC_DISTRIBUTION_REPO: ${{ vars.DISTRIBUTION_REPO || 'spotiflac-app/spotiflac-releases' }}
+  SPOTIFLAC_DISCORD_APPLICATION_ID: ${{ vars.DISCORD_APPLICATION_ID }}
+  SPOTIFLAC_DISCORD_CLIENT_ID: ${{ vars.DISCORD_APPLICATION_ID }}
 
 jobs:
   get-version:
@@ -42,6 +44,13 @@ jobs:
     steps:
       - name: Checkout release configuration
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Require full-feature account configuration
+        env:
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_API_SECRET: ${{ secrets.LASTFM_API_SECRET }}
+          DISCORD_MOBILE_SDK_PASSPHRASE: ${{ secrets.DISCORD_MOBILE_SDK_PASSPHRASE }}
+          MOBILE_BUILD: ${{ !inputs.linux_only && !inputs.windows_only }}
+        run: python3 scripts/check_feature_release_config.py
       - name: Get version
         id: version
         env:
@@ -76,7 +85,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: get-version
     env:
-      SPOTIFLAC_DISCORD_SDK: "0"
+      SPOTIFLAC_DISCORD_SDK: "1"
 
     steps:
       - name: Free disk space
@@ -93,6 +102,11 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Prepare pinned Discord SDK
+        uses: ./.github/actions/discord-sdk
+        with:
+          passphrase: ${{ secrets.DISCORD_MOBILE_SDK_PASSPHRASE }}
 
       - name: Configure public release endpoints
         env:
@@ -291,11 +305,19 @@ jobs:
     runs-on: macos-15-intel
     needs: get-version # Only depends on version, NOT android build!
     env:
-      SPOTIFLAC_DISCORD_SDK: "0"
+      SPOTIFLAC_DISCORD_SDK: "1"
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Prepare pinned Discord SDK
+        uses: ./.github/actions/discord-sdk
+        with:
+          passphrase: ${{ secrets.DISCORD_MOBILE_SDK_PASSPHRASE }}
+
+      - name: Configure project Discord callback
+        run: python3 scripts/configure_discord_identity.py --ios-plist ios/Runner/Info.plist
 
       - name: Configure public release endpoints
         env:
