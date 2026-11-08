@@ -253,7 +253,7 @@ jobs:
             "$ANDROID_HOME/build-tools/37.0.0/zipalign" -c -P 16 4 \
               "$apk_dir/SpotiFLAC-${VERSION}-${abi}.apk"
           done
-          (cd "$apk_dir" && sha256sum SpotiFLAC-*.apk > SHA256SUMS.txt)
+          (cd "$apk_dir" && sha256sum SpotiFLAC-*.apk SpotiFLAC-*.apk.idsig > SHA256SUMS-android.txt)
 
       - name: Record Android symbol provenance
         run: |
@@ -281,7 +281,7 @@ jobs:
           path: |
             build/app/outputs/flutter-apk/SpotiFLAC-*.apk
             build/app/outputs/flutter-apk/SpotiFLAC-*.apk.idsig
-            build/app/outputs/flutter-apk/SHA256SUMS.txt
+            build/app/outputs/flutter-apk/SHA256SUMS-android.txt
 
   build-ios:
     if: ${{ !inputs.linux_only && !inputs.windows_only && !inputs.android_only }}
@@ -396,12 +396,15 @@ jobs:
             echo "ERROR: IPA not created!"
             exit 1
           fi
+          (cd build/ios/ipa && shasum -a 256 SpotiFLAC-*.ipa > SHA256SUMS-ios.txt)
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ios-ipa
-          path: build/ios/ipa/SpotiFLAC-*.ipa
+          path: |
+            build/ios/ipa/SpotiFLAC-*.ipa
+            build/ios/ipa/SHA256SUMS-ios.txt
 
   # Desktop builds mirror .github/workflows/desktop.yml without its Cargo
   # cache, then package: a universal dmg (ad hoc signed, not notarized),
@@ -897,56 +900,13 @@ jobs:
         with:
           tag_name: ${{ needs.get-version.outputs.version }}
           name: SpotiFLAC ${{ needs.get-version.outputs.version }}
+          target_commitish: ${{ github.sha }}
           body_path: release/RELEASE_NOTES.md
           files: |
             release/SpotiFLAC-*
             release/SHA256SUMS.txt
-          # Enable public releases only after validating the first draft builds.
-          draft: ${{ vars.PUBLISH_RELEASES != 'true' }}
+          # Public distribution uses publish_distribution.py after verification.
+          draft: true
           prerelease: ${{ needs.get-version.outputs.is_prerelease == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  update-altstore:
-    runs-on: ubuntu-latest
-    needs: [get-version, build-ios, create-release]
-    # !cancelled() keeps an optional build-windows failure upstream of
-    # create-release from skipping this job.
-    if: ${{ !cancelled() && vars.PUBLISH_RELEASES == 'true' && needs.create-release.result == 'success' && needs.build-ios.result == 'success' && needs.get-version.outputs.is_prerelease != 'true' }}
-    permissions:
-      contents: write
-
-    steps:
-      - name: Checkout main branch
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: main
-
-      - name: Download iOS IPA
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: ios-ipa
-          path: ./release
-
-      - name: Update apps.json from the actual iOS package
-        env:
-          VERSION: ${{ needs.get-version.outputs.version }}
-          REPOSITORY: ${{ github.repository }}
-        run: |
-          IPA_FILE=$(find release -name '*ios*.ipa' -type f -print -quit)
-          python3 scripts/update_ios_feed.py --ipa "$IPA_FILE" --version "$VERSION" --repository "$REPOSITORY"
-
-      - name: Commit and push
-        env:
-          VERSION: ${{ needs.get-version.outputs.version }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add apps.json
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "chore: update AltStore source to ${VERSION}"
-            git push
-          fi
-

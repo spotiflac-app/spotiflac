@@ -6,6 +6,10 @@ requests, documentation, and translations are all welcome.
 Please follow the [Code of Conduct](CODE_OF_CONDUCT.md) when participating in
 the project.
 
+Security vulnerabilities should use the private route in [SECURITY.md](SECURITY.md).
+Changes to `main` go through a pull request with the `CI required checks` gate.
+Release/configuration tests run independently of the native build jobs.
+
 ## Before You Start
 
 - Search the [existing issues](https://github.com/spotiflac-app/spotiflac/issues)

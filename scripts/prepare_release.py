@@ -18,17 +18,33 @@ def prepare(directory,version):
     if not packages:raise ValueError('No release packages')
     if any(p.is_symlink() or not p.name.startswith(f'SpotiFLAC-{version}-') for p in packages):
         raise ValueError('Unexpected package version or symbolic link')
-    for manifest in sorted(directory.glob('SHA256SUMS*.txt')):
+    names={p.name for p in packages}
+    if len({name.casefold() for name in names}) != len(names):
+        raise ValueError('Case-insensitive duplicate release package')
+    manifests=sorted(directory.glob('SHA256SUMS*.txt'))
+    if not manifests:
+        raise ValueError('Missing input checksum manifests')
+    verified={}
+    for manifest in manifests:
+        if manifest.is_symlink():
+            raise ValueError('Checksum manifest must not be a symbolic link')
         for line in manifest.read_text(encoding='utf-8').splitlines():
             if not line.strip():continue
             match=re.fullmatch(r'([0-9a-fA-F]{64}) [ *](.+)',line)
             if not match:raise ValueError(f'Invalid checksum line in {manifest.name}')
             expected,name=match.groups()
-            if Path(name).name!=name or name not in {p.name for p in packages}:
+            if Path(name).name!=name or name not in names:
                 raise ValueError('Checksum references an unexpected file')
+            expected=expected.lower()
+            if name in verified and verified[name]!=expected:
+                raise ValueError(f'Conflicting checksums: {name}')
             target=directory/name
-            if target.is_symlink() or digest(target)!=expected.lower():
+            if target.is_symlink() or digest(target)!=expected:
                 raise ValueError(f'Checksum mismatch: {name}')
+            verified[name]=expected
+    missing=names-verified.keys()
+    if missing:
+        raise ValueError('Packages missing input checksums: '+', '.join(sorted(missing)))
     checksum=''.join(f'{digest(p)}  {p.name}\n' for p in packages)
     (directory/'SHA256SUMS.txt').write_text(checksum,encoding='utf-8')
     notes=[f'# SpotiFLAC {version}','', 'Website: https://spotiflac.com',

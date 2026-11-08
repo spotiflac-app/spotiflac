@@ -50,7 +50,8 @@ Discord and the optional built-in Apple lyrics backup require project-owned setu
 
 The public iOS source is populated from the published IPA and available at
 https://raw.githubusercontent.com/spotiflac-app/spotiflac-releases/main/apps.json.
-The source repository's `apps.json` is synchronized with that package metadata.
+The source repository's `apps.json` is a versioned metadata snapshot. Public
+feed updates are written to the downloads repository by the verified publisher.
 
 Android uses the project release key; encrypted signing material and passwords
 remain outside source control. Keep that key for future application updates.

@@ -24,6 +24,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  python:
+    name: Release and configuration tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Run Python validation suites
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
+
+  required:
+    name: CI required checks
+    runs-on: ubuntu-latest
+    needs: [changes, python, flutter, rust, rust-ios, android]
+    if: ${{ always() }}
+    steps:
+      - name: Require successful applicable checks
+        env:
+          NEEDS_RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          results = json.loads(os.environ['NEEDS_RESULTS'])
+          failed = [name for name, job in results.items() if job['result'] not in ('success', 'skipped')]
+          failed += [name for name in ('changes', 'python') if results[name]['result'] != 'success']
+          if failed:
+              raise SystemExit('Required checks failed: ' + ', '.join(sorted(set(failed))))
+          print('All applicable checks passed.')
+          PY
+
   changes:
     name: Detect changed paths
     runs-on: ubuntu-latest

@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Stage verified build assets and matching source in a downloads draft.
+"""Stage verified build assets and matching source in the downloads repository.
 
-This command never publishes a release and never changes repository visibility.
+Publication requires the explicit --publish flag after all asset digests pass.
+This command never changes repository visibility.
 Authentication stays in the environment or the local Git credential manager.
 """
 import argparse
+import base64
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
@@ -130,12 +132,58 @@ def resolve_source_commit(github, repository, source, tag):
         raise ValueError('Release tag did not resolve to a source commit')
     return ref["sha"]
 
+def verify_distribution_assets(release, paths):
+    expected={path.name:'sha256:'+checksum(path) for path in paths}
+    actual={asset['name']:asset.get('digest') for asset in release['assets']}
+    if len(actual)!=len(release['assets']) or actual!=expected:
+        raise ValueError('Distribution assets do not match the verified local files')
+
+def publish_verified_release(github, repository, release, paths, tag, feed=None):
+    """Publish only a fully verified downloads draft, then refresh its stable feed."""
+    current=github.api('GET',f'/repos/{repository}/releases/{release["id"]}')
+    verify_distribution_assets(current,paths)
+    if not current['draft'] and current['tag_name']!=tag:
+        raise ValueError('Published release version does not match')
+    if feed is not None and not current['prerelease']:
+        data=json.loads(feed.read_text(encoding='utf-8'))
+        prefix=f'https://github.com/{repository}/releases/download/{tag}/'
+        for app in data['apps']:
+            if not app['downloadURL'].startswith(prefix):
+                raise ValueError('Public feed points outside the published downloads release')
+            name=app['downloadURL'].removeprefix(prefix)
+            asset=next((a for a in current['assets'] if a['name']==name),None)
+            if asset is None or app['size']!=asset['size']:
+                raise ValueError('Public feed does not match a published package')
+    published=current
+    if current['draft']:
+        published=github.api('PATCH',f'/repos/{repository}/releases/{release["id"]}',{
+            'tag_name':tag,'draft':False,
+            'make_latest':'false' if current['prerelease'] else 'true',
+        })
+    if published['draft'] or published['tag_name']!=tag:
+        raise ValueError('Downloads release publication was not confirmed')
+    verify_distribution_assets(published,paths)
+    if feed is not None and not published['prerelease']:
+        try:
+            previous=github.api('GET',f'/repos/{repository}/contents/apps.json')
+        except urllib.error.HTTPError as error:
+            if error.code!=404:raise
+            previous=None
+        content=feed.read_bytes()
+        if previous is None or base64.b64decode(previous['content'])!=content:
+            payload={'message':f'chore: update iOS source to {tag}',
+                     'content':base64.b64encode(content).decode()}
+            if previous is not None:payload['sha']=previous['sha']
+            github.api('PUT',f'/repos/{repository}/contents/apps.json',payload)
+    return published
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--repository', default='spotiflac-app/spotiflac')
     parser.add_argument('--downloads-repository', default='spotiflac-app/spotiflac-releases')
     parser.add_argument('--tag', required=True)
     parser.add_argument('--directory', type=Path, required=True)
+    parser.add_argument('--publish', action='store_true', help='Publish the verified downloads draft and refresh its stable iOS feed')
     args = parser.parse_args()
     for repository in (args.repository, args.downloads_repository):
         if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+', repository):
@@ -150,7 +198,10 @@ def main():
     destination = github.api('GET', f'/repos/{args.downloads_repository}')
     assert not destination['private'], 'Downloads metadata host must be public; draft assets remain restricted'
     assert destination['owner']['login'].lower() == args.repository.split('/')[0].lower()
-    source = next(release for release in github.api('GET', f'/repos/{args.repository}/releases?per_page=100') if release['tag_name'] == args.tag)
+    sources=[release for release in github.api('GET', f'/repos/{args.repository}/releases?per_page=100')
+             if release['tag_name']==args.tag or (release['draft'] and release['name']==f'SpotiFLAC {args.tag}')]
+    if len(sources)!=1:raise ValueError('Expected exactly one source build release for this version')
+    source=sources[0]
     args.directory.mkdir(parents=True, exist_ok=True)
     assets = {asset['name']: asset for asset in source['assets']}
     manifest = args.directory / 'SHA256SUMS.txt'
@@ -178,23 +229,31 @@ def main():
     expected[source_zip.name] = checksum(source_zip)
     manifest.write_text(''.join(f'{digest}  {name}\n' for name, digest in sorted(expected.items())), encoding='utf-8')
     ipa = next((args.directory / name for name in expected if name.endswith('.ipa')), None)
+    feed=None
     if ipa is not None:
         from update_ios_feed import update
         feed = args.directory / 'apps.json'
-        feed.write_text('{"apps": []}\n', encoding='utf-8')
+        feed.write_text(json.dumps({'name':'SpotiFLAC Source','identifier':'com.spotiflac.app.source',
+                                   'website':'https://spotiflac.com','apps':[]})+'\n', encoding='utf-8')
         update(feed, ipa, args.tag, args.downloads_repository)
         feed_data = json.loads(feed.read_text(encoding='utf-8'))
         feed_data['apps'][0]['versionDate'] = source['created_at'].split('T')[0]
         feed.write_text(json.dumps(feed_data, indent=2) + '\n', encoding='utf-8')
         expected[feed.name] = checksum(feed)
         manifest.write_text(''.join(f'{digest}  {name}\n' for name, digest in sorted(expected.items())), encoding='utf-8')
-    body = (source['body'] or '').replace(f'https://github.com/{args.repository}', f'https://github.com/{args.downloads_repository}')
-    body += f'\n\nMatching source: `{source_zip.name}`\nSource commit: `{source_commit}`\n\nThis is a validation draft. Publishing is a separate explicit step.\n'
-    draft = next((release for release in github.api('GET', f'/repos/{args.downloads_repository}/releases?per_page=100') if release['tag_name'] == args.tag), None)
+    body = source['body'] or ''
+    body += f'\n\nMatching source: `{source_zip.name}`\nSource commit: `{source_commit}`\n'
+    drafts=[release for release in github.api('GET', f'/repos/{args.downloads_repository}/releases?per_page=100')
+            if release['tag_name']==args.tag or (release['draft'] and release['name']==f'SpotiFLAC {args.tag}')]
+    if len(drafts)>1:raise ValueError('Multiple destination releases match this version')
+    draft=drafts[0] if drafts else None
     if draft:
         if not draft['draft']:
-            raise ValueError('Published releases are immutable; use a new version')
-        draft = github.api('PATCH', f'/repos/{args.downloads_repository}/releases/{draft["id"]}', {'body': body, 'draft': True})
+            if not args.publish:
+                raise ValueError('Published releases are immutable; use --publish only to verify and resume feed synchronization')
+            verify_distribution_assets(draft,[args.directory / name for name in sorted(expected)]+[manifest])
+        else:
+            draft = github.api('PATCH', f'/repos/{args.downloads_repository}/releases/{draft["id"]}', {'body': body, 'draft': True})
     else:
         draft = github.api('POST', f'/repos/{args.downloads_repository}/releases', {'tag_name': args.tag, 'target_commitish': destination['default_branch'], 'name': f'SpotiFLAC {args.tag}', 'body': body, 'draft': True, 'prerelease': source['prerelease']})
     paths = [args.directory / name for name in sorted(expected)] + [manifest]
@@ -202,12 +261,16 @@ def main():
         # Separate HTTP clients avoid shared redirect-handler state.
         GitHub(github.token).upload(draft, path)
         print('Verified upload: ' + path.name, flush=True)
-    with ThreadPoolExecutor(max_workers=6) as uploads:
-        list(uploads.map(upload, paths))
+    if draft['draft']:
+        with ThreadPoolExecutor(max_workers=6) as uploads:
+            list(uploads.map(upload, paths))
     verified = github.api('GET', f'/repos/{args.downloads_repository}/releases/{draft["id"]}')
-    assert verified['draft'] and {asset['name'] for asset in verified['assets']} == set(expected) | {'SHA256SUMS.txt'}
+    assert verified['draft'] or args.publish
+    verify_distribution_assets(verified,paths)
     assert github.api('GET', f'/repos/{args.repository}')['private'] == source_repository['private'], 'Repository visibility changed during staging'
-    print(json.dumps({'draft_url': verified['html_url'], 'source_commit': source_commit, 'verified_assets': len(verified['assets']), 'published': False}))
+    if args.publish:
+        verified=publish_verified_release(github,args.downloads_repository,verified,paths,args.tag,feed)
+    print(json.dumps({'release_url': verified['html_url'], 'source_commit': source_commit, 'verified_assets': len(verified['assets']), 'published':not verified['draft']}))
 
 if __name__ == '__main__':
     main()
