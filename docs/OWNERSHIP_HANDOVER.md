@@ -1,102 +1,79 @@
 # SpotiFLAC project and release status
 
-Updated 2026-11-08.
+Updated 2026-11-09.
 
 - Website: https://spotiflac.com
 - Source: https://github.com/spotiflac-app/spotiflac
-- Downloads: https://github.com/spotiflac-app/spotiflac-releases/releases/tag/v5.2.6
-- Product version: **5.2.6+165**
+- Downloads: https://github.com/spotiflac-app/spotiflac-releases/releases/tag/v5.2.7
+- Product version: **5.2.7+166**
 - Application namespace: `com.spotiflac.app`
 
 ## Published application
 
-The application, native bindings, platform metadata and installers use SpotiFLAC
-and the `com.spotiflac.app` namespace. The published product version is 5.2.6+165;
-the About screen and diagnostics also retain build 165. Copyright and contributor
-notices are retained with the corresponding source and third-party components.
+SpotiFLAC 5.2.7 includes ZIP/rustls security patches, semantic prerelease update
+ordering, and verified package publication. Android ARM32/ARM64 APKs, Windows
+x64/ARM64 installers and portable ZIPs, Linux x64/ARM64 AppImages and Debian
+packages, a universal macOS DMG and an unsigned iOS IPA are available.
 
-The owner approved public source hosting on 2026-11-06. The final release was
-published on 2026-11-08 in the separate project-owned downloads repository.
-All 18 assets were compared with local SHA-256 digests after upload: Android
-ARM32/ARM64 APKs and signature sidecars, Windows x64/ARM64 installers and portable
-ZIPs, Linux x64/ARM64 AppImages and Debian packages, universal macOS DMG,
-unsigned iOS IPA, two source archives, the iOS feed and unified checksum manifest.
+The downloads release includes matching source, iOS metadata and a unified
+SHA-256 manifest. Every uploaded asset is compared against its local digest.
+LICENSE, COPYING, NOTICE and third-party notices accompany the matching source.
 
-The release source archives contain commit
-`7807ddf4d48ddcfd4766f804c7b9d72a964597b7`, including the final build recovery
-recipes. The platform builds below have identical application, asset, Rust and
-dependency source trees; subsequent differences concern packaging recovery.
-
-| Final package | Successful platform job |
-| --- | --- |
-| Android ARM32/ARM64 | [42473372828](https://github.com/spotiflac-app/spotiflac/actions/runs/42473372828) |
-| iOS and universal macOS | [42471535967](https://github.com/spotiflac-app/spotiflac/actions/runs/42471535967) |
-| Windows x64 | [42472799232](https://github.com/spotiflac-app/spotiflac/actions/runs/42472799232) |
-| Windows ARM64 | [42474564826](https://github.com/spotiflac-app/spotiflac/actions/runs/42474564826) |
-| Linux x64/ARM64 | [42473371302](https://github.com/spotiflac-app/spotiflac/actions/runs/42473371302) |
-
-Some multi-platform runs contain failed, superseded jobs for other targets; the
-table identifies only the successful jobs used for the published packages.
-Earlier QA binaries with an incorrect version and superseded Linux binaries
-remain quarantined. Do not relabel or distribute those earlier artifacts.
+All platform packages were built in
+[Release run 42494200414](https://github.com/spotiflac-app/spotiflac/actions/runs/42494200414)
+from immutable commit `ebcc0041c20e594dec08c035215c5aa7f89232c3`.
+Subsequent documentation and validation changes do not change those binaries.
 
 ## Updates, configuration and signing
 
-Official builds use `spotiflac-app/spotiflac-releases` for unauthenticated release
-checks and `config/app.json`. No GitHub token is embedded in the application.
-Announcements are empty and funding is disabled. Inherited payment accounts,
-community links and optional original-operator integrations were removed or disabled.
-Discord and the optional built-in Apple lyrics backup require project-owned setup.
+Official builds use `spotiflac-app/spotiflac-releases` for public release checks
+and `config/app.json`. No GitHub token is embedded in the application.
+Announcements are empty and funding is disabled. Discord and the optional
+built-in Apple lyrics backup require project-owned configuration.
 
-The public iOS source is populated from the published IPA and available at
+The stable iOS source is generated from the published IPA:
 https://raw.githubusercontent.com/spotiflac-app/spotiflac-releases/main/apps.json.
-The source repository's `apps.json` is a versioned metadata snapshot. Public
-feed updates are written to the downloads repository by the verified publisher.
+The source repository's `apps.json` is a versioned metadata snapshot.
 
-Android uses the project release key; encrypted signing material and passwords
-remain outside source control. Keep that key for future application updates.
-iOS is unsigned and requires signing before installation. macOS is ad-hoc signed
-and not notarized. Windows packages are unsigned. Trusted Apple/Windows signing
-is optional follow-up work requiring owner-held accounts or certificates.
+Android uses the project release key; private signing material remains outside
+source control. Keep that key for future application updates. iOS is unsigned
+and requires signing before installation. macOS is ad-hoc signed and not
+notarized. Windows packages are unsigned. This release uses the existing
+project distribution model; trusted Apple/Windows signing is optional.
 
 ## Verification and practical limits
 
-Final artifact ZIP digests, package manifests, published asset digests, Android
-project signatures, and Android/Windows/iOS package identities and versions were
-verified. Final Windows jobs audit native PE/AOT architectures and bundled tools;
-final Linux jobs audit GLIBC compatibility and package dependencies.
+Required CI and desktop build checks passed before the release preparation was
+merged. [Package validation run 42527562102](https://github.com/spotiflac-app/spotiflac/actions/runs/42527562102)
+uses disposable GitHub-hosted runners and checks:
 
-Earlier native startup checks covered Windows x64/ARM64, macOS Intel/Apple Silicon,
-and Linux x64/ARM64 on Ubuntu 22.04 and 24.04. They apply to the package hashes
-tested in those runs, rather than constituting a repeated GUI test of every final
-package. Isolated provider tests used synthetic loopback audio. Physical phone
-installation, hardware audio and commercial-provider GUI coverage are not claimed.
-Build and package verification do not establish those runtime results.
+- Windows x64/ARM64 native startup and upgrade from 5.2.6, preserving a settings marker.
+- macOS Intel/Apple Silicon DMG integrity, universal binaries, ad-hoc signature integrity and native startup.
+- Linux x64/ARM64 Debian installation, native library loading and rendered startup on Ubuntu 22.04 and 24.04.
+- Android project certificate and V1-V4 signatures, package identities and versions; iOS bundle metadata and native backend checks.
 
-Linux packaging rebuilds the original dart_smb2 0.1.3/r8 native sources and pinned
-LGPL FFmpeg sources against Ubuntu 22.04. It rejects GLIBC_PRIVATE and GLIBC
-requirements above 2.35. Debian packages explicitly declare dynamically loaded
-EGL/GLES dependencies; AppImages still use host desktop runtime libraries.
-Verified native components were reused only after source/provenance checks.
-The pinned SQLite binary is checked against its upstream SHA-256 before reuse.
+Physical phone installation, hardware audio and commercial-provider GUI coverage
+are not claimed. Native startup checks do not establish complete feature coverage.
 
-Standard public GitHub runners were used. Earlier private-runner account limits
-were superseded; no payment or spending-limit settings were changed.
+Linux packaging builds pinned LGPL FFmpeg and dart_smb2 sources on Ubuntu 22.04.
+It rejects GLIBC_PRIVATE and GLIBC requirements above 2.35. Debian packages declare
+dynamically loaded EGL/GLES dependencies; AppImages use host desktop libraries.
+
+Repository controls include secret scanning and push protection, Dependabot
+alerts and security updates, private vulnerability reporting, and protected main
+with required applicable CI checks. Pull requests are required; the sole
+maintainer setup does not require a second reviewer. Standard public hosted
+runners are used; no billing or spending-limit settings were changed.
 
 ## Website deployment
 
-Download links and release synchronization were updated in the separate website
-repository, `carrompool234/spotiflacc`, at commit
-`04f74a2e24551bf8329663b9983d73b0e0dff5ef`. Checks matched package URLs across
-eight pages against the published release. The existing local redesign was untouched.
-
-Vercel reported **Deployment was blocked** for
-[this deployment](https://vercel.com/team-spot/spotiflacc/AwW5HSjxB6tuTb5DRfa8rVn1Gg7n).
-The live site's download links still pointed to upstream packages at the last
-verification. Resolving that hosting block is the remaining deployment task.
+Website work is deferred at the owner's request. This release changes the app
+and GitHub repositories only. The previous website source update at `04f74a2`
+in `carrompool234/spotiflacc` remains subject to its separate Vercel deployment
+block. Website publication is not part of this release.
 
 ## Licensing
 
-LICENSE, COPYING, NOTICE and third-party notices are retained. Distribute the
-matching source and notices with binaries as required by the existing licenses.
-See [release setup](RELEASE_SETUP.md) for build and distribution instructions.
+Distribute the matching source and notices with binaries as required by the
+existing licenses. See [release setup](RELEASE_SETUP.md) for build and
+publication instructions, and [SECURITY.md](../SECURITY.md) for private reporting.

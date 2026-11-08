@@ -1,7 +1,7 @@
 <div align="center">
 
-<p><b>SpotiFLAC 5.2.6 is available for Android, iOS, Windows, macOS and Linux.</b></p>
-<p><a href="https://github.com/spotiflac-app/spotiflac-releases/releases/tag/v5.2.6">Download v5.2.6 and verify its SHA-256 checksums</a></p>
+<p><b>SpotiFLAC 5.2.7 is available for Android, iOS, Windows, macOS and Linux.</b></p>
+<p><a href="https://github.com/spotiflac-app/spotiflac-releases/releases/tag/v5.2.7">Download v5.2.7 and verify its SHA-256 checksums</a></p>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/brand/logo/svg/spotiflac-lockup-horizontal-dark.svg">
@@ -23,11 +23,6 @@
       <img alt="Download the latest release" src="assets/readme/badges/badge-release-light.svg" height="56">
     </picture>
   </a>
-  
-</p>
-
-<p align="center">
-  
   
 </p>
 
