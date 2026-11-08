@@ -1,0 +1,48 @@
+name: Validate existing macOS release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    name: Validate macOS (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: macos-15-intel
+          - arch: arm64
+            runner: macos-15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Verify immutable build provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/spotiflac-app/spotiflac/actions/runs/42238210013 > "$RUNNER_TEMP/build-run.json"
+          python3 -c 'import json,os; d=json.load(open(os.environ["RUNNER_TEMP"]+"/build-run.json")); assert d["head_sha"]=="9553af072d78936efe03ea80e3d3ae69b041d4f8" and d["conclusion"]=="success"'
+      - name: Download existing macOS package
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          github-token: ${{ github.token }}
+          run-id: 42238210013
+          name: desktop-release-macos
+          path: package
+      - name: Verify package and native startup
+        run: python3 scripts/validate_macos_release.py package --report package/validation.json
+      - name: Save validation evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: macos-release-validation-${{ matrix.arch }}
+          if-no-files-found: warn
+          path: |
+            package/validation.json
+            package/startup.log
