@@ -28,8 +28,8 @@ try {
     Expand-Archive -LiteralPath $archive -DestinationPath $bundle
     & "$PSScriptRoot\check_windows_bundle.ps1" -BundleDir $bundle -Arch $Arch
     $executable = Join-Path $bundle 'spotiflac.exe'
-    $version = [Diagnostics.FileVersionInfo]::GetVersionInfo($executable)
-    if ($version.ProductName -ne 'SpotiFLAC' -or $version.ProductVersion -ne $productVersion) { throw 'Unexpected product version' }
+    $fileVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo($executable)
+    if ($fileVersion.ProductName -ne 'SpotiFLAC' -or $fileVersion.ProductVersion -ne $productVersion) { throw 'Unexpected product version' }
     $report.portable_sha256 = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
     # Disposable hosted runner; no owner's profile, library or credentials.
     $appProcess = Start-Process -FilePath $executable -WorkingDirectory $bundle -WindowStyle Hidden -PassThru `
