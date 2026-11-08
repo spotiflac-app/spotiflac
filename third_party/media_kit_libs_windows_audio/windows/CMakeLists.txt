@@ -22,7 +22,7 @@ set(LIBMPV_SRC "${CMAKE_CURRENT_BINARY_DIR}/${LIBMPV}-extracted")
 if(DEFINED ENV{SPOTIFLAC_VERIFIED_LIBMPV})
   # Release recovery can reuse an architecture-checked DLL from an immutable,
   # checksum-verified package when GitHub's binary download endpoint is down.
-  set(LIBMPV_SRC "$ENV{SPOTIFLAC_VERIFIED_LIBMPV}")
+  file(TO_CMAKE_PATH "$ENV{SPOTIFLAC_VERIFIED_LIBMPV}" LIBMPV_SRC)
   if(NOT EXISTS "${LIBMPV_SRC}/libmpv-2.dll")
     message(FATAL_ERROR "The verified libmpv directory has no playback DLL.")
   endif()
