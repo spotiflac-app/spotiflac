@@ -7,7 +7,8 @@ import 'package:spotiflac/services/listening_statistics.dart' show listeningDay;
 import 'package:spotiflac/services/music_player_service.dart'
     show rankAutoplayTracks;
 import 'package:spotiflac/services/playable_media.dart';
-import 'package:spotiflac/services/sqlite_helpers.dart' show normalizeLookupText;
+import 'package:spotiflac/services/sqlite_helpers.dart'
+    show normalizeLookupText;
 import 'package:spotiflac/utils/artist_utils.dart' show splitArtistTagValues;
 import 'package:spotiflac/utils/file_access.dart'
     show isContentUri, stripCueTrackSuffix;

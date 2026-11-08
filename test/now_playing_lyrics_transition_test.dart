@@ -552,7 +552,9 @@ void main() {
       ) async {
         await pumpNowPlaying(
           tester,
-          theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : AppTheme.light(),
+          theme: spotiflac
+              ? SpotiFLACTheme.build(Brightness.dark)
+              : AppTheme.light(),
           size: const Size(412, 915),
           remote: remote,
         );
@@ -637,105 +639,114 @@ void main() {
   });
 
   for (final spotiflac in [false, true]) {
-    testWidgets('cover style switches live and survives rotation ($spotiflac)', (
-      tester,
-    ) async {
-      await pumpNowPlaying(
-        tester,
-        theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : AppTheme.light(),
-        size: const Size(390, 844),
-      );
-      mediaItems.add(item('first'));
-      await settlePlayer(tester);
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(NowPlayingScreen)),
-      );
-      container
-          .read(settingsProvider.notifier)
-          .setPlayerCoverStyle('fullscreen');
-      await settlePlayer(tester);
-      if (spotiflac) {
-        expect(
-          tester
-              .widget<SpotiFLACPlayerLayout>(find.byType(SpotiFLACPlayerLayout))
-              .insetArtwork,
-          isFalse,
+    testWidgets(
+      'cover style switches live and survives rotation ($spotiflac)',
+      (tester) async {
+        await pumpNowPlaying(
+          tester,
+          theme: spotiflac
+              ? SpotiFLACTheme.build(Brightness.dark)
+              : AppTheme.light(),
+          size: const Size(390, 844),
         );
-        expect(
-          tester
-              .widget<SpotiFLACPlayerBackground>(
-                find.byType(SpotiFLACPlayerBackground),
-              )
-              .artwork,
-          isNotNull,
-        );
-      } else {
-        expect(find.byType(MaterialPlayerBackdrop), findsOneWidget);
-        expect(
-          tester
-              .widget<MaterialPlayerLayout>(find.byType(MaterialPlayerLayout))
-              .fullScreenArtwork,
-          isTrue,
-        );
-      }
-      tester.view.physicalSize = const Size(844, 390);
-      await settlePlayer(tester);
-      if (!spotiflac) {
-        expect(find.byType(MaterialPlayerBackdrop), findsOneWidget);
-        expect(
-          tester
-              .widget<MaterialPlayerBackdrop>(
-                find.byType(MaterialPlayerBackdrop),
-              )
-              .showArtwork,
-          isFalse,
-        );
-        expect(
-          tester
-              .widget<MaterialPlayerLayout>(find.byType(MaterialPlayerLayout))
-              .fullScreenArtwork,
-          isFalse,
-        );
-        final playerScaffold = tester.widget<Scaffold>(
-          find.descendant(
-            of: find.byType(NowPlayingScreen),
-            matching: find.byType(Scaffold),
-          ),
-        );
-        expect(playerScaffold.backgroundColor, Colors.transparent);
-        final playerAppBar = tester.widget<AppBar>(
-          find.descendant(
-            of: find.byType(NowPlayingScreen),
-            matching: find.byType(AppBar),
-          ),
-        );
-        expect(playerAppBar.backgroundColor, Colors.transparent);
-        final lyricsToggle = find.byKey(
-          const ValueKey('material-lyrics-toggle'),
-        );
-        await tester.tap(lyricsToggle);
+        mediaItems.add(item('first'));
         await settlePlayer(tester);
-        expect(find.byType(SyncedLyricsView), findsOneWidget);
-        expect(find.byType(MaterialPlayerBackdrop), findsOneWidget);
-        await tester.tap(lyricsToggle);
-        await settlePlayer(tester);
-      }
-      expect(tester.takeException(), isNull);
-      tester.view.physicalSize = const Size(390, 844);
-      await settlePlayer(tester);
-      container.read(settingsProvider.notifier).setPlayerCoverStyle('default');
-      await settlePlayer(tester);
-      expect(find.byType(MaterialPlayerBackdrop), findsNothing);
-      if (spotiflac) {
-        expect(
-          tester
-              .widget<SpotiFLACPlayerLayout>(find.byType(SpotiFLACPlayerLayout))
-              .insetArtwork,
-          isTrue,
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(NowPlayingScreen)),
         );
-      }
-      expect(tester.takeException(), isNull);
-    });
+        container
+            .read(settingsProvider.notifier)
+            .setPlayerCoverStyle('fullscreen');
+        await settlePlayer(tester);
+        if (spotiflac) {
+          expect(
+            tester
+                .widget<SpotiFLACPlayerLayout>(
+                  find.byType(SpotiFLACPlayerLayout),
+                )
+                .insetArtwork,
+            isFalse,
+          );
+          expect(
+            tester
+                .widget<SpotiFLACPlayerBackground>(
+                  find.byType(SpotiFLACPlayerBackground),
+                )
+                .artwork,
+            isNotNull,
+          );
+        } else {
+          expect(find.byType(MaterialPlayerBackdrop), findsOneWidget);
+          expect(
+            tester
+                .widget<MaterialPlayerLayout>(find.byType(MaterialPlayerLayout))
+                .fullScreenArtwork,
+            isTrue,
+          );
+        }
+        tester.view.physicalSize = const Size(844, 390);
+        await settlePlayer(tester);
+        if (!spotiflac) {
+          expect(find.byType(MaterialPlayerBackdrop), findsOneWidget);
+          expect(
+            tester
+                .widget<MaterialPlayerBackdrop>(
+                  find.byType(MaterialPlayerBackdrop),
+                )
+                .showArtwork,
+            isFalse,
+          );
+          expect(
+            tester
+                .widget<MaterialPlayerLayout>(find.byType(MaterialPlayerLayout))
+                .fullScreenArtwork,
+            isFalse,
+          );
+          final playerScaffold = tester.widget<Scaffold>(
+            find.descendant(
+              of: find.byType(NowPlayingScreen),
+              matching: find.byType(Scaffold),
+            ),
+          );
+          expect(playerScaffold.backgroundColor, Colors.transparent);
+          final playerAppBar = tester.widget<AppBar>(
+            find.descendant(
+              of: find.byType(NowPlayingScreen),
+              matching: find.byType(AppBar),
+            ),
+          );
+          expect(playerAppBar.backgroundColor, Colors.transparent);
+          final lyricsToggle = find.byKey(
+            const ValueKey('material-lyrics-toggle'),
+          );
+          await tester.tap(lyricsToggle);
+          await settlePlayer(tester);
+          expect(find.byType(SyncedLyricsView), findsOneWidget);
+          expect(find.byType(MaterialPlayerBackdrop), findsOneWidget);
+          await tester.tap(lyricsToggle);
+          await settlePlayer(tester);
+        }
+        expect(tester.takeException(), isNull);
+        tester.view.physicalSize = const Size(390, 844);
+        await settlePlayer(tester);
+        container
+            .read(settingsProvider.notifier)
+            .setPlayerCoverStyle('default');
+        await settlePlayer(tester);
+        expect(find.byType(MaterialPlayerBackdrop), findsNothing);
+        if (spotiflac) {
+          expect(
+            tester
+                .widget<SpotiFLACPlayerLayout>(
+                  find.byType(SpotiFLACPlayerLayout),
+                )
+                .insetArtwork,
+            isTrue,
+          );
+        }
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
 
   testWidgets('Material seek wave follows playback, buffering and pause', (
@@ -1115,7 +1126,9 @@ void main() {
       expect(tester.getRect(title), bounds);
       expect(
         tester
-            .widgetList<SpotiFLACPlaybackButton>(find.byType(SpotiFLACPlaybackButton))
+            .widgetList<SpotiFLACPlaybackButton>(
+              find.byType(SpotiFLACPlaybackButton),
+            )
             .where(
               (button) => [
                 CupertinoIcons.backward_fill,
@@ -1136,112 +1149,120 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('SpotiFLAC lyrics keep wrapped, first and last lines at upper focus', (
-    tester,
-  ) async {
-    final lyrics = List.generate(100, (index) {
-      final seconds = index * 2;
-      final time =
-          '${(seconds ~/ 60).toString().padLeft(2, '0')}:'
-          '${(seconds % 60).toString().padLeft(2, '0')}.00';
-      return '[$time]Line $index with enough words to wrap across several rows';
-    }).join('\n');
-    metadataOverrides = {'lyrics': lyrics};
-    final playback = StreamController<PlaybackState>();
-    addTearDown(playback.close);
-    await pumpNowPlaying(
-      tester,
-      theme: SpotiFLACTheme.build(Brightness.dark),
-      size: const Size(393, 780),
-      playbackEvents: playback.stream,
-    );
-    mediaItems.add(item('many'));
-    playback.add(PlaybackState(updatePosition: const Duration(seconds: 140)));
-    await settlePlayer(tester);
-    await tester.tap(findAppIcon(CupertinoIcons.quote_bubble));
-    await settlePlayer(tester);
-    final current = find.text(
-      'Line 70 with enough words to wrap across several rows',
-    );
-    expect(current, findsOneWidget);
-    final list = find.byType(ListView);
-    void expectUpperFocus(Finder line) {
-      final bounds = tester.getRect(line);
-      final viewport = tester.getRect(list);
-      expect(bounds.top, closeTo(viewport.top + 16 + 780 * 0.06, 2));
-    }
-
-    expectUpperFocus(current);
-    await tester.drag(list, const Offset(0, 200));
-    await settlePlayer(tester);
-    await tester.tap(findAppIcon(CupertinoIcons.quote_bubble));
-    await settlePlayer(tester);
-    await tester.tap(findAppIcon(CupertinoIcons.quote_bubble));
-    await settlePlayer(tester);
-    expectUpperFocus(current);
-    for (final index in [99, 0]) {
-      playback.add(PlaybackState(updatePosition: Duration(seconds: index * 2)));
-      await settlePlayer(tester);
-      expectUpperFocus(
-        find.text('Line $index with enough words to wrap across several rows'),
-      );
-    }
-    expect(tester.takeException(), isNull);
-  });
-
-  for (final width in [393.0, 768.0]) {
-    testWidgets('SpotiFLAC lyrics fit the timeline without rewrapping ($width)', (
-      tester,
-    ) async {
-      const original =
-          'A longer lyric with words that already wrap onto another row';
-      const pronunciation = 'Pronunciation follows the same layout as before';
-      const translation =
-          'The translated words also keep their existing line breaks';
-      metadataOverrides['lyrics'] =
-          '[x-romaji:1000:${base64.encode(utf8.encode(pronunciation))}]\n'
-          '[x-translation:1000:${base64.encode(utf8.encode(translation))}]\n'
-          '[00:01.000]$original\n[00:15.000]Next line';
+  testWidgets(
+    'SpotiFLAC lyrics keep wrapped, first and last lines at upper focus',
+    (tester) async {
+      final lyrics = List.generate(100, (index) {
+        final seconds = index * 2;
+        final time =
+            '${(seconds ~/ 60).toString().padLeft(2, '0')}:'
+            '${(seconds % 60).toString().padLeft(2, '0')}.00';
+        return '[$time]Line $index with enough words to wrap across several rows';
+      }).join('\n');
+      metadataOverrides = {'lyrics': lyrics};
+      final playback = StreamController<PlaybackState>();
+      addTearDown(playback.close);
       await pumpNowPlaying(
         tester,
         theme: SpotiFLACTheme.build(Brightness.dark),
-        size: Size(width, 1024),
-        playback: PlaybackState(updatePosition: const Duration(seconds: 2)),
+        size: const Size(393, 780),
+        playbackEvents: playback.stream,
       );
-      mediaItems.add(item('first'));
+      mediaItems.add(item('many'));
+      playback.add(PlaybackState(updatePosition: const Duration(seconds: 140)));
       await settlePlayer(tester);
       await tester.tap(findAppIcon(CupertinoIcons.quote_bubble));
       await settlePlayer(tester);
+      final current = find.text(
+        'Line 70 with enough words to wrap across several rows',
+      );
+      expect(current, findsOneWidget);
+      final list = find.byType(ListView);
+      void expectUpperFocus(Finder line) {
+        final bounds = tester.getRect(line);
+        final viewport = tester.getRect(list);
+        expect(bounds.top, closeTo(viewport.top + 16 + 780 * 0.06, 2));
+      }
 
-      final track = seekTrackBounds(tester);
-      for (final text in [original, pronunciation, translation]) {
-        final finder = find.text(text);
-        final paragraph = tester.renderObject<RenderParagraph>(finder);
-        final previousLayout = TextPainter(
-          text: paragraph.text,
-          textDirection: paragraph.textDirection,
-          textAlign: paragraph.textAlign,
-          textScaler: paragraph.textScaler,
-          locale: paragraph.locale,
-        )..layout(maxWidth: width - 48);
-        final selection = TextSelection(
-          baseOffset: 0,
-          extentOffset: text.length,
+      expectUpperFocus(current);
+      await tester.drag(list, const Offset(0, 200));
+      await settlePlayer(tester);
+      await tester.tap(findAppIcon(CupertinoIcons.quote_bubble));
+      await settlePlayer(tester);
+      await tester.tap(findAppIcon(CupertinoIcons.quote_bubble));
+      await settlePlayer(tester);
+      expectUpperFocus(current);
+      for (final index in [99, 0]) {
+        playback.add(
+          PlaybackState(updatePosition: Duration(seconds: index * 2)),
         );
-        expect(
-          paragraph.getBoxesForSelection(selection).map((box) => box.toRect()),
-          previousLayout
-              .getBoxesForSelection(selection)
-              .map((box) => box.toRect()),
+        await settlePlayer(tester);
+        expectUpperFocus(
+          find.text(
+            'Line $index with enough words to wrap across several rows',
+          ),
         );
-        final bounds = tester.getRect(finder);
-        expect(bounds.left, closeTo(track.left, 0.01));
-        expect(bounds.right, closeTo(track.right, 0.01));
-        expect(bounds.height, lessThan(previousLayout.height));
-        previousLayout.dispose();
       }
       expect(tester.takeException(), isNull);
-    });
+    },
+  );
+
+  for (final width in [393.0, 768.0]) {
+    testWidgets(
+      'SpotiFLAC lyrics fit the timeline without rewrapping ($width)',
+      (tester) async {
+        const original =
+            'A longer lyric with words that already wrap onto another row';
+        const pronunciation = 'Pronunciation follows the same layout as before';
+        const translation =
+            'The translated words also keep their existing line breaks';
+        metadataOverrides['lyrics'] =
+            '[x-romaji:1000:${base64.encode(utf8.encode(pronunciation))}]\n'
+            '[x-translation:1000:${base64.encode(utf8.encode(translation))}]\n'
+            '[00:01.000]$original\n[00:15.000]Next line';
+        await pumpNowPlaying(
+          tester,
+          theme: SpotiFLACTheme.build(Brightness.dark),
+          size: Size(width, 1024),
+          playback: PlaybackState(updatePosition: const Duration(seconds: 2)),
+        );
+        mediaItems.add(item('first'));
+        await settlePlayer(tester);
+        await tester.tap(findAppIcon(CupertinoIcons.quote_bubble));
+        await settlePlayer(tester);
+
+        final track = seekTrackBounds(tester);
+        for (final text in [original, pronunciation, translation]) {
+          final finder = find.text(text);
+          final paragraph = tester.renderObject<RenderParagraph>(finder);
+          final previousLayout = TextPainter(
+            text: paragraph.text,
+            textDirection: paragraph.textDirection,
+            textAlign: paragraph.textAlign,
+            textScaler: paragraph.textScaler,
+            locale: paragraph.locale,
+          )..layout(maxWidth: width - 48);
+          final selection = TextSelection(
+            baseOffset: 0,
+            extentOffset: text.length,
+          );
+          expect(
+            paragraph
+                .getBoxesForSelection(selection)
+                .map((box) => box.toRect()),
+            previousLayout
+                .getBoxesForSelection(selection)
+                .map((box) => box.toRect()),
+          );
+          final bounds = tester.getRect(finder);
+          expect(bounds.left, closeTo(track.left, 0.01));
+          expect(bounds.right, closeTo(track.right, 0.01));
+          expect(bounds.height, lessThan(previousLayout.height));
+          previousLayout.dispose();
+        }
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
 
   for (final size in [const Size(393, 852), const Size(768, 1024)]) {
@@ -1485,22 +1506,23 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('SpotiFLAC landscape has no top handle or reserved toolbar height', (
-    tester,
-  ) async {
-    await pumpNowPlaying(
-      tester,
-      theme: SpotiFLACTheme.build(
-        Brightness.dark,
-      ).copyWith(platform: TargetPlatform.android),
-      size: const Size(900, 420),
-    );
-    mediaItems.add(item('first'));
-    await settlePlayer(tester);
-    final bar = tester.widget<AppBar>(find.byType(AppBar));
-    expect(bar.toolbarHeight, 0);
-    expect(bar.title, isNull);
-  });
+  testWidgets(
+    'SpotiFLAC landscape has no top handle or reserved toolbar height',
+    (tester) async {
+      await pumpNowPlaying(
+        tester,
+        theme: SpotiFLACTheme.build(
+          Brightness.dark,
+        ).copyWith(platform: TargetPlatform.android),
+        size: const Size(900, 420),
+      );
+      mediaItems.add(item('first'));
+      await settlePlayer(tester);
+      final bar = tester.widget<AppBar>(find.byType(AppBar));
+      expect(bar.toolbarHeight, 0);
+      expect(bar.title, isNull);
+    },
+  );
 
   for (final height in [780.0, 520.0]) {
     testWidgets(
@@ -1798,7 +1820,9 @@ void main() {
         ).join('\n');
         await pumpNowPlaying(
           tester,
-          theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : AppTheme.light(),
+          theme: spotiflac
+              ? SpotiFLACTheme.build(Brightness.dark)
+              : AppTheme.light(),
           size: landscape ? const Size(852, 393) : const Size(393, 852),
           playback: PlaybackState(playing: true),
         );
@@ -2380,7 +2404,9 @@ void main() {
       addTearDown(playback.close);
       await pumpNowPlaying(
         tester,
-        theme: layout == 'material' ? null : SpotiFLACTheme.build(Brightness.dark),
+        theme: layout == 'material'
+            ? null
+            : SpotiFLACTheme.build(Brightness.dark),
         size: layout == 'landscape'
             ? const Size(852, 393)
             : const Size(393, 852),
@@ -3078,12 +3104,16 @@ void main() {
     await settlePlayer(tester);
     expectTimes(34, 146);
     final transport = tester
-        .widgetList<SpotiFLACPlaybackButton>(find.byType(SpotiFLACPlaybackButton))
+        .widgetList<SpotiFLACPlaybackButton>(
+          find.byType(SpotiFLACPlaybackButton),
+        )
         .toList();
     await positionAt(34800);
     expectTimes(34, 146);
     final updatedTransport = tester
-        .widgetList<SpotiFLACPlaybackButton>(find.byType(SpotiFLACPlaybackButton))
+        .widgetList<SpotiFLACPlaybackButton>(
+          find.byType(SpotiFLACPlaybackButton),
+        )
         .toList();
     for (var i = 0; i < transport.length; i++) {
       expect(updatedTransport[i], same(transport[i]));
@@ -4708,56 +4738,60 @@ void main() {
       },
     );
 
-    testWidgets('finished lyric stays bright until the next lead ($spotiflac)', (
-      tester,
-    ) async {
-      metadataOverrides['lyrics'] =
-          '[00:01.00]v1:<00:01.00>Held<00:02.00>\n'
-          '[00:07.00]v2:<00:07.00>Next<00:08.00>';
-      final playback = StreamController<PlaybackState>.broadcast();
-      addTearDown(playback.close);
-      await pumpNowPlaying(
-        tester,
-        theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : null,
-        size: const Size(390, 844),
-        playbackEvents: playback.stream,
-      );
-      mediaItems.add(item('first'));
-      await settlePlayer(tester);
-      await tester.tap(
-        spotiflac
-            ? findAppIcon(CupertinoIcons.quote_bubble)
-            : find.byKey(const ValueKey('material-lyrics-toggle')),
-      );
-      await settlePlayer(tester);
-
-      Finder timed(String text) => find.descendant(
-        of: find.byWidgetPredicate(
-          (widget) => widget is Semantics && widget.properties.label == text,
-        ),
-        matching: find.byType(CustomPaint),
-      );
-      for (final milliseconds in [1500, 2500, 6999, 7000, 8000, 6999]) {
-        playback.add(
-          PlaybackState(
-            playing: false,
-            processingState: AudioProcessingState.ready,
-            updatePosition: Duration(milliseconds: milliseconds),
-          ),
+    testWidgets(
+      'finished lyric stays bright until the next lead ($spotiflac)',
+      (tester) async {
+        metadataOverrides['lyrics'] =
+            '[00:01.00]v1:<00:01.00>Held<00:02.00>\n'
+            '[00:07.00]v2:<00:07.00>Next<00:08.00>';
+        final playback = StreamController<PlaybackState>.broadcast();
+        addTearDown(playback.close);
+        await pumpNowPlaying(
+          tester,
+          theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : null,
+          size: const Size(390, 844),
+          playbackEvents: playback.stream,
+        );
+        mediaItems.add(item('first'));
+        await settlePlayer(tester);
+        await tester.tap(
+          spotiflac
+              ? findAppIcon(CupertinoIcons.quote_bubble)
+              : find.byKey(const ValueKey('material-lyrics-toggle')),
         );
         await settlePlayer(tester);
-        final text = milliseconds < 7000 ? 'Held' : 'Next';
-        expect(timed(text), findsOneWidget);
-        final opacity = tester.widget<AnimatedOpacity>(
-          find
-              .ancestor(of: timed(text), matching: find.byType(AnimatedOpacity))
-              .first,
+
+        Finder timed(String text) => find.descendant(
+          of: find.byWidgetPredicate(
+            (widget) => widget is Semantics && widget.properties.label == text,
+          ),
+          matching: find.byType(CustomPaint),
         );
-        expect(opacity.opacity, 1, reason: 'At $milliseconds ms');
-        expect(timed(text == 'Held' ? 'Next' : 'Held'), findsNothing);
-      }
-      expect(tester.takeException(), isNull);
-    });
+        for (final milliseconds in [1500, 2500, 6999, 7000, 8000, 6999]) {
+          playback.add(
+            PlaybackState(
+              playing: false,
+              processingState: AudioProcessingState.ready,
+              updatePosition: Duration(milliseconds: milliseconds),
+            ),
+          );
+          await settlePlayer(tester);
+          final text = milliseconds < 7000 ? 'Held' : 'Next';
+          expect(timed(text), findsOneWidget);
+          final opacity = tester.widget<AnimatedOpacity>(
+            find
+                .ancestor(
+                  of: timed(text),
+                  matching: find.byType(AnimatedOpacity),
+                )
+                .first,
+          );
+          expect(opacity.opacity, 1, reason: 'At $milliseconds ms');
+          expect(timed(text == 'Held' ? 'Next' : 'Held'), findsNothing);
+        }
+        expect(tester.takeException(), isNull);
+      },
+    );
 
     testWidgets('an unfinished line holds the view while the next starts '
         '($spotiflac)', (tester) async {

@@ -86,7 +86,9 @@ class SpotiFLACPlayerActionsSheet extends ConsumerWidget {
           _action(
             context,
             'favorite',
-            loved ? context.l10n.spotiflacFavorited : context.l10n.spotiflacFavorite,
+            loved
+                ? context.l10n.spotiflacFavorited
+                : context.l10n.spotiflacFavorite,
             CupertinoIcons.star_fill,
             selected: loved,
           ),

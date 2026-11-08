@@ -23,7 +23,9 @@ void main() {
       addTearDown(playing.dispose);
       await tester.pumpWidget(
         MaterialApp(
-          theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : AppTheme.dark(),
+          theme: spotiflac
+              ? SpotiFLACTheme.build(Brightness.dark)
+              : AppTheme.dark(),
           home: Scaffold(
             body: Center(
               child: ValueListenableBuilder<bool>(

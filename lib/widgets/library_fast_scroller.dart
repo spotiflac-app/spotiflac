@@ -289,7 +289,9 @@ class _LibraryFastScrollerState extends State<LibraryFastScroller> {
                                             ? colors.primary
                                             : colors.onSurfaceVariant
                                                   .withValues(
-                                                    alpha: spotiflac ? 0.45 : 0.6,
+                                                    alpha: spotiflac
+                                                        ? 0.45
+                                                        : 0.6,
                                                   ),
                                         shape: const StadiumBorder(),
                                       ),

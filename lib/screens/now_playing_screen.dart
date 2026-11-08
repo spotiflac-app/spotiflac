@@ -440,7 +440,10 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
           ),
           fullBleed: key == _motionArtworkKey,
           child: Theme(
-            data: SpotiFLACTheme.fromContext(context, brightness: Brightness.dark),
+            data: SpotiFLACTheme.fromContext(
+              context,
+              brightness: Brightness.dark,
+            ),
             child: key == _compactArtworkKey
                 ? PlayerArtwork(
                     artUri: mediaItem.artUri?.toString(),
@@ -687,8 +690,9 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
                                       : Colors.transparent,
                                 ),
                                 icon: const AppIcon(CupertinoIcons.list_bullet),
-                                onPressed: () =>
-                                    _setSpotiFLACPage(_currentPage == 2 ? 0 : 2),
+                                onPressed: () => _setSpotiFLACPage(
+                                  _currentPage == 2 ? 0 : 2,
+                                ),
                               ),
                             ],
                           ),

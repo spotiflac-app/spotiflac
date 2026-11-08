@@ -52,7 +52,8 @@ fn load(dir: &Path) -> Option<Identity> {
 }
 
 fn generate() -> Result<(String, String), String> {
-    let fail = |error: rcgen::Error| format!("Cannot create the SpotiFLAC Link certificate: {error}");
+    let fail =
+        |error: rcgen::Error| format!("Cannot create the SpotiFLAC Link certificate: {error}");
     let key = rcgen::KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).map_err(fail)?;
     let mut params = rcgen::CertificateParams::new(vec![SUBJECT_NAME.to_owned()]).map_err(fail)?;
     params

@@ -387,9 +387,12 @@ fn a_transient_outage_recovers_before_flac_lyrics_embedding() {
     )
     .unwrap();
     assert!(tagged.ends_with(audio));
-    let metadata =
-        spotiflac_core::tags::read_audio_tags(&mut std::io::Cursor::new(tagged), "flac", &|| Ok(()))
-            .unwrap();
+    let metadata = spotiflac_core::tags::read_audio_tags(
+        &mut std::io::Cursor::new(tagged),
+        "flac",
+        &|| Ok(()),
+    )
+    .unwrap();
     assert_eq!(metadata.lyrics, lrc);
 }
 

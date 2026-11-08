@@ -324,7 +324,11 @@ void main() {
             final player = _Player();
             final playback = _Playback();
             await tester.pumpWidget(
-              _selectionApp(spotiflac: spotiflac, player: player, playback: playback),
+              _selectionApp(
+                spotiflac: spotiflac,
+                player: player,
+                playback: playback,
+              ),
             );
             await _selectAllTracks(tester);
             final action = find.widgetWithText(
@@ -353,37 +357,42 @@ void main() {
       }
     }
 
-    testWidgets('playlist desktop menu acts on its clicked track ($spotiflac)', (
-      tester,
-    ) async {
-      debugDesktopPlatformOverride = true;
-      addTearDown(() => debugDesktopPlatformOverride = null);
-      tester.view.physicalSize = const Size(1000, 900);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
-      final player = _Player();
-      await tester.pumpWidget(
-        _selectionApp(spotiflac: spotiflac, player: player, playback: _Playback()),
-      );
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('First'));
-      final gesture = await tester.startGesture(
-        tester.getCenter(find.text('First')),
-        kind: PointerDeviceKind.mouse,
-        buttons: kSecondaryButton,
-      );
-      await gesture.up();
-      await tester.pumpAndSettle();
-      expect(find.text('Add to queue'), findsOneWidget);
-      expect(find.text('Delete 1 track'), findsOneWidget);
-      expect(find.text('Remove from playlist (1)'), findsOneWidget);
-      await tester.tap(find.text('Play next'));
-      await tester.pumpAndSettle();
-      expect(player.queue.map((item) => item.title), ['First']);
-      expect(player.insertedNext, isTrue);
-      expect(find.byType(SelectionBottomBar), findsNothing);
-      expect(tester.takeException(), isNull);
-    });
+    testWidgets(
+      'playlist desktop menu acts on its clicked track ($spotiflac)',
+      (tester) async {
+        debugDesktopPlatformOverride = true;
+        addTearDown(() => debugDesktopPlatformOverride = null);
+        tester.view.physicalSize = const Size(1000, 900);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        final player = _Player();
+        await tester.pumpWidget(
+          _selectionApp(
+            spotiflac: spotiflac,
+            player: player,
+            playback: _Playback(),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.text('First'));
+        final gesture = await tester.startGesture(
+          tester.getCenter(find.text('First')),
+          kind: PointerDeviceKind.mouse,
+          buttons: kSecondaryButton,
+        );
+        await gesture.up();
+        await tester.pumpAndSettle();
+        expect(find.text('Add to queue'), findsOneWidget);
+        expect(find.text('Delete 1 track'), findsOneWidget);
+        expect(find.text('Remove from playlist (1)'), findsOneWidget);
+        await tester.tap(find.text('Play next'));
+        await tester.pumpAndSettle();
+        expect(player.queue.map((item) => item.title), ['First']);
+        expect(player.insertedNext, isTrue);
+        expect(find.byType(SelectionBottomBar), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
 
     testWidgets(
       'playlist file deletion confirms and cleans both indexes ($spotiflac)',
@@ -470,7 +479,11 @@ void main() {
         final playback = _Playback()..paths.clear();
         playback.paths['First'] = '/album.cue#track01';
         await tester.pumpWidget(
-          _selectionApp(spotiflac: spotiflac, player: _Player(), playback: playback),
+          _selectionApp(
+            spotiflac: spotiflac,
+            player: _Player(),
+            playback: playback,
+          ),
         );
         await _selectAllTracks(tester);
         expect(
@@ -489,26 +502,27 @@ void main() {
       },
     );
 
-    testWidgets('external player hides collection queue controls ($spotiflac)', (
-      tester,
-    ) async {
-      tester.view.physicalSize = const Size(390, 844);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
-      await tester.pumpWidget(
-        _selectionApp(
-          spotiflac: spotiflac,
-          player: _Player(),
-          playback: _Playback(),
-          internalPlayer: false,
-        ),
-      );
-      await _selectAllTracks(tester);
-      expect(find.text('Play next'), findsNothing);
-      expect(find.text('Add to queue'), findsNothing);
-      expect(find.textContaining('Add to playlist'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
+    testWidgets(
+      'external player hides collection queue controls ($spotiflac)',
+      (tester) async {
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        await tester.pumpWidget(
+          _selectionApp(
+            spotiflac: spotiflac,
+            player: _Player(),
+            playback: _Playback(),
+            internalPlayer: false,
+          ),
+        );
+        await _selectAllTracks(tester);
+        expect(find.text('Play next'), findsNothing);
+        expect(find.text('Add to queue'), findsNothing);
+        expect(find.textContaining('Add to playlist'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
 
   for (final spotiflac in [false, true]) {

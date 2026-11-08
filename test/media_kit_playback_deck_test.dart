@@ -402,7 +402,9 @@ void main() {
     final second = MediaKitPlaybackDeck(playerId: 'mpv-other', engine: other);
     await _settle();
     expect(
-      other.filterWrites.where((call) => call[2].startsWith('@spotiflac_probe')),
+      other.filterWrites.where(
+        (call) => call[2].startsWith('@spotiflac_probe'),
+      ),
       isEmpty,
     );
     await second.dispose();

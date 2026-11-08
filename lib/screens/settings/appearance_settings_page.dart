@@ -50,7 +50,9 @@ class AppearanceSettingsPage extends ConsumerWidget {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Text(
-                          style == AppThemeStyle.spotiflac ? 'SpotiFLAC' : 'Material',
+                          style == AppThemeStyle.spotiflac
+                              ? 'SpotiFLAC'
+                              : 'Material',
                         ),
                         if (style == AppThemeStyle.spotiflac)
                           Container(
@@ -111,7 +113,9 @@ class AppearanceSettingsPage extends ConsumerWidget {
                 children: [
                   _SpotiFLACAccentPicker(
                     selected: themeSettings.spotiflacAccent,
-                    onChanged: ref.read(themeProvider.notifier).setSpotiFLACAccent,
+                    onChanged: ref
+                        .read(themeProvider.notifier)
+                        .setSpotiFLACAccent,
                   ),
                   const _SpotiFLACGlassClaritySlider(),
                   SettingsSwitchItem(

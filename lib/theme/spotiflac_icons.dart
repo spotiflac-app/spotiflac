@@ -226,5 +226,6 @@ IconData _cupertinoFor(IconData icon) {
 
 extension SpotiFLACIconContext on BuildContext {
   /// [icon] as-is, or its Cupertino counterpart when the SpotiFLAC theme is on.
-  IconData adaptiveIcon(IconData icon) => isSpotiFLAC ? spotiflacIconFor(icon) : icon;
+  IconData adaptiveIcon(IconData icon) =>
+      isSpotiFLAC ? spotiflacIconFor(icon) : icon;
 }

@@ -24,6 +24,9 @@ void main() {
       CupertinoIcons.forward.codePoint,
       CupertinoIcons.chevron_forward.codePoint,
     );
-    expect(spotiflacArrowForward.codePoint, CupertinoIcons.arrow_right.codePoint);
+    expect(
+      spotiflacArrowForward.codePoint,
+      CupertinoIcons.arrow_right.codePoint,
+    );
   });
 }

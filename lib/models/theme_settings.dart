@@ -134,7 +134,8 @@ class ThemeSettings {
       spotiflacGlassClarity: normalizeSpotiFLACGlassClarity(
         spotiflacGlassClarity ?? this.spotiflacGlassClarity,
       ),
-      spotiflacGlassOutlines: spotiflacGlassOutlines ?? this.spotiflacGlassOutlines,
+      spotiflacGlassOutlines:
+          spotiflacGlassOutlines ?? this.spotiflacGlassOutlines,
     );
   }
 
@@ -162,7 +163,9 @@ class ThemeSettings {
       seedColorValue: json[kSeedColorKey] as int? ?? kDefaultSeedColor,
       useAmoled: json[kUseAmoledKey] as bool? ?? false,
       style: themeStyleFromString(json[kThemeStyleKey] as String?),
-      spotiflacAccent: spotiflacAccentFromString(json[kSpotiFLACAccentKey] as String?),
+      spotiflacAccent: spotiflacAccentFromString(
+        json[kSpotiFLACAccentKey] as String?,
+      ),
       useSystemFont: json[kUseSystemFontKey] as bool? ?? false,
       customFontId: json[kCustomFontIdKey] as String? ?? '',
       customFontName: json[kCustomFontNameKey] as String? ?? '',

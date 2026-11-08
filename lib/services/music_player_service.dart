@@ -13,11 +13,13 @@ import 'package:audio_session/audio_session.dart'
         AudioSession,
         AudioSessionConfiguration,
         AudioInterruptionType;
-import 'package:spotiflac/services/listening_statistics.dart' show ListeningTrack;
+import 'package:spotiflac/services/listening_statistics.dart'
+    show ListeningTrack;
 import 'package:spotiflac/services/library_database.dart';
 import 'package:spotiflac/services/app_state_database.dart';
 import 'package:spotiflac/services/media_library_browser.dart';
-import 'package:spotiflac/services/sqlite_helpers.dart' show normalizeLookupText;
+import 'package:spotiflac/services/sqlite_helpers.dart'
+    show normalizeLookupText;
 import 'package:spotiflac/services/platform_bridge.dart';
 import 'package:spotiflac/services/playback_normalization.dart';
 import 'package:spotiflac/services/playback_automation.dart';

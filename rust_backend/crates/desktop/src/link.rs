@@ -7,8 +7,8 @@
 
 use crate::call::{Args, CallError, CallResult, Reply};
 use crate::runtime::Config;
-use spotiflac_link::{Host, HostError, LinkConfig, LinkServer};
 use serde_json::{Value, json};
+use spotiflac_link::{Host, HostError, LinkConfig, LinkServer};
 use std::collections::HashMap;
 use std::future::Future;
 use std::path::{Path, PathBuf};
@@ -156,7 +156,8 @@ impl Link {
         }
         let mut status = json!({"running": false});
         if let Ok(dir) = state_dir(config) {
-            status["receivedDir"] = Value::from(spotiflac_link::received_dir(&dir).to_string_lossy());
+            status["receivedDir"] =
+                Value::from(spotiflac_link::received_dir(&dir).to_string_lossy());
         }
         status
     }

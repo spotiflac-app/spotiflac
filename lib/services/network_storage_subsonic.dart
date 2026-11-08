@@ -425,7 +425,8 @@ class SubsonicClient {
       _subsonicMap(result['lyricsList'])['structuredLyrics'],
     );
     for (final entry in entries) {
-      if (entry['spotiflacRaw'] case final String raw when raw.trim().isNotEmpty) {
+      if (entry['spotiflacRaw'] case final String raw
+          when raw.trim().isNotEmpty) {
         return raw;
       }
     }

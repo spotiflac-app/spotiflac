@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:spotiflac/l10n/l10n.dart';
 import 'package:spotiflac/providers/music_player_provider.dart';
-import 'package:spotiflac/services/music_player_runtime.dart' show UnplayableSong;
+import 'package:spotiflac/services/music_player_runtime.dart'
+    show UnplayableSong;
 import 'package:spotiflac/widgets/app_snack_bar.dart';
 
 /// Receives transient playback feedback across all foreground app routes.

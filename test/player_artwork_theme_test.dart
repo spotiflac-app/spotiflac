@@ -239,7 +239,9 @@ void main() {
         playQueueProvider.overrideWith((ref) => Stream.value(const [])),
       ],
       child: MaterialApp(
-        theme: spotiflac ? SpotiFLACTheme.build(Brightness.light) : AppTheme.light(),
+        theme: spotiflac
+            ? SpotiFLACTheme.build(Brightness.light)
+            : AppTheme.light(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: home,
@@ -287,7 +289,10 @@ void main() {
     ) async {
       palette.cached[_coverA] = cover;
       await tester.pumpWidget(
-        app(const Scaffold(bottomNavigationBar: MiniPlayer()), spotiflac: false),
+        app(
+          const Scaffold(bottomNavigationBar: MiniPlayer()),
+          spotiflac: false,
+        ),
       );
       await tester.pumpAndSettle();
       expect(Theme.of(tester.element(find.text('Song'))).colorScheme, cover);

@@ -1,8 +1,8 @@
 use crate::host::decode_go_utf8;
 use crate::runtime::{Control, ExtensionServices};
 use base64::Engine;
-use spotiflac_network::{HttpRequest, HttpResponse};
 use rquickjs::{Array, Ctx, Function, Object, TypedArray, Value};
+use spotiflac_network::{HttpRequest, HttpResponse};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 

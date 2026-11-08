@@ -634,7 +634,9 @@ class _PlaylistPickerThumbnail extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Icon(
-        context.isSpotiFLAC ? CupertinoIcons.music_note_list : Icons.queue_music,
+        context.isSpotiFLAC
+            ? CupertinoIcons.music_note_list
+            : Icons.queue_music,
         color: colorScheme.onSurfaceVariant,
       ),
     );

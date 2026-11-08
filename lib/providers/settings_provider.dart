@@ -25,7 +25,7 @@ const _settingsCorruptBackupKey = 'app_settings_corrupt_backup';
 const _migrationVersionKey = 'settings_migration_version';
 const _currentMigrationVersion = 15;
 
-/// Marked the removed rebrand tour as seen.
+/// Tracks a retired introductory screen for preference cleanup.
 const _retiredUpgradeIntroSeenKey = 'upgrade_intro_spotiflac_seen';
 const _legacyDefaultLyricsProviders = ['apple_music', 'lrclib'];
 const _spotifyClientSecretKey = 'spotify_client_secret';
@@ -356,7 +356,7 @@ class SettingsNotifier extends Notifier<AppSettings> {
       }
       // Migration 14 persists the legacy lyrics provider alias normalized by
       // AppSettings.fromJson without changing the user's provider order.
-      // Migration 15: the rebrand tour is gone, and so is its flag.
+      // Migration 15 removes the retired introductory screen's preference.
       if (lastMigration < 15) {
         await prefs.remove(_retiredUpgradeIntroSeenKey);
       }

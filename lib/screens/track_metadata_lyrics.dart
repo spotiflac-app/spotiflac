@@ -28,7 +28,9 @@ extension _TrackMetadataLyricsAndSaving on _TrackMetadataScreenState {
                 if (hasDisplayLyrics)
                   AppIconButton(
                     icon: Icon(
-                      context.isSpotiFLAC ? CupertinoIcons.doc_on_doc : Icons.copy,
+                      context.isSpotiFLAC
+                          ? CupertinoIcons.doc_on_doc
+                          : Icons.copy,
                       size: 20,
                     ),
                     onPressed: () => _copyToClipboard(context, _lyrics!),

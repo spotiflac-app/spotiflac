@@ -423,7 +423,11 @@ void main() {
     });
 
     testWidgets('$style: clears the finished transfers', (tester) async {
-      final container = await _pump(tester, spotiflac: spotiflac, transfers: _all);
+      final container = await _pump(
+        tester,
+        spotiflac: spotiflac,
+        transfers: _all,
+      );
       await tester.tap(find.byKey(const ValueKey('link-transfers-clear')));
       await _settle(tester);
       expect(container.read(linkTransfersProvider), hasLength(2));
@@ -478,7 +482,12 @@ void main() {
   }
 
   testWidgets('opens at once under reduced motion', (tester) async {
-    await _pump(tester, spotiflac: false, transfers: [_done], reduceMotion: true);
+    await _pump(
+      tester,
+      spotiflac: false,
+      transfers: [_done],
+      reduceMotion: true,
+    );
     await tester.tap(find.text('12 songs to Studio'));
     await tester.pump();
     expect(find.text('Song 12'), findsOneWidget);

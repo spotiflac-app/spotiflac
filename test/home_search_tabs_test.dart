@@ -186,7 +186,12 @@ void main() {
         addTearDown(tester.view.reset);
         final extensions = _StartupExtensions();
         final explore = _StartupExplore();
-        await _pumpStartupHome(tester, extensions, explore, spotiflac: spotiflac);
+        await _pumpStartupHome(
+          tester,
+          extensions,
+          explore,
+          spotiflac: spotiflac,
+        );
 
         expect(find.text('Shortcuts'), findsNothing);
         expect(find.byType(ShimmerLoading), findsOneWidget);
@@ -252,46 +257,52 @@ void main() {
       ])
         (spotiflac, result),
   ]) {
-    testWidgets('Home leaves startup loading after $result (SpotiFLAC=$spotiflac)', (
-      tester,
-    ) async {
-      final extensions = _StartupExtensions();
-      final explore = _StartupExplore();
-      await _pumpStartupHome(tester, extensions, explore, spotiflac: spotiflac);
-      expect(find.byType(ShimmerLoading), findsOneWidget);
-      extensions.update(
-        ExtensionState(
-          isInitialized: result != 'initialization error',
-          error: result == 'initialization error'
-              ? 'Unable to initialize'
-              : null,
-          extensions: result == 'feed error' || result == 'empty feed'
-              ? const [_feedExtension]
-              : const [],
-        ),
-      );
-      explore.update(
-        ExploreState(
-          error: result == 'feed error' ? 'Offline' : null,
-          lastFetched: result == 'empty feed' ? DateTime(2026, 10, 22) : null,
-        ),
-      );
-      await tester.pump();
-      await tester.pumpAndSettle();
-      expect(find.byType(ShimmerLoading), findsNothing);
-      final showsSetupPrompt =
-          !spotiflac &&
-          (result == 'no extensions' || result == 'initialization error');
-      expect(
-        find.text('No search providers yet'),
-        showsSetupPrompt ? findsOneWidget : findsNothing,
-      );
-      expect(
-        find.text('Shortcuts'),
-        !spotiflac && !showsSetupPrompt ? findsOneWidget : findsNothing,
-      );
-      expect(tester.takeException(), isNull);
-    });
+    testWidgets(
+      'Home leaves startup loading after $result (SpotiFLAC=$spotiflac)',
+      (tester) async {
+        final extensions = _StartupExtensions();
+        final explore = _StartupExplore();
+        await _pumpStartupHome(
+          tester,
+          extensions,
+          explore,
+          spotiflac: spotiflac,
+        );
+        expect(find.byType(ShimmerLoading), findsOneWidget);
+        extensions.update(
+          ExtensionState(
+            isInitialized: result != 'initialization error',
+            error: result == 'initialization error'
+                ? 'Unable to initialize'
+                : null,
+            extensions: result == 'feed error' || result == 'empty feed'
+                ? const [_feedExtension]
+                : const [],
+          ),
+        );
+        explore.update(
+          ExploreState(
+            error: result == 'feed error' ? 'Offline' : null,
+            lastFetched: result == 'empty feed' ? DateTime(2026, 10, 22) : null,
+          ),
+        );
+        await tester.pump();
+        await tester.pumpAndSettle();
+        expect(find.byType(ShimmerLoading), findsNothing);
+        final showsSetupPrompt =
+            !spotiflac &&
+            (result == 'no extensions' || result == 'initialization error');
+        expect(
+          find.text('No search providers yet'),
+          showsSetupPrompt ? findsOneWidget : findsNothing,
+        );
+        expect(
+          find.text('Shortcuts'),
+          !spotiflac && !showsSetupPrompt ? findsOneWidget : findsNothing,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
 
   for (final spotiflac in [false, true]) {
@@ -305,7 +316,10 @@ void main() {
           spotiflac: spotiflac,
           feedDisabled: true,
         );
-        expect(find.text('Shortcuts'), spotiflac ? findsNothing : findsOneWidget);
+        expect(
+          find.text('Shortcuts'),
+          spotiflac ? findsNothing : findsOneWidget,
+        );
         expect(find.byType(ShimmerLoading), findsNothing);
         expect(tester.takeException(), isNull);
       },
@@ -1133,7 +1147,9 @@ Future<void> _pumpStartupHome(
         }),
     ],
     child: MaterialApp(
-      theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : AppTheme.dark(),
+      theme: spotiflac
+          ? SpotiFLACTheme.build(Brightness.dark)
+          : AppTheme.dark(),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: homeVisible == null
@@ -1147,7 +1163,9 @@ Future<void> _pumpStartupHome(
                     enabled: visible,
                     child: HomeTab(
                       key: const ValueKey('home'),
-                      mode: spotiflac ? HomeTabMode.browse : HomeTabMode.combined,
+                      mode: spotiflac
+                          ? HomeTabMode.browse
+                          : HomeTabMode.combined,
                     ),
                   ),
                   const Scaffold(key: ValueKey('other')),

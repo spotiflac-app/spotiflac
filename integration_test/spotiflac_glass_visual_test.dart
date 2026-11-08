@@ -35,7 +35,9 @@ void main() {
     expect(ui.ImageFilter.isShaderFilterSupported, isTrue);
     binding.framePolicy = LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
     final directory = (await tester.runAsync(() async {
-      return (await getTemporaryDirectory()).createTemp('spotiflac-glass-visual-');
+      return (await getTemporaryDirectory()).createTemp(
+        'spotiflac-glass-visual-',
+      );
     }))!;
     final cover = File('${directory.path}/cover.png');
     await tester.runAsync(() async {
@@ -182,7 +184,9 @@ void main() {
             musicPlayerControllerProvider.overrideWithValue(
               MusicPlayerController(runtime: runtime),
             ),
-            spotiflacGlassLevelProvider.overrideWithValue(SpotiFLACGlassLevel.liquid),
+            spotiflacGlassLevelProvider.overrideWithValue(
+              SpotiFLACGlassLevel.liquid,
+            ),
           ],
           child: MaterialApp(
             theme: SpotiFLACTheme.build(
@@ -349,7 +353,8 @@ void main() {
           find.descendant(
             of: find.byType(SpotiFLACTabBar),
             matching: find.byWidgetPredicate(
-              (widget) => widget is SpotiFLACLiquidBackdrop && !widget.interaction,
+              (widget) =>
+                  widget is SpotiFLACLiquidBackdrop && !widget.interaction,
             ),
           ),
         );

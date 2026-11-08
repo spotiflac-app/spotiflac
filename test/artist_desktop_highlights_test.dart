@@ -120,7 +120,9 @@ void main() {
     await dispose(tester);
   });
 
-  testWidgets('phones keep the stacked SpotiFLAC artist layout', (tester) async {
+  testWidgets('phones keep the stacked SpotiFLAC artist layout', (
+    tester,
+  ) async {
     await pumpArtist(tester, desktop: false);
     final featured = find.byType(ArtistFeaturedAlbumCard);
     expect(featured, findsOneWidget);

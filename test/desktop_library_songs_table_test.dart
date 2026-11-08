@@ -227,7 +227,9 @@ void main() {
           supportedLocales: AppLocalizations.supportedLocales,
           // SpotiFLAC opens Songs as a section page from its Library root.
           home: Scaffold(
-            body: QueueTab(librarySection: spotiflac && !root ? filterMode : null),
+            body: QueueTab(
+              librarySection: spotiflac && !root ? filterMode : null,
+            ),
           ),
         ),
       ),
@@ -236,22 +238,23 @@ void main() {
   }
 
   for (final spotiflac in [false, true]) {
-    testWidgets('desktop Songs list is the songs table (spotiflac: $spotiflac)', (
-      tester,
-    ) async {
-      await pumpLibrary(tester, desktop: true, spotiflac: spotiflac);
-      expect(find.byType(SliverTrackTable), findsOneWidget);
-      expect(find.byType(TrackCard), findsNothing);
-      expect(find.text('Alpha'), findsOneWidget);
-      expect(find.text('Bravo'), findsOneWidget);
-      // No month sections: the table sorts through its header instead.
-      expect(find.text('January 2026'), findsNothing);
-      final l10n = AppLocalizations.of(tester.element(find.byType(QueueTab)));
-      await tester.tap(find.text(l10n.editMetadataFieldTitle));
-      await _settle(tester);
-      final preferences = await SharedPreferences.getInstance();
-      expect(loadBootstrapSettings(preferences).historySortMode, 'a-z');
-    });
+    testWidgets(
+      'desktop Songs list is the songs table (spotiflac: $spotiflac)',
+      (tester) async {
+        await pumpLibrary(tester, desktop: true, spotiflac: spotiflac);
+        expect(find.byType(SliverTrackTable), findsOneWidget);
+        expect(find.byType(TrackCard), findsNothing);
+        expect(find.text('Alpha'), findsOneWidget);
+        expect(find.text('Bravo'), findsOneWidget);
+        // No month sections: the table sorts through its header instead.
+        expect(find.text('January 2026'), findsNothing);
+        final l10n = AppLocalizations.of(tester.element(find.byType(QueueTab)));
+        await tester.tap(find.text(l10n.editMetadataFieldTitle));
+        await _settle(tester);
+        final preferences = await SharedPreferences.getInstance();
+        expect(loadBootstrapSettings(preferences).historySortMode, 'a-z');
+      },
+    );
 
     testWidgets('a right-click menu leaves the selection toolbar closed '
         '(spotiflac: $spotiflac)', (tester) async {

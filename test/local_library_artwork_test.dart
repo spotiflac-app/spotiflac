@@ -84,7 +84,9 @@ void main() {
       ),
     ],
     child: MaterialApp(
-      theme: spotiflac ? SpotiFLACTheme.build(Brightness.light) : AppTheme.light(),
+      theme: spotiflac
+          ? SpotiFLACTheme.build(Brightness.light)
+          : AppTheme.light(),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: home,
@@ -224,51 +226,54 @@ void main() {
   );
 
   for (final spotiflac in [false, true]) {
-    testWidgets('blank album cover keeps the scanned track cover ($spotiflac)', (
-      tester,
-    ) async {
-      tester.view.physicalSize = const Size(430, 1200);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
-      await tester.runAsync(() async {
-        await scannedCover.writeAsBytes(png);
-        await tester.pumpWidget(
-          app(
-            LocalAlbumScreen(
-              albumName: 'Album',
-              artistName: 'Artist',
-              coverPath: '   ',
-              tracks: [
-                LocalLibraryItem(
-                  id: 'song',
-                  trackName: 'Song',
-                  artistName: 'Artist',
-                  albumName: 'Album',
-                  filePath: audio.path,
-                  coverPath: scannedCover.path,
-                  scannedAt: DateTime(2026),
-                ),
-              ],
+    testWidgets(
+      'blank album cover keeps the scanned track cover ($spotiflac)',
+      (tester) async {
+        tester.view.physicalSize = const Size(430, 1200);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        await tester.runAsync(() async {
+          await scannedCover.writeAsBytes(png);
+          await tester.pumpWidget(
+            app(
+              LocalAlbumScreen(
+                albumName: 'Album',
+                artistName: 'Artist',
+                coverPath: '   ',
+                tracks: [
+                  LocalLibraryItem(
+                    id: 'song',
+                    trackName: 'Song',
+                    artistName: 'Artist',
+                    albumName: 'Album',
+                    filePath: audio.path,
+                    coverPath: scannedCover.path,
+                    scannedAt: DateTime(2026),
+                  ),
+                ],
+              ),
+              spotiflac: spotiflac,
             ),
-            spotiflac: spotiflac,
-          ),
-        );
+          );
+          await tester.pumpAndSettle();
+        });
         await tester.pumpAndSettle();
-      });
-      await tester.pumpAndSettle();
-      expect(
-        spotiflac
-            ? tester
-                  .widget<SpotiFLACArtistSurface>(find.byType(SpotiFLACArtistSurface))
-                  .imageSource
-            : tester
-                  .widget<AlbumDetailHeader>(find.byType(AlbumDetailHeader))
-                  .paletteSource,
-        scannedCover.path,
-      );
-      expect(extractions, 0);
-      expect(tester.takeException(), isNull);
-    });
+        expect(
+          spotiflac
+              ? tester
+                    .widget<SpotiFLACArtistSurface>(
+                      find.byType(SpotiFLACArtistSurface),
+                    )
+                    .imageSource
+              : tester
+                    .widget<AlbumDetailHeader>(find.byType(AlbumDetailHeader))
+                    .paletteSource,
+          scannedCover.path,
+        );
+        expect(extractions, 0);
+        expect(tester.takeException(), isNull);
+      },
+    );
 
     for (final stale in [false, true]) {
       testWidgets('album header recovers artwork ($spotiflac, stale: $stale)', (
@@ -326,7 +331,9 @@ void main() {
     }
   }
 
-  testWidgets('SpotiFLAC album grid replaces a stale scan path', (tester) async {
+  testWidgets('SpotiFLAC album grid replaces a stale scan path', (
+    tester,
+  ) async {
     final preview = await playerPreview(tester);
     await tester.runAsync(() async {
       await tester.pumpWidget(

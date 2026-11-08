@@ -255,7 +255,9 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: MaterialApp(
-            theme: spotiflac ? SpotiFLACTheme.build(Brightness.light) : ThemeData(),
+            theme: spotiflac
+                ? SpotiFLACTheme.build(Brightness.light)
+                : ThemeData(),
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             builder: (context, child) => MediaQuery(
@@ -289,7 +291,10 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       final container = await openTour(tester);
 
-      expect(find.text('SpotiFLAC ${AppInfo.whatsNewRelease} is here'), findsOne);
+      expect(
+        find.text('SpotiFLAC ${AppInfo.whatsNewRelease} is here'),
+        findsOne,
+      );
       expect(find.text('Skip for now'), findsOne);
       for (final title in [
         'SpotiFLAC Link',
@@ -365,7 +370,9 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: MaterialApp(
-            theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : ThemeData(),
+            theme: spotiflac
+                ? SpotiFLACTheme.build(Brightness.dark)
+                : ThemeData(),
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             home: Builder(
@@ -388,7 +395,10 @@ void main() {
       final container = await openDialog(tester);
 
       expect(find.byType(WhatsNewScreen), findsNothing);
-      expect(find.text('SpotiFLAC ${AppInfo.whatsNewRelease} is here'), findsOne);
+      expect(
+        find.text('SpotiFLAC ${AppInfo.whatsNewRelease} is here'),
+        findsOne,
+      );
       // The list names every section; the first one is shown.
       for (final title in [
         'A Home that learns',

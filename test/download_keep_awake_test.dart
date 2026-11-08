@@ -185,7 +185,9 @@ void main() {
     const connectivity = MethodChannel(
       'dev.fluttercommunity.plus/connectivity_status',
     );
-    const progress = MethodChannel('com.spotiflac.app/download_progress_stream');
+    const progress = MethodChannel(
+      'com.spotiflac.app/download_progress_stream',
+    );
     messenger.setMockMethodCallHandler(paths, (_) async => directory.path);
     messenger.setMockMethodCallHandler(connectivity, (_) async => null);
     messenger.setMockMethodCallHandler(progress, (_) async => null);

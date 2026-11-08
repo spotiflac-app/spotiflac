@@ -452,7 +452,9 @@ class _PlayerColumn extends StatelessWidget {
                     mediaItem: mediaItem,
                     metadata: metadata,
                     style:
-                        (spotiflac ? textTheme.titleMedium : textTheme.titleLarge)
+                        (spotiflac
+                                ? textTheme.titleMedium
+                                : textTheme.titleLarge)
                             ?.copyWith(
                               fontWeight: FontWeight.w600,
                               color: colorScheme.onSurface,
@@ -465,7 +467,9 @@ class _PlayerColumn extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style:
-                          (spotiflac ? textTheme.bodyMedium : textTheme.titleSmall)
+                          (spotiflac
+                                  ? textTheme.bodyMedium
+                                  : textTheme.titleSmall)
                               ?.copyWith(color: colorScheme.onSurfaceVariant),
                     ),
                   PlaybackSourceLabel(

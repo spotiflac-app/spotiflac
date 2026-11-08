@@ -10,7 +10,8 @@ import 'package:spotiflac/widgets/app_switch.dart';
 import 'package:spotiflac/widgets/app_text_field.dart';
 import 'package:spotiflac/widgets/app_bottom_sheet.dart';
 import 'package:spotiflac/widgets/app_choice_chip.dart';
-import 'package:spotiflac/theme/spotiflac_icons.dart' show spotiflacArrowForward;
+import 'package:spotiflac/theme/spotiflac_icons.dart'
+    show spotiflacArrowForward;
 import 'package:spotiflac/theme/spotiflac_theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';

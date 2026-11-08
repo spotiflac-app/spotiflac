@@ -14,55 +14,63 @@ import 'package:spotiflac/widgets/playback_feedback.dart';
 
 void main() {
   for (final spotiflac in [false, true]) {
-    testWidgets('playback errors show themed feedback (SpotiFLAC: $spotiflac)', (
-      tester,
-    ) async {
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      final runtime = MusicPlayerRuntime();
-      addTearDown(runtime.dispose);
-      final states = StreamController<PlaybackState>();
-      addTearDown(states.close);
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            musicPlayerRuntimeProvider.overrideWithValue(runtime),
-            playbackStateProvider.overrideWith((_) => states.stream),
-          ],
-          child: MaterialApp(
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : ThemeData(),
-            builder: (_, child) =>
-                AppScaffoldMessenger(child: PlaybackFeedback(child: child!)),
-            home: const Scaffold(body: SizedBox.expand()),
+    testWidgets(
+      'playback errors show themed feedback (SpotiFLAC: $spotiflac)',
+      (tester) async {
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        final runtime = MusicPlayerRuntime();
+        addTearDown(runtime.dispose);
+        final states = StreamController<PlaybackState>();
+        addTearDown(states.close);
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              musicPlayerRuntimeProvider.overrideWithValue(runtime),
+              playbackStateProvider.overrideWith((_) => states.stream),
+            ],
+            child: MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              theme: spotiflac
+                  ? SpotiFLACTheme.build(Brightness.dark)
+                  : ThemeData(),
+              builder: (_, child) =>
+                  AppScaffoldMessenger(child: PlaybackFeedback(child: child!)),
+              home: const Scaffold(body: SizedBox.expand()),
+            ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      final failed = PlaybackState(
-        processingState: AudioProcessingState.error,
-        errorCode: 1,
-        errorMessage: 'Audio output failed',
-      );
-      states.add(failed);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 350));
-      await tester.pumpAndSettle();
-      expect(
-        find.text('Cannot open file: Audio output failed'),
-        findsOneWidget,
-      );
-      expect(
-        find.byType(SpotiFLACGlassPanel),
-        spotiflac ? findsOneWidget : findsNothing,
-      );
-      await tester.pump(const Duration(seconds: 4));
-      await tester.pumpAndSettle();
-      states.add(failed.copyWith(updatePosition: const Duration(seconds: 1)));
-      await tester.pumpAndSettle();
-      expect(find.text('Cannot open file: Audio output failed'), findsNothing);
-      expect(tester.takeException(), isNull);
-    });
+        );
+        await tester.pumpAndSettle();
+        final failed = PlaybackState(
+          processingState: AudioProcessingState.error,
+          errorCode: 1,
+          errorMessage: 'Audio output failed',
+        );
+        states.add(failed);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 350));
+        await tester.pumpAndSettle();
+        expect(
+          find.text('Cannot open file: Audio output failed'),
+          findsOneWidget,
+        );
+        expect(
+          find.byType(SpotiFLACGlassPanel),
+          spotiflac ? findsOneWidget : findsNothing,
+        );
+        await tester.pump(const Duration(seconds: 4));
+        await tester.pumpAndSettle();
+        states.add(failed.copyWith(updatePosition: const Duration(seconds: 1)));
+        await tester.pumpAndSettle();
+        expect(
+          find.text('Cannot open file: Audio output failed'),
+          findsNothing,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
 
     testWidgets(
       'superseded errors do not linger after playback recovers ($spotiflac)',
@@ -83,7 +91,9 @@ void main() {
             child: MaterialApp(
               localizationsDelegates: AppLocalizations.localizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
-              theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : ThemeData(),
+              theme: spotiflac
+                  ? SpotiFLACTheme.build(Brightness.dark)
+                  : ThemeData(),
               builder: (_, child) =>
                   AppScaffoldMessenger(child: PlaybackFeedback(child: child!)),
               home: const Scaffold(body: SizedBox.expand()),
@@ -144,7 +154,9 @@ void main() {
             locale: Locale(spotiflac ? 'id' : 'en'),
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
-            theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : ThemeData(),
+            theme: spotiflac
+                ? SpotiFLACTheme.build(Brightness.dark)
+                : ThemeData(),
             builder: (_, child) =>
                 AppScaffoldMessenger(child: PlaybackFeedback(child: child!)),
             home: const Scaffold(body: SizedBox.expand()),

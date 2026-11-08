@@ -276,20 +276,23 @@ void main() {
     },
   );
 
-  test('SpotiFLAC notification icons do not disable widget transport', () async {
-    final media = item('one');
-    player.mediaItem.add(media);
-    player.playbackState.add(
-      PlaybackState(
-        controls: const PlaybackNotification(
-          spotiflac: true,
-        ).controls(playing: true, item: media),
-      ),
-    );
-    await settle();
-    expect(updates.last['canPrevious'], isTrue);
-    expect(updates.last['canNext'], isTrue);
-  });
+  test(
+    'SpotiFLAC notification icons do not disable widget transport',
+    () async {
+      final media = item('one');
+      player.mediaItem.add(media);
+      player.playbackState.add(
+        PlaybackState(
+          controls: const PlaybackNotification(
+            spotiflac: true,
+          ).controls(playing: true, item: media),
+        ),
+      );
+      await settle();
+      expect(updates.last['canPrevious'], isTrue);
+      expect(updates.last['canNext'], isTrue);
+    },
+  );
 
   test(
     'clearing playback also removes artwork and disables the player',

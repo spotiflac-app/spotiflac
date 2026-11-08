@@ -42,7 +42,8 @@ class SpotiFLACLandscapePlayer extends StatefulWidget {
   final Widget? lyricsOptions;
 
   @override
-  State<SpotiFLACLandscapePlayer> createState() => _SpotiFLACLandscapePlayerState();
+  State<SpotiFLACLandscapePlayer> createState() =>
+      _SpotiFLACLandscapePlayerState();
 }
 
 class _SpotiFLACLandscapePlayerState extends State<SpotiFLACLandscapePlayer> {

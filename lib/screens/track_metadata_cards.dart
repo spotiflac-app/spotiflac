@@ -922,7 +922,9 @@ extension _TrackMetadataCards on _TrackMetadataScreenState {
                     ),
                     const SizedBox(width: 8),
                     Icon(
-                      context.isSpotiFLAC ? CupertinoIcons.doc_on_doc : Icons.copy,
+                      context.isSpotiFLAC
+                          ? CupertinoIcons.doc_on_doc
+                          : Icons.copy,
                       size: 18,
                       color: colorScheme.onSurfaceVariant,
                     ),

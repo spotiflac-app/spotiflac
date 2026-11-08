@@ -482,7 +482,8 @@ class SpotiFLACSelectionForeground extends StatefulWidget {
       _SpotiFLACSelectionForegroundState();
 }
 
-class _SpotiFLACSelectionForegroundState extends State<SpotiFLACSelectionForeground> {
+class _SpotiFLACSelectionForegroundState
+    extends State<SpotiFLACSelectionForeground> {
   ui.FragmentProgram? _program;
   ui.FragmentShader? _shader;
 

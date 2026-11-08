@@ -130,7 +130,8 @@ void main() {
       expect(
         DesktopFFmpegTools.searchDirectories(
           operatingSystem: 'macos',
-          executablePath: '/Applications/SpotiFLAC.app/Contents/MacOS/SpotiFLAC',
+          executablePath:
+              '/Applications/SpotiFLAC.app/Contents/MacOS/SpotiFLAC',
           environment: {'SPOTIFLAC_FFMPEG_DIR': '/opt/ff', 'PATH': '/a:/b'},
         ),
         [

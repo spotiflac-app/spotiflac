@@ -292,66 +292,67 @@ void main() {
       },
     );
 
-    testWidgets('playlist selection confirms one deletion (SpotiFLAC: $spotiflac)', (
-      tester,
-    ) async {
-      tester.view.physicalSize = const Size(800, 1200);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
-      final calls = <List<String>>[];
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            settingsProvider.overrideWith(_Settings.new),
-            downloadHistoryProvider.overrideWith(() => history),
-            localLibraryProvider.overrideWith(() => local),
-            libraryCollectionsProvider.overrideWith(
-              () => _SelectionCollections(calls.add),
+    testWidgets(
+      'playlist selection confirms one deletion (SpotiFLAC: $spotiflac)',
+      (tester) async {
+        tester.view.physicalSize = const Size(800, 1200);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        final calls = <List<String>>[];
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              settingsProvider.overrideWith(_Settings.new),
+              downloadHistoryProvider.overrideWith(() => history),
+              localLibraryProvider.overrideWith(() => local),
+              libraryCollectionsProvider.overrideWith(
+                () => _SelectionCollections(calls.add),
+              ),
+              downloadQueueProvider.overrideWith(_Queue.new),
+            ],
+            child: MaterialApp(
+              theme: spotiflac
+                  ? SpotiFLACTheme.build(Brightness.dark)
+                  : AppTheme.light(),
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: const Scaffold(body: QueueTab(librarySection: 'playlists')),
             ),
-            downloadQueueProvider.overrideWith(_Queue.new),
-          ],
-          child: MaterialApp(
-            theme: spotiflac
-                ? SpotiFLACTheme.build(Brightness.dark)
-                : AppTheme.light(),
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            home: const Scaffold(body: QueueTab(librarySection: 'playlists')),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      final l10n = AppLocalizations.of(tester.element(find.byType(QueueTab)));
-      await tester.ensureVisible(find.text('First'));
-      await tester.longPress(find.text('First'));
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Second'));
-      await tester.tap(find.text('Second'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text(l10n.selectionDeletePlaylistsCount(2)));
-      await tester.pumpAndSettle();
-      expect(
-        find.text(l10n.collectionDeletePlaylistsMessage(2)),
-        findsOneWidget,
-      );
-      await tester.tap(find.text(l10n.dialogCancel));
-      await tester.pumpAndSettle();
-      expect(calls, isEmpty);
-      expect(find.text('First'), findsOneWidget);
-      await tester.tap(find.text(l10n.selectionDeletePlaylistsCount(2)));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text(l10n.dialogDelete));
-      await tester.pumpAndSettle();
-      expect(calls, [
-        ['First', 'Second'],
-      ]);
-      expect(find.text('First'), findsNothing);
-      expect(find.text('Second'), findsNothing);
-      expect(find.text('Keep'), findsOneWidget);
-      expect(find.text(l10n.selectionDeletePlaylistsCount(2)), findsNothing);
-      expect(find.text(l10n.collectionPlaylistsDeleted(2)), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
+        );
+        await tester.pumpAndSettle();
+        final l10n = AppLocalizations.of(tester.element(find.byType(QueueTab)));
+        await tester.ensureVisible(find.text('First'));
+        await tester.longPress(find.text('First'));
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.text('Second'));
+        await tester.tap(find.text('Second'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(l10n.selectionDeletePlaylistsCount(2)));
+        await tester.pumpAndSettle();
+        expect(
+          find.text(l10n.collectionDeletePlaylistsMessage(2)),
+          findsOneWidget,
+        );
+        await tester.tap(find.text(l10n.dialogCancel));
+        await tester.pumpAndSettle();
+        expect(calls, isEmpty);
+        expect(find.text('First'), findsOneWidget);
+        await tester.tap(find.text(l10n.selectionDeletePlaylistsCount(2)));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(l10n.dialogDelete));
+        await tester.pumpAndSettle();
+        expect(calls, [
+          ['First', 'Second'],
+        ]);
+        expect(find.text('First'), findsNothing);
+        expect(find.text('Second'), findsNothing);
+        expect(find.text('Keep'), findsOneWidget);
+        expect(find.text(l10n.selectionDeletePlaylistsCount(2)), findsNothing);
+        expect(find.text(l10n.collectionPlaylistsDeleted(2)), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
 
   test(

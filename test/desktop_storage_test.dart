@@ -182,7 +182,10 @@ void main() {
         await resolveDesktopPickerInitialDirectory(output.path),
         music.path,
       );
-      expect(await Directory(p.join(music.path, 'SpotiFLAC')).exists(), isFalse);
+      expect(
+        await Directory(p.join(music.path, 'SpotiFLAC')).exists(),
+        isFalse,
+      );
     });
 
     test('uses the parent when the saved path is now a file', () async {

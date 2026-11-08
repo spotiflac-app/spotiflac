@@ -672,7 +672,9 @@ class SpotiFLACTabBar extends ConsumerWidget {
                           child: SpotiFLACGlass.navigation(
                             blurEnabled: blurEnabled,
                             strongTint: true,
-                            tintOpacity: SpotiFLACTheme.navigationOpacity(context),
+                            tintOpacity: SpotiFLACTheme.navigationOpacity(
+                              context,
+                            ),
                             refractionDepth: 0.45 + 0.15 * progress,
                             radius: lerpDouble(32, foldedSize / 2, amount)!,
                             child: const SizedBox.expand(),

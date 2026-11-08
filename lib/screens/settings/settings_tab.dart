@@ -441,9 +441,9 @@ class _SettingsTabState extends ConsumerState<SettingsTab> {
     final destination = targetLabel == null
         ? page
         : SettingsSearchHighlightScope(targetLabel: targetLabel, child: page);
-    await Navigator.of(
-      context,
-    ).push(slidePageRoute<void>(page: SpotiFLACSettingsTheme(child: destination)));
+    await Navigator.of(context).push(
+      slidePageRoute<void>(page: SpotiFLACSettingsTheme(child: destination)),
+    );
     if (!mounted) return;
 
     if (page is DonatePage) {

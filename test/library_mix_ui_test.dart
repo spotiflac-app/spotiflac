@@ -327,7 +327,9 @@ Future<void> _pumpMix(WidgetTester tester, {required bool spotiflac}) async {
         downloadHistoryProvider.overrideWith(_History.new),
       ],
       child: MaterialApp(
-        theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : AppTheme.dark(),
+        theme: spotiflac
+            ? SpotiFLACTheme.build(Brightness.dark)
+            : AppTheme.dark(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: LibraryMixScreen(view: _mix),
@@ -371,7 +373,9 @@ Future<void> _pumpHome(
           return child!;
         },
         child: MaterialApp(
-          theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : AppTheme.dark(),
+          theme: spotiflac
+              ? SpotiFLACTheme.build(Brightness.dark)
+              : AppTheme.dark(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: HomeTab(

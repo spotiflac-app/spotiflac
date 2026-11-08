@@ -44,7 +44,9 @@ Future<void> _pumpArtist(
   await tester.pumpWidget(
     ProviderScope(
       child: MaterialApp(
-        theme: spotiflac ? SpotiFLACTheme.build(Brightness.light) : AppTheme.light(),
+        theme: spotiflac
+            ? SpotiFLACTheme.build(Brightness.light)
+            : AppTheme.light(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: ArtistScreen(

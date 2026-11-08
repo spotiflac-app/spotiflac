@@ -36,7 +36,10 @@ void main() {
           container: container,
           child: MaterialApp(
             theme: spotiflac
-                ? SpotiFLACTheme.build(Brightness.dark, accent: SpotiFLACAccent.blue)
+                ? SpotiFLACTheme.build(
+                    Brightness.dark,
+                    accent: SpotiFLACAccent.blue,
+                  )
                 : AppTheme.light(),
             locale: const Locale('en'),
             localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -103,7 +106,9 @@ void main() {
       );
     });
 
-    testWidgets('Gapless playback yields to AutoMix ($spotiflac)', (tester) async {
+    testWidgets('Gapless playback yields to AutoMix ($spotiflac)', (
+      tester,
+    ) async {
       SharedPreferences.setMockInitialValues({});
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1;
@@ -119,7 +124,10 @@ void main() {
           container: container,
           child: MaterialApp(
             theme: spotiflac
-                ? SpotiFLACTheme.build(Brightness.dark, accent: SpotiFLACAccent.blue)
+                ? SpotiFLACTheme.build(
+                    Brightness.dark,
+                    accent: SpotiFLACAccent.blue,
+                  )
                 : AppTheme.light(),
             locale: const Locale('en'),
             localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -183,7 +191,10 @@ void main() {
           container: container,
           child: MaterialApp(
             theme: spotiflac
-                ? SpotiFLACTheme.build(Brightness.dark, accent: SpotiFLACAccent.blue)
+                ? SpotiFLACTheme.build(
+                    Brightness.dark,
+                    accent: SpotiFLACAccent.blue,
+                  )
                 : AppTheme.light(),
             locale: const Locale('en'),
             localizationsDelegates: AppLocalizations.localizationsDelegates,

@@ -10,13 +10,13 @@ use hmac::{Hmac, KeyInit, Mac};
 use http_body_util::{BodyExt, Full, StreamBody};
 use hyper::body::Frame;
 use hyper_util::rt::TokioIo;
-use spotiflac_link::{Host, HostError, LinkConfig, LinkServer, Tuning};
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::crypto::CryptoProvider;
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 use rustls::{DigitallySignedStruct, SignatureScheme};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
+use spotiflac_link::{Host, HostError, LinkConfig, LinkServer, Tuning};
 use std::convert::Infallible;
 use std::future::Future;
 use std::net::{IpAddr, Ipv4Addr};
@@ -509,7 +509,10 @@ fn info_reports_the_identity_without_auth() {
     assert_eq!(info["pairing"], false);
 
     fixture.begin_pairing();
-    assert_eq!(fixture.get("/spotiflac/v1/info", None).json()["pairing"], true);
+    assert_eq!(
+        fixture.get("/spotiflac/v1/info", None).json()["pairing"],
+        true
+    );
     fixture.server().end_pairing();
     assert_eq!(
         fixture.host.wait_event("linkPairingEnded", 1)["reason"],
@@ -545,7 +548,11 @@ fn info_reports_the_identity_without_auth() {
 fn pairing_with_a_valid_proof_stores_the_device() {
     let fixture = Fixture::new();
     let pin = fixture.begin_pairing();
-    let response = fixture.post_json("/spotiflac/v1/pair", None, &fixture.pair_body(&pin, "phone-1"));
+    let response = fixture.post_json(
+        "/spotiflac/v1/pair",
+        None,
+        &fixture.pair_body(&pin, "phone-1"),
+    );
     assert_eq!(response.status, 200, "{}", response.text());
     let paired = response.json();
     assert_eq!(paired["serverId"], fixture.server().server_id());
@@ -568,7 +575,11 @@ fn pairing_with_a_valid_proof_stores_the_device() {
     assert!(device["pairedMs"].as_i64().unwrap() > 0);
 
     // The window closed with the success.
-    let again = fixture.post_json("/spotiflac/v1/pair", None, &fixture.pair_body(&pin, "phone-1"));
+    let again = fixture.post_json(
+        "/spotiflac/v1/pair",
+        None,
+        &fixture.pair_body(&pin, "phone-1"),
+    );
     assert_eq!(again.status, 403);
     assert_eq!(again.json(), json!({"error": "pairing_closed"}));
 
@@ -577,7 +588,10 @@ fn pairing_with_a_valid_proof_stores_the_device() {
     let replaced = fixture.pair("phone-1");
     assert_ne!(replaced, key);
     assert_eq!(fixture.get("/spotiflac/v1/state", Some(key)).status, 401);
-    assert_eq!(fixture.get("/spotiflac/v1/state", Some(&replaced)).status, 200);
+    assert_eq!(
+        fixture.get("/spotiflac/v1/state", Some(&replaced)).status,
+        200
+    );
     assert_eq!(fixture.server().devices().as_array().unwrap().len(), 1);
 
     let invalid = fixture.post_json("/spotiflac/v1/pair", None, &json!({"deviceId": "x"}));
@@ -603,7 +617,11 @@ fn five_bad_proofs_end_the_window() {
         json!({"reason": "attempts"})
     );
     // Even the right proof is refused now.
-    let response = fixture.post_json("/spotiflac/v1/pair", None, &fixture.pair_body(&pin, "phone-1"));
+    let response = fixture.post_json(
+        "/spotiflac/v1/pair",
+        None,
+        &fixture.pair_body(&pin, "phone-1"),
+    );
     assert_eq!(response.json(), json!({"error": "pairing_closed"}));
     assert!(fixture.host.events("linkPaired").is_empty());
 }
@@ -633,7 +651,11 @@ fn pairing_windows_expire() {
         fixture.host.wait_event("linkPairingEnded", 1),
         json!({"reason": "expired"})
     );
-    let response = fixture.post_json("/spotiflac/v1/pair", None, &fixture.pair_body(&pin, "phone-1"));
+    let response = fixture.post_json(
+        "/spotiflac/v1/pair",
+        None,
+        &fixture.pair_body(&pin, "phone-1"),
+    );
     assert_eq!(response.status, 403);
     assert_eq!(response.json(), json!({"error": "pairing_closed"}));
     assert_eq!(fixture.host.events("linkPairingEnded").len(), 1);

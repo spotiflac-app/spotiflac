@@ -65,7 +65,9 @@ void main() {
         ProviderScope(
           overrides: [extensionProvider.overrideWith(_NoExtensions.new)],
           child: MaterialApp(
-            theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : ThemeData(),
+            theme: spotiflac
+                ? SpotiFLACTheme.build(Brightness.dark)
+                : ThemeData(),
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             home: Builder(

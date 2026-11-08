@@ -3,13 +3,13 @@
 use super::Backend;
 use crate::files::{StagedFile, SyncBatch};
 use cap_std::fs::OpenOptions;
+use sha2::{Digest, Sha256};
 use spotiflac_core::app_version::AppVersion;
 use spotiflac_core::cover::{MAX_DOWNLOAD_BYTES, resize};
 use spotiflac_core::tags::{CoverArt, extract_cover};
 use spotiflac_network::{
     HttpRequest, NetworkService, NetworkSession, random_user_agent, url::UrlParts,
 };
-use sha2::{Digest, Sha256};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::io::{Read, Write};

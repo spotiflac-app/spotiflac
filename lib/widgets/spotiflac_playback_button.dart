@@ -31,7 +31,8 @@ class SpotiFLACPlaybackButton extends StatefulWidget {
   final bool pointerPress;
 
   @override
-  State<SpotiFLACPlaybackButton> createState() => _SpotiFLACPlaybackButtonState();
+  State<SpotiFLACPlaybackButton> createState() =>
+      _SpotiFLACPlaybackButtonState();
 }
 
 class _SpotiFLACPlaybackButtonState extends State<SpotiFLACPlaybackButton>

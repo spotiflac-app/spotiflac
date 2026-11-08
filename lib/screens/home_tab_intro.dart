@@ -22,7 +22,8 @@ double _homeShelfCoverSizeOf(BuildContext context) =>
 double _homeMixCoverSizeOf(BuildContext context) =>
     _homeDesktop(context) ? _homeDesktopMixCoverSize : _homeMixCoverSize;
 
-double _homeShelfRadiusOf(BuildContext context) => context.isSpotiFLAC ? 10 : 20;
+double _homeShelfRadiusOf(BuildContext context) =>
+    context.isSpotiFLAC ? 10 : 20;
 
 /// Whether Home uses compact SpotiFLAC desktop typography.
 bool _homeCompactText(BuildContext context) =>
@@ -931,8 +932,9 @@ class _HomeShelf extends StatelessWidget {
           scrollDirection: Axis.horizontal,
           padding: EdgeInsets.symmetric(horizontal: inset),
           itemCount: itemCount,
-          separatorBuilder: (_, _) =>
-              SizedBox(width: context.isSpotiFLAC ? _homeSpotiFLACShelfGap : 12),
+          separatorBuilder: (_, _) => SizedBox(
+            width: context.isSpotiFLAC ? _homeSpotiFLACShelfGap : 12,
+          ),
           itemBuilder: itemBuilder,
         ),
       ),

@@ -446,7 +446,9 @@ void main() {
         chrome.expand();
         await tester.pumpAndSettle();
         expect(
-          tester.widget<SpotiFLACTabBar>(find.byType(SpotiFLACTabBar)).selectedIndex,
+          tester
+              .widget<SpotiFLACTabBar>(find.byType(SpotiFLACTabBar))
+              .selectedIndex,
           index,
         );
       }
@@ -456,7 +458,9 @@ void main() {
       'edge icons travel continuously without fading (glass: $blur)',
       (tester) async {
         await pumpShell(tester, blur: blur);
-        final homeButton = find.byKey(const ValueKey('spotiflac-compact-leading'));
+        final homeButton = find.byKey(
+          const ValueKey('spotiflac-compact-leading'),
+        );
         final icon = find.descendant(
           of: homeButton,
           matching: find.byIcon(Icons.home),
@@ -677,7 +681,9 @@ void main() {
   ) async {
     await pumpShell(tester);
     final playerState = tester.state(find.byType(MiniPlayer));
-    final expandedHeight = tester.getSize(find.byType(SpotiFLACBottomBar)).height;
+    final expandedHeight = tester
+        .getSize(find.byType(SpotiFLACBottomBar))
+        .height;
     await tester.drag(find.byType(ListView), const Offset(0, -240));
     await tester.pumpAndSettle();
     expect(chrome.value, isTrue);
@@ -691,7 +697,10 @@ void main() {
     await tester.tap(find.byTooltip('Home'));
     await tester.pumpAndSettle();
     expect(chrome.value, isFalse);
-    expect(tester.getSize(find.byType(SpotiFLACBottomBar)).height, expandedHeight);
+    expect(
+      tester.getSize(find.byType(SpotiFLACBottomBar)).height,
+      expandedHeight,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -887,7 +896,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(SpotiFLACSelectionPill), findsNothing);
       expect(
-        tester.element(find.byType(SpotiFLACSelectionPill, skipOffstage: false)),
+        tester.element(
+          find.byType(SpotiFLACSelectionPill, skipOffstage: false),
+        ),
         same(glass),
       );
       expect(TickerMode.valuesOf(glass).enabled, isFalse);

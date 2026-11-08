@@ -105,37 +105,38 @@ void main() {
     expect(sharedPreview.value, isNull);
   });
 
-  testWidgets('removing a SpotiFLAC slider releases its pending preview safely', (
-    tester,
-  ) async {
-    final preview = PlaybackSeekPreview();
-    addTearDown(preview.dispose);
-    final completion = Completer<void>();
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: SpotiFLACTheme.build(Brightness.dark),
-        home: Scaffold(
-          body: PlaybackSeekSlider(
-            preview: preview,
-            position: Duration.zero,
-            duration: const Duration(seconds: 100),
-            onSeek: (_) => completion.future,
+  testWidgets(
+    'removing a SpotiFLAC slider releases its pending preview safely',
+    (tester) async {
+      final preview = PlaybackSeekPreview();
+      addTearDown(preview.dispose);
+      final completion = Completer<void>();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: SpotiFLACTheme.build(Brightness.dark),
+          home: Scaffold(
+            body: PlaybackSeekSlider(
+              preview: preview,
+              position: Duration.zero,
+              duration: const Duration(seconds: 100),
+              onSeek: (_) => completion.future,
+            ),
           ),
         ),
-      ),
-    );
-    await tester.tap(find.byType(Slider));
-    await tester.pump();
-    expect(preview.value, isNotNull);
-    await tester.pumpWidget(const SizedBox());
-    expect(preview.value, isNull);
-    final session = preview.begin(const Duration(seconds: 20));
-    completion.complete();
-    await tester.pump();
-    expect(preview.value, const Duration(seconds: 20));
-    preview.end(session);
-    expect(tester.takeException(), isNull);
-  });
+      );
+      await tester.tap(find.byType(Slider));
+      await tester.pump();
+      expect(preview.value, isNotNull);
+      await tester.pumpWidget(const SizedBox());
+      expect(preview.value, isNull);
+      final session = preview.begin(const Duration(seconds: 20));
+      completion.complete();
+      await tester.pump();
+      expect(preview.value, const Duration(seconds: 20));
+      preview.end(session);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('failed seeks release the shared preview', (tester) async {
     final preview = PlaybackSeekPreview();

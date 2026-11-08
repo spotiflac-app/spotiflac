@@ -299,7 +299,9 @@ class LinkTransferGlyph extends StatelessWidget {
                   color: ink,
                 ),
                 AppIcon(
-                  spotiflac ? spotiflacArrowForward : Icons.arrow_forward_rounded,
+                  spotiflac
+                      ? spotiflacArrowForward
+                      : Icons.arrow_forward_rounded,
                   size: size * 0.2,
                   color: ink,
                 ),
@@ -680,7 +682,9 @@ class _TransferSongRow extends StatelessWidget {
         color: spotiflac ? scheme.onSurface : scheme.primary,
       ),
       LinkTransferEntryState.skipped => AppIcon(
-        spotiflac ? CupertinoIcons.checkmark_circle : Icons.check_circle_outline,
+        spotiflac
+            ? CupertinoIcons.checkmark_circle
+            : Icons.check_circle_outline,
         size: glyph,
         color: scheme.onSurfaceVariant,
       ),

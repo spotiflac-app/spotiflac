@@ -248,7 +248,9 @@ class _MicrophoneButton extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final spotiflac = context.isSpotiFLAC;
     final animate = !MediaQuery.disableAnimationsOf(context);
-    final fill = spotiflac || listening ? scheme.primary : scheme.primaryContainer;
+    final fill = spotiflac || listening
+        ? scheme.primary
+        : scheme.primaryContainer;
     final glyph = spotiflac || listening
         ? scheme.onPrimary
         : scheme.onPrimaryContainer;

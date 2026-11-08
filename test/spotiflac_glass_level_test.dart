@@ -243,7 +243,10 @@ void main() {
             ),
           ],
           child: MaterialApp(
-            theme: SpotiFLACTheme.build(Brightness.light, glassClarity: clarity),
+            theme: SpotiFLACTheme.build(
+              Brightness.light,
+              glassClarity: clarity,
+            ),
             home: const SpotiFLACGlass.navigation(
               blurEnabled: true,
               child: SizedBox(width: 200, height: 50),
@@ -473,7 +476,9 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          spotiflacGlassLevelProvider.overrideWithValue(SpotiFLACGlassLevel.liquid),
+          spotiflacGlassLevelProvider.overrideWithValue(
+            SpotiFLACGlassLevel.liquid,
+          ),
         ],
         child: MaterialApp(
           theme: SpotiFLACTheme.build(Brightness.dark),

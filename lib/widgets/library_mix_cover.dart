@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:spotiflac/models/unified_library_item.dart';
-import 'package:spotiflac/services/sqlite_helpers.dart' show normalizeLookupText;
+import 'package:spotiflac/services/sqlite_helpers.dart'
+    show normalizeLookupText;
 import 'package:spotiflac/widgets/app_icon.dart';
 import 'package:spotiflac/widgets/cached_cover_image.dart';
 import 'package:spotiflac/widgets/local_library_artwork_builder.dart';

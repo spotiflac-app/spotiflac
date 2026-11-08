@@ -291,36 +291,39 @@ void main() {
   );
 
   for (final spotiflac in [false, true]) {
-    testWidgets('country picker saves a country with either theme ($spotiflac)', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            settingsProvider.overrideWith(_Settings.new),
-            extensionProvider.overrideWith(_Extensions.new),
-          ],
-          child: MaterialApp(
-            locale: const Locale('en'),
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : ThemeData(),
-            builder: (_, child) => AppScaffoldMessenger(child: child!),
-            home: const Scaffold(
-              body: SettingsGroup(children: [HomeFeedRegionSetting()]),
+    testWidgets(
+      'country picker saves a country with either theme ($spotiflac)',
+      (tester) async {
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              settingsProvider.overrideWith(_Settings.new),
+              extensionProvider.overrideWith(_Extensions.new),
+            ],
+            child: MaterialApp(
+              locale: const Locale('en'),
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              theme: spotiflac
+                  ? SpotiFLACTheme.build(Brightness.dark)
+                  : ThemeData(),
+              builder: (_, child) => AppScaffoldMessenger(child: child!),
+              home: const Scaffold(
+                body: SettingsGroup(children: [HomeFeedRegionSetting()]),
+              ),
             ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('United States · Example Music'), findsOneWidget);
-      await tester.tap(find.text('Home feed country'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Japan'));
-      await tester.pumpAndSettle();
-      expect(writes.single['market'], 'jp');
-      expect(find.text('Japan · Example Music'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('United States · Example Music'), findsOneWidget);
+        await tester.tap(find.text('Home feed country'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Japan'));
+        await tester.pumpAndSettle();
+        expect(writes.single['market'], 'jp');
+        expect(find.text('Japan · Example Music'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
 }

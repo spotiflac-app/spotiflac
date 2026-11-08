@@ -23,7 +23,8 @@ import 'package:spotiflac/services/library_mixes.dart';
 import 'package:spotiflac/services/listening_statistics.dart';
 import 'package:spotiflac/services/music_player_runtime.dart';
 import 'package:spotiflac/services/playable_media.dart';
-import 'package:spotiflac/services/sqlite_helpers.dart' show normalizeLookupText;
+import 'package:spotiflac/services/sqlite_helpers.dart'
+    show normalizeLookupText;
 import 'package:spotiflac/utils/int_utils.dart';
 import 'package:spotiflac/utils/logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';

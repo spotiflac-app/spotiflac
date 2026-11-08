@@ -69,7 +69,10 @@ void main() {
         Color(0xff7a1f3d),
         Color(0x80204060),
       ]) {
-        final base = SpotiFLACTheme.build(brightness, accent: SpotiFLACAccent.green);
+        final base = SpotiFLACTheme.build(
+          brightness,
+          accent: SpotiFLACAccent.green,
+        );
         final chrome = SpotiFLACTheme.build(
           brightness,
           accent: SpotiFLACAccent.green,

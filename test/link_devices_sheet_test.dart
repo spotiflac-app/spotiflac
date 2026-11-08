@@ -343,7 +343,9 @@ void main() {
         );
         expect(
           glyph(
-            spotiflac ? CupertinoIcons.device_phone_portrait : Icons.phone_android,
+            spotiflac
+                ? CupertinoIcons.device_phone_portrait
+                : Icons.phone_android,
           ),
           findsOneWidget,
         );

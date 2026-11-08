@@ -186,7 +186,11 @@ class _DesktopMiniPlayerState extends ConsumerState<DesktopMiniPlayer> {
           height: 88,
           child: Row(
             children: [
-              _Artwork(mediaItem: mediaItem, size: 72, radius: spotiflac ? 8 : 12),
+              _Artwork(
+                mediaItem: mediaItem,
+                size: 72,
+                radius: spotiflac ? 8 : 12,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(

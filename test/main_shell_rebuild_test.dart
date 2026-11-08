@@ -109,7 +109,9 @@ void main() {
           desktopSidebarProfileProvider.overrideWithValue(null),
         ],
         child: MaterialApp.router(
-          theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : AppTheme.dark(),
+          theme: spotiflac
+              ? SpotiFLACTheme.build(Brightness.dark)
+              : AppTheme.dark(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           routerConfig: router,

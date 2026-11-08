@@ -64,47 +64,50 @@ void main() {
   };
 
   for (final spotiflac in [false, true]) {
-    testWidgets('support row updates cached progress after refresh ($spotiflac)', (
-      tester,
-    ) async {
-      SharedPreferences.setMockInitialValues({
-        'app_remote_config_cached_json': jsonEncode(goalConfig()),
-      });
-      final response = Completer<http.Response>();
-      final service = AppRemoteConfigService(
-        client: MockClient((_) => response.future),
-      );
-      await pumpSettings(
-        tester,
-        service: service,
-        theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : AppTheme.light(),
-      );
-      final support = find.byWidgetPredicate(
-        (widget) =>
-            widget is SettingsItem && widget.title == 'Support Development',
-      );
-      final progress = find.descendant(
-        of: support,
-        matching: find.byType(AppProgressIndicator),
-      );
-      expect(
-        find.descendant(of: support, matching: find.text('9%')),
-        findsOneWidget,
-      );
-      expect(tester.widget<AppProgressIndicator>(progress).value, 0.09);
+    testWidgets(
+      'support row updates cached progress after refresh ($spotiflac)',
+      (tester) async {
+        SharedPreferences.setMockInitialValues({
+          'app_remote_config_cached_json': jsonEncode(goalConfig()),
+        });
+        final response = Completer<http.Response>();
+        final service = AppRemoteConfigService(
+          client: MockClient((_) => response.future),
+        );
+        await pumpSettings(
+          tester,
+          service: service,
+          theme: spotiflac
+              ? SpotiFLACTheme.build(Brightness.dark)
+              : AppTheme.light(),
+        );
+        final support = find.byWidgetPredicate(
+          (widget) =>
+              widget is SettingsItem && widget.title == 'Support Development',
+        );
+        final progress = find.descendant(
+          of: support,
+          matching: find.byType(AppProgressIndicator),
+        );
+        expect(
+          find.descendant(of: support, matching: find.text('9%')),
+          findsOneWidget,
+        );
+        expect(tester.widget<AppProgressIndicator>(progress).value, 0.09);
 
-      response.complete(
-        http.Response(jsonEncode(goalConfig(progress: 0.27)), 200),
-      );
-      await tester.pumpAndSettle();
-      expect(
-        find.descendant(of: support, matching: find.text('27%')),
-        findsOneWidget,
-      );
-      expect(tester.widget<AppProgressIndicator>(progress).value, 0.27);
-      expect(find.text('9%'), findsNothing);
-      expect(tester.takeException(), isNull);
-    });
+        response.complete(
+          http.Response(jsonEncode(goalConfig(progress: 0.27)), 200),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.descendant(of: support, matching: find.text('27%')),
+          findsOneWidget,
+        );
+        expect(tester.widget<AppProgressIndicator>(progress).value, 0.27);
+        expect(find.text('9%'), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
 
   for (final active in [false, true]) {
@@ -143,31 +146,34 @@ void main() {
   });
 
   for (final spotiflac in [false, true]) {
-    testWidgets('broad search builds only visible grouped results ($spotiflac)', (
-      tester,
-    ) async {
-      await pumpSettings(
-        tester,
-        theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : AppTheme.light(),
-      );
-      await tester.enterText(find.byType(TextField), 'a');
-      await tester.pump();
-      final group = tester.widget<SliverSettingsGroup>(
-        find.byType(SliverSettingsGroup),
-      );
-      expect(group.itemCount, greaterThan(30));
-      final rows = find.descendant(
-        of: find.byType(SliverSettingsGroup),
-        matching: find.byType(SettingsItem),
-      );
-      expect(rows.evaluate().length, lessThan(group.itemCount ~/ 2));
-      await tester.drag(
-        find.byType(CustomScrollView).first,
-        const Offset(0, -600),
-      );
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-    });
+    testWidgets(
+      'broad search builds only visible grouped results ($spotiflac)',
+      (tester) async {
+        await pumpSettings(
+          tester,
+          theme: spotiflac
+              ? SpotiFLACTheme.build(Brightness.dark)
+              : AppTheme.light(),
+        );
+        await tester.enterText(find.byType(TextField), 'a');
+        await tester.pump();
+        final group = tester.widget<SliverSettingsGroup>(
+          find.byType(SliverSettingsGroup),
+        );
+        expect(group.itemCount, greaterThan(30));
+        final rows = find.descendant(
+          of: find.byType(SliverSettingsGroup),
+          matching: find.byType(SettingsItem),
+        );
+        expect(rows.evaluate().length, lessThan(group.itemCount ~/ 2));
+        await tester.drag(
+          find.byType(CustomScrollView).first,
+          const Offset(0, -600),
+        );
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
 
   testWidgets('network protocols are discoverable from Settings', (

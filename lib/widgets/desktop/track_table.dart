@@ -893,7 +893,9 @@ class _AlbumRowViewState extends State<_AlbumRowView> {
             onFocusChange: (focused) => setState(() => _focused = focused),
             child: AnimatedOpacity(
               opacity: active ? 1 : 0,
-              duration: context.isSpotiFLAC ? _spotiflacRowFade : tokens.motionFast,
+              duration: context.isSpotiFLAC
+                  ? _spotiflacRowFade
+                  : tokens.motionFast,
               curve: context.isSpotiFLAC ? Curves.easeIn : Curves.linear,
               child: Builder(
                 builder: (buttonContext) => IconButton(

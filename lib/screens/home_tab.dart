@@ -62,7 +62,8 @@ import 'package:spotiflac/screens/network_storage_screen.dart';
 import 'package:spotiflac/screens/now_playing_screen.dart';
 import 'package:spotiflac/services/library_database.dart';
 import 'package:spotiflac/services/listening_statistics.dart';
-import 'package:spotiflac/services/music_player_service.dart' show PlayableMedia;
+import 'package:spotiflac/services/music_player_service.dart'
+    show PlayableMedia;
 import 'package:spotiflac/screens/track_metadata_screen.dart';
 import 'package:spotiflac/screens/album_screen.dart';
 import 'package:spotiflac/screens/artist_screen.dart';

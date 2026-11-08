@@ -96,7 +96,9 @@ void runLyricsPerformanceTests({required bool spotiflac}) {
       active.dispose();
       fastPhrases.dispose();
     });
-    final theme = spotiflac ? SpotiFLACTheme.build(Brightness.dark) : AppTheme.dark();
+    final theme = spotiflac
+        ? SpotiFLACTheme.build(Brightness.dark)
+        : AppTheme.dark();
     await tester.pumpWidget(
       ProviderScope(
         overrides: [

@@ -723,7 +723,8 @@ class _SliderTile extends ConsumerWidget {
     final spotiflac = context.isSpotiFLAC;
     final content = Padding(
       padding: EdgeInsetsDirectional.fromSTEB(
-        tokens.rowPaddingH + (indented && !spotiflac ? 24 + tokens.rowIconGap : 0),
+        tokens.rowPaddingH +
+            (indented && !spotiflac ? 24 + tokens.rowIconGap : 0),
         tokens.rowPaddingVCompact,
         tokens.rowPaddingH,
         spotiflac ? 0 : tokens.gapXs,

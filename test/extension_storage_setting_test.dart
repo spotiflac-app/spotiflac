@@ -133,62 +133,64 @@ void main() {
   }
 
   for (final spotiflac in [false, true]) {
-    testWidgets('Linux extension settings recover without keyring ($spotiflac)', (
-      tester,
-    ) async {
-      await tester.pumpWidget(app(const ExtensionsPage(), spotiflac));
-      await settleStorage(tester);
-      final setting = find.byType(ExtensionStorageSetting);
-      expect(find.text('Use unsecured extension storage'), findsOneWidget);
-      expect(find.textContaining('anyone with access'), findsOneWidget);
-      expect(
-        tester
-            .widget<SettingsSwitchItem>(
-              find.descendant(
-                of: setting,
-                matching: find.byType(SettingsSwitchItem),
-              ),
-            )
-            .value,
-        isFalse,
-      );
-      await tester.runAsync(() async {
-        await tester.tap(
-          find.descendant(of: setting, matching: find.byType(AppSwitch)),
+    testWidgets(
+      'Linux extension settings recover without keyring ($spotiflac)',
+      (tester) async {
+        await tester.pumpWidget(app(const ExtensionsPage(), spotiflac));
+        await settleStorage(tester);
+        final setting = find.byType(ExtensionStorageSetting);
+        expect(find.text('Use unsecured extension storage'), findsOneWidget);
+        expect(find.textContaining('anyone with access'), findsOneWidget);
+        expect(
+          tester
+              .widget<SettingsSwitchItem>(
+                find.descendant(
+                  of: setting,
+                  matching: find.byType(SettingsSwitchItem),
+                ),
+              )
+              .value,
+          isFalse,
         );
-      });
-      await settleStorage(tester);
-      expect(container.read(extensionProvider).isInitialized, isTrue);
-      expect(
-        tester
-            .widget<SettingsSwitchItem>(
-              find.descendant(
-                of: setting,
-                matching: find.byType(SettingsSwitchItem),
-              ),
-            )
-            .value,
-        isTrue,
-      );
-      await tester.runAsync(() async {
-        await tester.tap(
-          find.descendant(of: setting, matching: find.byType(AppSwitch)),
+        await tester.runAsync(() async {
+          await tester.tap(
+            find.descendant(of: setting, matching: find.byType(AppSwitch)),
+          );
+        });
+        await settleStorage(tester);
+        expect(container.read(extensionProvider).isInitialized, isTrue);
+        expect(
+          tester
+              .widget<SettingsSwitchItem>(
+                find.descendant(
+                  of: setting,
+                  matching: find.byType(SettingsSwitchItem),
+                ),
+              )
+              .value,
+          isTrue,
         );
-      });
-      await settleStorage(tester);
-      expect(
-        find.textContaining('Start or unlock it before switching'),
-        findsOneWidget,
-      );
-      expect(
-        await tester.runAsync(
-          ExtensionStorageService.isUnsecuredStorageEnabled,
-        ),
-        isTrue,
-      );
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox.shrink());
-    }, variant: TargetPlatformVariant({TargetPlatform.linux}));
+        await tester.runAsync(() async {
+          await tester.tap(
+            find.descendant(of: setting, matching: find.byType(AppSwitch)),
+          );
+        });
+        await settleStorage(tester);
+        expect(
+          find.textContaining('Start or unlock it before switching'),
+          findsOneWidget,
+        );
+        expect(
+          await tester.runAsync(
+            ExtensionStorageService.isUnsecuredStorageEnabled,
+          ),
+          isTrue,
+        );
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+      variant: TargetPlatformVariant({TargetPlatform.linux}),
+    );
 
     testWidgets('Linux folder setup offers unsecured storage ($spotiflac)', (
       tester,

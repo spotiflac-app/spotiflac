@@ -102,7 +102,9 @@ Future<_Playback> _pump(
         playbackProvider.overrideWith(() => playback),
       ],
       child: MaterialApp(
-        theme: spotiflac ? SpotiFLACTheme.build(Brightness.light) : AppTheme.light(),
+        theme: spotiflac
+            ? SpotiFLACTheme.build(Brightness.light)
+            : AppTheme.light(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: home ?? const LibraryDirectoryScreen(),

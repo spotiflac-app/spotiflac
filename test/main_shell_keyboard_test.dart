@@ -135,8 +135,9 @@ void main() {
     return locale;
   }
 
-  bool collapsed(WidgetTester tester) =>
-      tester.widget<SpotiFLACBottomBar>(find.byType(SpotiFLACBottomBar)).collapsed;
+  bool collapsed(WidgetTester tester) => tester
+      .widget<SpotiFLACBottomBar>(find.byType(SpotiFLACBottomBar))
+      .collapsed;
 
   testWidgets(
     'Material Home restores its viewport and navigation after the player',
@@ -149,7 +150,12 @@ void main() {
 
       final media = StreamController<MediaItem?>();
       addTearDown(media.close);
-      await pumpShell(tester, spotiflac: false, search: true, media: media.stream);
+      await pumpShell(
+        tester,
+        spotiflac: false,
+        search: true,
+        media: media.stream,
+      );
       tester.view.padding = const FakeViewPadding(top: 24, bottom: 24);
       tester.view.viewPadding = const FakeViewPadding(top: 24, bottom: 24);
       media.add(
@@ -207,19 +213,20 @@ void main() {
   );
 
   for (final spotiflac in [false, true]) {
-    testWidgets('external mode hides Home playback and mini player ($spotiflac)', (
-      tester,
-    ) async {
-      await pumpShell(tester, spotiflac: spotiflac, externalPlayer: true);
-      await tester.pump(const Duration(milliseconds: 400));
-      expect(find.text('Continue Listening'), findsNothing);
-      expect(find.text('Old internal song'), findsNothing);
-      expect(find.text('Saved song'), findsNothing);
-      for (final player in find.byType(MiniPlayer).evaluate()) {
-        expect(tester.getSize(find.byWidget(player.widget)).height, 0);
-      }
-      expect(tester.takeException(), isNull);
-    });
+    testWidgets(
+      'external mode hides Home playback and mini player ($spotiflac)',
+      (tester) async {
+        await pumpShell(tester, spotiflac: spotiflac, externalPlayer: true);
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(find.text('Continue Listening'), findsNothing);
+        expect(find.text('Old internal song'), findsNothing);
+        expect(find.text('Saved song'), findsNothing);
+        for (final player in find.byType(MiniPlayer).evaluate()) {
+          expect(tester.getSize(find.byWidget(player.widget)).height, 0);
+        }
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
 
   void scrollHome(WidgetTester tester, {required double pixels}) {

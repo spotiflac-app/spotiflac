@@ -161,7 +161,9 @@ void main() {
           listeningRewindProvider.overrideWith((ref, period) async => rewind),
         ],
         child: MaterialApp(
-          theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : ThemeData(),
+          theme: spotiflac
+              ? SpotiFLACTheme.build(Brightness.dark)
+              : ThemeData(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           builder: (context, child) => ListenableBuilder(
@@ -197,56 +199,58 @@ void main() {
       .firstWhere((widget) => widget.heightFactor == 1)
       .widthFactor!;
 
-  testWidgets('SpotiFLAC blurs each slide cover once while it zooms and swipes', (
-    tester,
-  ) async {
-    await open(tester, spotiflac: true);
-    var frames = 0;
-    var liveFrames = 0;
-    final images = Set<ui.Image>.identity();
-    Future<void> frame([
-      Duration duration = const Duration(milliseconds: 16),
-    ]) async {
-      await tester.pump(duration);
-      frames++;
-      if (tester.layers.whereType<ImageFilterLayer>().isNotEmpty) liveFrames++;
-      for (final blur in blurs(tester)) {
-        if (blur.debugImage case final image?) images.add(image);
+  testWidgets(
+    'SpotiFLAC blurs each slide cover once while it zooms and swipes',
+    (tester) async {
+      await open(tester, spotiflac: true);
+      var frames = 0;
+      var liveFrames = 0;
+      final images = Set<ui.Image>.identity();
+      Future<void> frame([
+        Duration duration = const Duration(milliseconds: 16),
+      ]) async {
+        await tester.pump(duration);
+        frames++;
+        if (tester.layers.whereType<ImageFilterLayer>().isNotEmpty)
+          liveFrames++;
+        for (final blur in blurs(tester)) {
+          if (blur.debugImage case final image?) images.add(image);
+        }
       }
-    }
 
-    final story = tester.getRect(find.byType(PageView));
-    // Two seconds on the first slide, then tap to the next slide (same
-    // cover) and to the top artist (another cover), with the zoom running.
-    for (var i = 0; i < 120; i++) {
-      await frame();
-    }
-    expect(images, hasLength(1));
-    expect(blurs(tester).single.debugImage, same(images.single));
-    for (var slide = 0; slide < 2; slide++) {
-      await tester.tapAt(Offset(story.right - 40, story.center.dy));
+      final story = tester.getRect(find.byType(PageView));
+      // Two seconds on the first slide, then tap to the next slide (same
+      // cover) and to the top artist (another cover), with the zoom running.
+      for (var i = 0; i < 120; i++) {
+        await frame();
+      }
+      expect(images, hasLength(1));
+      expect(blurs(tester).single.debugImage, same(images.single));
+      for (var slide = 0; slide < 2; slide++) {
+        await tester.tapAt(Offset(story.right - 40, story.center.dy));
+        for (var i = 0; i < 40; i++) {
+          await frame();
+        }
+      }
+      expect(find.text('Your top artist'), findsOneWidget);
+      // A slow manual swipe toward the next slide holds both covers' images.
+      final gesture = await tester.startGesture(story.center);
+      for (var i = 0; i < 30; i++) {
+        await gesture.moveBy(const Offset(-8, 0));
+        await frame();
+      }
+      await gesture.up();
       for (var i = 0; i < 40; i++) {
         await frame();
       }
-    }
-    expect(find.text('Your top artist'), findsOneWidget);
-    // A slow manual swipe toward the next slide holds both covers' images.
-    final gesture = await tester.startGesture(story.center);
-    for (var i = 0; i < 30; i++) {
-      await gesture.moveBy(const Offset(-8, 0));
-      await frame();
-    }
-    await gesture.up();
-    for (var i = 0; i < 40; i++) {
-      await frame();
-    }
 
-    // The old backdrop blurred live on every frame (270 of 270).
-    expect(frames, 270);
-    expect(liveFrames, lessThanOrEqualTo(6));
-    expect(images, hasLength(2));
-    expect(tester.takeException(), isNull);
-  });
+      // The old backdrop blurred live on every frame (270 of 270).
+      expect(frames, 270);
+      expect(liveFrames, lessThanOrEqualTo(6));
+      expect(images, hasLength(2));
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   for (final spotiflac in [false, true]) {
     testWidgets(

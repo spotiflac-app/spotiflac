@@ -69,7 +69,9 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         child: MaterialApp(
-          theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : AppTheme.light(),
+          theme: spotiflac
+              ? SpotiFLACTheme.build(Brightness.dark)
+              : AppTheme.light(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: Align(
@@ -201,65 +203,67 @@ void main() {
         );
       }
 
-      testWidgets('artist loading fits scaled text at $width, SpotiFLAC=$spotiflac', (
-        tester,
-      ) async {
+      testWidgets(
+        'artist loading fits scaled text at $width, SpotiFLAC=$spotiflac',
+        (tester) async {
+          await mount(
+            tester,
+            spotiflac: spotiflac,
+            width: width,
+            textScale: 2,
+            child: const ArtistScreenSkeleton(showCoverHeader: false),
+          );
+          final context = tester.element(find.byType(ArtistScreenSkeleton));
+          final side = artistAlbumTileSize(context);
+          final covers = find.byWidgetPredicate(
+            (widget) =>
+                widget is SkeletonBox &&
+                widget.width == side &&
+                widget.height == side,
+          );
+          expect(covers, findsWidgets);
+          expect(tester.getSize(covers.first), Size.square(side));
+          expect(tester.takeException(), isNull);
+          await tester.pumpWidget(const SizedBox.shrink());
+        },
+      );
+    }
+
+    testWidgets(
+      'collection loading keeps one desktop header, SpotiFLAC=$spotiflac',
+      (tester) async {
+        final pending = _PendingMetadata();
+        RustFfiBackend.debugShared = RustFfiBackend(
+          openTransport: () => pending,
+          loadConfig: () async => const DesktopBackendConfig(
+            appSupportDir: '/support',
+            documentsDir: '/documents',
+            tempDir: '/tmp',
+          ),
+        );
+        await PlatformBridge.clearTrackCache();
         await mount(
           tester,
           spotiflac: spotiflac,
-          width: width,
-          textScale: 2,
-          child: const ArtistScreenSkeleton(showCoverHeader: false),
+          width: 900,
+          child: ExtensionAlbumScreen(
+            extensionId: 'example-metadata',
+            albumId: 'loading-$spotiflac',
+            albumName: 'Album',
+          ),
         );
-        final context = tester.element(find.byType(ArtistScreenSkeleton));
-        final side = artistAlbumTileSize(context);
-        final covers = find.byWidgetPredicate(
-          (widget) =>
-              widget is SkeletonBox &&
-              widget.width == side &&
-              widget.height == side,
+        expect(pending.metadataId, isNotNull);
+        expect(find.text('Album'), findsWidgets);
+        expect(
+          find.byKey(const ValueKey('track-table-skeleton-row-0')),
+          findsOneWidget,
         );
-        expect(covers, findsWidgets);
-        expect(tester.getSize(covers.first), Size.square(side));
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox.shrink());
-      });
-    }
-
-    testWidgets('collection loading keeps one desktop header, SpotiFLAC=$spotiflac', (
-      tester,
-    ) async {
-      final pending = _PendingMetadata();
-      RustFfiBackend.debugShared = RustFfiBackend(
-        openTransport: () => pending,
-        loadConfig: () async => const DesktopBackendConfig(
-          appSupportDir: '/support',
-          documentsDir: '/documents',
-          tempDir: '/tmp',
-        ),
-      );
-      await PlatformBridge.clearTrackCache();
-      await mount(
-        tester,
-        spotiflac: spotiflac,
-        width: 900,
-        child: ExtensionAlbumScreen(
-          extensionId: 'example-metadata',
-          albumId: 'loading-$spotiflac',
-          albumName: 'Album',
-        ),
-      );
-      expect(pending.metadataId, isNotNull);
-      expect(find.text('Album'), findsWidgets);
-      expect(
-        find.byKey(const ValueKey('track-table-skeleton-row-0')),
-        findsOneWidget,
-      );
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox.shrink());
-      pending.complete();
-      await tester.pump();
-      await tester.pump(const Duration(seconds: 1));
-    });
+        pending.complete();
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+      },
+    );
   }
 }

@@ -49,7 +49,8 @@ class LyricsSettingsPage extends ConsumerWidget {
               children: [
                 const LyricsSizeSetting(),
                 // Lyrics blur only where the player draws it.
-                if (context.isSpotiFLAC && ref.watch(spotiflacLiquidGlassProvider))
+                if (context.isSpotiFLAC &&
+                    ref.watch(spotiflacLiquidGlassProvider))
                   const LyricsBlurSetting(),
                 const LyricsOffsetSetting(),
                 SettingsSwitchItem(

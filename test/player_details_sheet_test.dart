@@ -111,7 +111,9 @@ void main() {
     );
   }
 
-  testWidgets('SpotiFLAC decodes the cover at its thumbnail size', (tester) async {
+  testWidgets('SpotiFLAC decodes the cover at its thumbnail size', (
+    tester,
+  ) async {
     await open(
       tester,
       spotiflac: true,

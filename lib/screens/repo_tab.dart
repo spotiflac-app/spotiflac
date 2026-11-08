@@ -1060,7 +1060,9 @@ class _ExtensionItem extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    context.isSpotiFLAC ? CupertinoIcons.check_mark : Icons.check,
+                    context.isSpotiFLAC
+                        ? CupertinoIcons.check_mark
+                        : Icons.check,
                     size: 16,
                     color: colorScheme.outline,
                   ),
@@ -1079,7 +1081,9 @@ class _ExtensionItem extends StatelessWidget {
                 backgroundColor: context.isSpotiFLAC
                     ? colorScheme.primary.withValues(alpha: 0.12)
                     : null,
-                foregroundColor: context.isSpotiFLAC ? colorScheme.primary : null,
+                foregroundColor: context.isSpotiFLAC
+                    ? colorScheme.primary
+                    : null,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 minimumSize: Size(0, context.tokens.minTouchTarget),
               ),

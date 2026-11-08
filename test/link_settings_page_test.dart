@@ -218,31 +218,36 @@ void main() {
     });
 
     for (final spotiflac in [false, true]) {
-      testWidgets('${spotiflac ? 'SpotiFLAC' : 'Material'}: dialog checks input', (
-        tester,
-      ) async {
-        final results = <Object?>[];
-        await tester.pumpWidget(
-          _dialogHost(const LinkManualAddDialog(), results, spotiflac: spotiflac),
-        );
-        await tester.tap(find.text('open'));
-        await _settle(tester);
-        await tester.enterText(
-          find.byKey(LinkManualAddDialog.hostKey),
-          'my computer',
-        );
-        await tester.tap(find.text(_l10n.linkContinue));
-        await tester.pump();
-        expect(find.text(_l10n.linkErrorInvalidAddress), findsOneWidget);
+      testWidgets(
+        '${spotiflac ? 'SpotiFLAC' : 'Material'}: dialog checks input',
+        (tester) async {
+          final results = <Object?>[];
+          await tester.pumpWidget(
+            _dialogHost(
+              const LinkManualAddDialog(),
+              results,
+              spotiflac: spotiflac,
+            ),
+          );
+          await tester.tap(find.text('open'));
+          await _settle(tester);
+          await tester.enterText(
+            find.byKey(LinkManualAddDialog.hostKey),
+            'my computer',
+          );
+          await tester.tap(find.text(_l10n.linkContinue));
+          await tester.pump();
+          expect(find.text(_l10n.linkErrorInvalidAddress), findsOneWidget);
 
-        await tester.enterText(
-          find.byKey(LinkManualAddDialog.hostKey),
-          '10.0.0.5:5000',
-        );
-        await tester.tap(find.text(_l10n.linkContinue));
-        await _settle(tester);
-        expect(results, [(host: '10.0.0.5', port: 5000)]);
-      });
+          await tester.enterText(
+            find.byKey(LinkManualAddDialog.hostKey),
+            '10.0.0.5:5000',
+          );
+          await tester.tap(find.text(_l10n.linkContinue));
+          await _settle(tester);
+          expect(results, [(host: '10.0.0.5', port: 5000)]);
+        },
+      );
     }
   });
 

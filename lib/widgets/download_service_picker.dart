@@ -255,7 +255,9 @@ class _DownloadServicePickerState extends ConsumerState<DownloadServicePicker> {
                               height: 0.5,
                               indent: 52,
                               endIndent: 16,
-                              color: SpotiFLACTheme.metadataDividerColor(context),
+                              color: SpotiFLACTheme.metadataDividerColor(
+                                context,
+                              ),
                             ),
                           qualityRows[i],
                         ],

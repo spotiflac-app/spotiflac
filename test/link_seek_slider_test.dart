@@ -105,7 +105,9 @@ void main() {
         expect(
           spotiflac
               ? tester
-                    .widget<SpotiFLACPlayerSlider>(find.byType(SpotiFLACPlayerSlider))
+                    .widget<SpotiFLACPlayerSlider>(
+                      find.byType(SpotiFLACPlayerSlider),
+                    )
                     .value
               : tester.widget<Slider>(find.byType(Slider)).value,
           38000,

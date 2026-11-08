@@ -126,7 +126,9 @@ void main() {
         await tester.pumpWidget(
           ProviderScope(
             child: MaterialApp(
-              theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : ThemeData(),
+              theme: spotiflac
+                  ? SpotiFLACTheme.build(Brightness.dark)
+                  : ThemeData(),
               localizationsDelegates: AppLocalizations.localizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
               home: Builder(
@@ -257,7 +259,9 @@ void main() {
         await tester.pumpWidget(
           ProviderScope(
             child: MaterialApp(
-              theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : ThemeData(),
+              theme: spotiflac
+                  ? SpotiFLACTheme.build(Brightness.dark)
+                  : ThemeData(),
               localizationsDelegates: AppLocalizations.localizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
               home: Builder(
@@ -416,58 +420,64 @@ void main() {
   });
 
   for (final spotiflac in [false, true]) {
-    testWidgets('USB changes refresh an open audio sheet (SpotiFLAC=$spotiflac)', (
-      tester,
-    ) async {
-      var device = 'First DAC';
-      var reads = 0;
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(_route, (call) async {
-            reads++;
-            return {
-              'platform': 'android',
-              'device': {'type': 'usb', 'name': device},
-            };
-          });
-      final metadata = PlayerMetadataController();
-      addTearDown(metadata.dispose);
-      await metadata.load(
-        const MediaItem(
-          id: 'track',
-          title: 'Track',
-          extras: {
-            'source': 'https://example.test/track.flac',
-            'format': 'flac',
-          },
-        ),
-      );
-      await tester.pumpWidget(
-        ProviderScope(
-          child: MaterialApp(
-            theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : ThemeData(),
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            home: Builder(
-              builder: (context) => TextButton(
-                onPressed: () =>
-                    showAudioInfoSheet(context, metadata: metadata),
-                child: const Text('open'),
+    testWidgets(
+      'USB changes refresh an open audio sheet (SpotiFLAC=$spotiflac)',
+      (tester) async {
+        var device = 'First DAC';
+        var reads = 0;
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(_route, (call) async {
+              reads++;
+              return {
+                'platform': 'android',
+                'device': {'type': 'usb', 'name': device},
+              };
+            });
+        final metadata = PlayerMetadataController();
+        addTearDown(metadata.dispose);
+        await metadata.load(
+          const MediaItem(
+            id: 'track',
+            title: 'Track',
+            extras: {
+              'source': 'https://example.test/track.flac',
+              'format': 'flac',
+            },
+          ),
+        );
+        await tester.pumpWidget(
+          ProviderScope(
+            child: MaterialApp(
+              theme: spotiflac
+                  ? SpotiFLACTheme.build(Brightness.dark)
+                  : ThemeData(),
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: Builder(
+                builder: (context) => TextButton(
+                  onPressed: () =>
+                      showAudioInfoSheet(context, metadata: metadata),
+                  child: const Text('open'),
+                ),
               ),
             ),
           ),
-        ),
-      );
-      await tester.tap(find.text('open'));
-      await tester.pumpAndSettle();
-      final before = reads;
-      device = 'Second DAC';
-      usbAudioStatus.value = const UsbAudioStatus(reason: 'route_changed');
-      await tester.pumpAndSettle();
-      expect(reads, greaterThan(before));
-      await tester.scrollUntilVisible(find.text('USB audio · Second DAC'), 200);
-      expect(find.text('USB audio · First DAC'), findsNothing);
-      await tester.pumpWidget(const SizedBox());
-    });
+        );
+        await tester.tap(find.text('open'));
+        await tester.pumpAndSettle();
+        final before = reads;
+        device = 'Second DAC';
+        usbAudioStatus.value = const UsbAudioStatus(reason: 'route_changed');
+        await tester.pumpAndSettle();
+        expect(reads, greaterThan(before));
+        await tester.scrollUntilVisible(
+          find.text('USB audio · Second DAC'),
+          200,
+        );
+        expect(find.text('USB audio · First DAC'), findsNothing);
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
   }
 
   testWidgets('a song from a paired device shows where it plays from', (
@@ -542,7 +552,9 @@ void main() {
         await tester.pumpWidget(
           ProviderScope(
             child: MaterialApp(
-              theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : ThemeData(),
+              theme: spotiflac
+                  ? SpotiFLACTheme.build(Brightness.dark)
+                  : ThemeData(),
               localizationsDelegates: AppLocalizations.localizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
               home: Builder(

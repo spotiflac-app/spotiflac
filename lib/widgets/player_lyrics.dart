@@ -37,7 +37,8 @@ const _spotiflacLyricFontSize = 34.0;
 /// a phone. Null keeps the text theme's size (phones and tablets).
 double? get _materialLyricFontSize => isDesktopPlatform ? 32 : null;
 double get _materialBackgroundLyricFontSize => isDesktopPlatform ? 24 : 18;
-const spotiflacLyricsContentInset = 28.0 + SpotiFLACPlayerSlider.horizontalInset;
+const spotiflacLyricsContentInset =
+    28.0 + SpotiFLACPlayerSlider.horizontalInset;
 
 /// How much of the lyrics area's bottom the player's controls cover. The
 /// SpotiFLAC phone player lays lyrics out under its controls so they can grow

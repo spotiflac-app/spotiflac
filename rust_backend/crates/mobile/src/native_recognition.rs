@@ -1,12 +1,12 @@
 //! Song recognition for the microphone screen. Flutter sends the audio
 //! captured so far as 16 kHz mono s16le and gets back a match, no match, or
 //! the kind of failure; only a fingerprint leaves the device.
+use serde_json::{Value, json};
 use spotiflac_network::NetworkService;
 use spotiflac_providers::recognition::{
     NetworkTransport, Prepared, RecognitionError, RecognitionLocale, RecognitionOutcome,
     Recognizer, prepare,
 };
-use serde_json::{Value, json};
 use std::sync::{Arc, OnceLock};
 
 /// More than the screen ever captures, with room for a late chunk.

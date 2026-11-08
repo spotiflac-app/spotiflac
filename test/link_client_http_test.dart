@@ -35,7 +35,9 @@ void main() {
           '${directory.path}/song.flac',
         ).writeAsBytes([1]);
         final client = _OpeningClient();
-        final uri = Uri.parse('https://example.test/spotiflac/v1/files/song.flac');
+        final uri = Uri.parse(
+          'https://example.test/spotiflac/v1/files/song.flac',
+        );
         const timeout = Duration(milliseconds: 10);
         final sending = upload
             ? linkHttpUpload(client, uri, file, timeout: timeout)

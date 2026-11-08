@@ -46,7 +46,9 @@ void main() {
           ),
         ],
         child: MaterialApp(
-          theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : ThemeData(),
+          theme: spotiflac
+              ? SpotiFLACTheme.build(Brightness.dark)
+              : ThemeData(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
@@ -104,7 +106,9 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           child: MaterialApp(
-            theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : ThemeData(),
+            theme: spotiflac
+                ? SpotiFLACTheme.build(Brightness.dark)
+                : ThemeData(),
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             home: Builder(

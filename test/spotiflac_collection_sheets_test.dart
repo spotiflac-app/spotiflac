@@ -321,54 +321,55 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('picker retains selections after failure (SpotiFLAC: $spotiflac)', (
-      tester,
-    ) async {
-      final firstAddition = Completer<void>()..complete();
-      final secondAddition = Completer<void>();
-      final collections = _Collections()
-        .._summaries = [_playlist('Road trip'), _playlist('Evening music')]
-        ..pendingAdditions.addAll([firstAddition, secondAddition]);
-      final observer = _PopObserver();
-      await tester.pumpWidget(
-        _app(
-          Consumer(
-            builder: (context, ref, _) => TextButton(
-              onPressed: () =>
-                  showAddTracksToPlaylistSheet(context, ref, [_track]),
-              child: const Text('Open'),
+    testWidgets(
+      'picker retains selections after failure (SpotiFLAC: $spotiflac)',
+      (tester) async {
+        final firstAddition = Completer<void>()..complete();
+        final secondAddition = Completer<void>();
+        final collections = _Collections()
+          .._summaries = [_playlist('Road trip'), _playlist('Evening music')]
+          ..pendingAdditions.addAll([firstAddition, secondAddition]);
+        final observer = _PopObserver();
+        await tester.pumpWidget(
+          _app(
+            Consumer(
+              builder: (context, ref, _) => TextButton(
+                onPressed: () =>
+                    showAddTracksToPlaylistSheet(context, ref, [_track]),
+                child: const Text('Open'),
+              ),
             ),
+            collections,
+            brightness: Brightness.light,
+            spotiflac: spotiflac,
+            navigatorObservers: [observer],
           ),
-          collections,
-          brightness: Brightness.light,
-          spotiflac: spotiflac,
-          navigatorObservers: [observer],
-        ),
-      );
-      await tester.tap(find.text('Open'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Road trip'));
-      await tester.tap(find.text('Evening music'));
-      await tester.pump();
-      await tester.tap(find.text('Done'));
-      await tester.pump();
-      expect(collections.additions, ['Road trip', 'Evening music']);
-      secondAddition.completeError(StateError('write failed'));
-      await tester.pump();
-      expect(observer.pops, 0);
-      expect(_doneAction(tester, spotiflac), isNotNull);
+        );
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Road trip'));
+        await tester.tap(find.text('Evening music'));
+        await tester.pump();
+        await tester.tap(find.text('Done'));
+        await tester.pump();
+        expect(collections.additions, ['Road trip', 'Evening music']);
+        secondAddition.completeError(StateError('write failed'));
+        await tester.pump();
+        expect(observer.pops, 0);
+        expect(_doneAction(tester, spotiflac), isNotNull);
 
-      // Retrying keeps the failed selection and skips the persisted playlist.
-      await tester.tap(find.text('Done'));
-      await tester.pumpAndSettle();
-      expect(collections.additions, [
-        'Road trip',
-        'Evening music',
-        'Evening music',
-      ]);
-      expect(observer.pops, 1);
-      expect(tester.takeException(), isNull);
-    });
+        // Retrying keeps the failed selection and skips the persisted playlist.
+        await tester.tap(find.text('Done'));
+        await tester.pumpAndSettle();
+        expect(collections.additions, [
+          'Road trip',
+          'Evening music',
+          'Evening music',
+        ]);
+        expect(observer.pops, 1);
+        expect(tester.takeException(), isNull);
+      },
+    );
 
     testWidgets('picker adds only new selections (SpotiFLAC: $spotiflac)', (
       tester,

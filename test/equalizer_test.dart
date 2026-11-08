@@ -106,7 +106,9 @@ void main() {
         final bandPicker = tester.widget(picker);
         Widget bass() => spotiflac
             ? tester
-                  .widgetList<SpotiFLACLevelSlider>(find.byType(SpotiFLACLevelSlider))
+                  .widgetList<SpotiFLACLevelSlider>(
+                    find.byType(SpotiFLACLevelSlider),
+                  )
                   .firstWhere((slider) => slider.semanticLabel == 'Bass')
             : tester
                   .widgetList<AppSlider>(find.byType(AppSlider))
@@ -114,7 +116,9 @@ void main() {
         final bassSlider = bass();
         final gainSlider = spotiflac
             ? tester
-                  .widgetList<SpotiFLACLevelSlider>(find.byType(SpotiFLACLevelSlider))
+                  .widgetList<SpotiFLACLevelSlider>(
+                    find.byType(SpotiFLACLevelSlider),
+                  )
                   .first
             : tester.widgetList<AppSlider>(find.byType(AppSlider)).first;
         for (var i = 1; i <= 20; i++) {
@@ -171,7 +175,9 @@ void main() {
         }
         final bandValue = spotiflac
             ? tester
-                  .widgetList<SpotiFLACLevelSlider>(find.byType(SpotiFLACLevelSlider))
+                  .widgetList<SpotiFLACLevelSlider>(
+                    find.byType(SpotiFLACLevelSlider),
+                  )
                   .first
                   .value
             : tester.widgetList<AppSlider>(find.byType(AppSlider)).first.value;
@@ -395,7 +401,9 @@ void main() {
         // The first slider on the page is the lowest band's fader.
         final onChanged = spotiflac
             ? tester
-                  .widgetList<SpotiFLACLevelSlider>(find.byType(SpotiFLACLevelSlider))
+                  .widgetList<SpotiFLACLevelSlider>(
+                    find.byType(SpotiFLACLevelSlider),
+                  )
                   .first
                   .onChanged
             : tester

@@ -839,7 +839,9 @@ class _LibraryDirectoryViewState extends ConsumerState<LibraryDirectoryView>
           mediaItemPlaybackUiProvider(_playbackKey(item)),
         );
         return TrackCard(
-          style: context.isSpotiFLAC ? TrackCardStyle.flat : TrackCardStyle.filled,
+          style: context.isSpotiFLAC
+              ? TrackCardStyle.flat
+              : TrackCardStyle.filled,
           leading: _SongArtwork(item: item, size: context.tokens.coverList),
           leadingArtwork: true,
           title: item.trackName,

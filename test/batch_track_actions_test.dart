@@ -33,7 +33,9 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           child: MaterialApp(
-            theme: spotiflac ? SpotiFLACTheme.build(Brightness.light) : ThemeData(),
+            theme: spotiflac
+                ? SpotiFLACTheme.build(Brightness.light)
+                : ThemeData(),
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             home: _BatchConvertHarness(items: items),

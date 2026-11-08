@@ -155,49 +155,55 @@ void main() {
       },
     );
 
-    testWidgets('result is readable above an open metadata sheet ($spotiflac)', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        ProviderScope(
-          child: MaterialApp(
-            theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : ThemeData(),
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            home: Scaffold(
-              body: Builder(
-                builder: (context) => TextButton(
-                  onPressed: () => showAppBottomSheet<void>(
-                    context: context,
-                    builder: (sheetContext) => SizedBox(
-                      height: 400,
-                      child: TextButton(
-                        onPressed: () => showReEnrichResultDialog(
-                          sheetContext,
-                          message: 'Metadata lookup failed',
+    testWidgets(
+      'result is readable above an open metadata sheet ($spotiflac)',
+      (tester) async {
+        await tester.pumpWidget(
+          ProviderScope(
+            child: MaterialApp(
+              theme: spotiflac
+                  ? SpotiFLACTheme.build(Brightness.dark)
+                  : ThemeData(),
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: Scaffold(
+                body: Builder(
+                  builder: (context) => TextButton(
+                    onPressed: () => showAppBottomSheet<void>(
+                      context: context,
+                      builder: (sheetContext) => SizedBox(
+                        height: 400,
+                        child: TextButton(
+                          onPressed: () => showReEnrichResultDialog(
+                            sheetContext,
+                            message: 'Metadata lookup failed',
+                          ),
+                          child: const Text('Look up metadata'),
                         ),
-                        child: const Text('Look up metadata'),
                       ),
                     ),
+                    child: const Text('Open metadata'),
                   ),
-                  child: const Text('Open metadata'),
                 ),
               ),
             ),
           ),
-        ),
-      );
-      await tester.tap(find.text('Open metadata'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Look up metadata'));
-      await tester.pumpAndSettle();
-      expect(find.text('Metadata lookup failed').hitTestable(), findsOneWidget);
-      expect(find.text('Look up metadata').hitTestable(), findsNothing);
-      await tester.tap(find.text('OK'));
-      await tester.pumpAndSettle();
-      expect(find.text('Look up metadata').hitTestable(), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
+        );
+        await tester.tap(find.text('Open metadata'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Look up metadata'));
+        await tester.pumpAndSettle();
+        expect(
+          find.text('Metadata lookup failed').hitTestable(),
+          findsOneWidget,
+        );
+        expect(find.text('Look up metadata').hitTestable(), findsNothing);
+        await tester.tap(find.text('OK'));
+        await tester.pumpAndSettle();
+        expect(find.text('Look up metadata').hitTestable(), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
 
     for (final fails in [false, true]) {
       testWidgets(

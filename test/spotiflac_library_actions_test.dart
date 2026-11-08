@@ -78,92 +78,97 @@ void main() {
     FlutterSecureStorage.setMockInitialValues({});
   });
 
-  testWidgets('SpotiFLAC selection actions remain accessible on narrow screens', (
-    tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(320, 780));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    var selectedAll = false;
-    var closed = false;
-    var deleted = false;
-    var converted = false;
-    await tester.pumpWidget(
-      _app(
-        Builder(
-          builder: (context) => Align(
-            alignment: Alignment.bottomCenter,
-            child: SelectionBottomBar(
-              selectedCount: 1,
-              allSelected: false,
-              onClose: () => closed = true,
-              onToggleSelectAll: () => selectedAll = true,
-              bottomPadding: 0,
-              children: [
-                SelectionActionButton(
-                  icon: Icons.swap_horiz,
-                  label: 'Convert 1 track',
-                  onPressed: () => converted = true,
-                  colorScheme: Theme.of(context).colorScheme,
-                ),
-                const SizedBox(height: 8),
-                DestructiveSelectionButton(
-                  count: 1,
-                  colorScheme: Theme.of(context).colorScheme,
-                  onPressed: () => deleted = true,
-                ),
-              ],
+  testWidgets(
+    'SpotiFLAC selection actions remain accessible on narrow screens',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(320, 780));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      var selectedAll = false;
+      var closed = false;
+      var deleted = false;
+      var converted = false;
+      await tester.pumpWidget(
+        _app(
+          Builder(
+            builder: (context) => Align(
+              alignment: Alignment.bottomCenter,
+              child: SelectionBottomBar(
+                selectedCount: 1,
+                allSelected: false,
+                onClose: () => closed = true,
+                onToggleSelectAll: () => selectedAll = true,
+                bottomPadding: 0,
+                children: [
+                  SelectionActionButton(
+                    icon: Icons.swap_horiz,
+                    label: 'Convert 1 track',
+                    onPressed: () => converted = true,
+                    colorScheme: Theme.of(context).colorScheme,
+                  ),
+                  const SizedBox(height: 8),
+                  DestructiveSelectionButton(
+                    count: 1,
+                    colorScheme: Theme.of(context).colorScheme,
+                    onPressed: () => deleted = true,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await _tapVisible(tester, find.text('Select All'));
-    await _tapVisible(tester, find.text('Convert 1 track'));
-    await _tapVisible(tester, find.byIcon(CupertinoIcons.trash));
-    await _tapVisible(tester, find.byIcon(CupertinoIcons.xmark));
-    expect((selectedAll, converted, deleted, closed), (true, true, true, true));
-    expect(tester.takeException(), isNull);
-  });
-
-  for (final brightness in Brightness.values) {
-    testWidgets('SpotiFLAC conversion preserves selected options ($brightness)', (
-      tester,
-    ) async {
-      await tester.binding.setSurfaceSize(const Size(390, 844));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-      (String, String, bool)? result;
-      await tester.pumpWidget(
-        _app(
-          BatchConvertSheet(
-            formats: const [
-              'ALAC',
-              'FLAC',
-              'WAV',
-              'AIFF',
-              'AAC',
-              'MP3',
-              'Opus',
-            ],
-            title: 'Batch Convert',
-            confirmLabel: 'Convert tracks',
-            sourceBitDepth: 24,
-            sourceSampleRate: 48000,
-            onConvert: (format, bitrate, quality, processing, keepOriginal) {
-              result = (format, bitrate, keepOriginal);
-            },
-          ),
-          brightness: brightness,
-        ),
       );
       await tester.pumpAndSettle();
-      await _tapVisible(tester, find.text('Opus'));
-      await _tapVisible(tester, find.text('160k'));
-      await _tapVisible(tester, find.byType(AppSwitch));
-      await _tapVisible(tester, find.text('Convert tracks'));
-      expect(result, ('Opus', '160k', true));
+      await _tapVisible(tester, find.text('Select All'));
+      await _tapVisible(tester, find.text('Convert 1 track'));
+      await _tapVisible(tester, find.byIcon(CupertinoIcons.trash));
+      await _tapVisible(tester, find.byIcon(CupertinoIcons.xmark));
+      expect(
+        (selectedAll, converted, deleted, closed),
+        (true, true, true, true),
+      );
       expect(tester.takeException(), isNull);
-    });
+    },
+  );
+
+  for (final brightness in Brightness.values) {
+    testWidgets(
+      'SpotiFLAC conversion preserves selected options ($brightness)',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(390, 844));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        (String, String, bool)? result;
+        await tester.pumpWidget(
+          _app(
+            BatchConvertSheet(
+              formats: const [
+                'ALAC',
+                'FLAC',
+                'WAV',
+                'AIFF',
+                'AAC',
+                'MP3',
+                'Opus',
+              ],
+              title: 'Batch Convert',
+              confirmLabel: 'Convert tracks',
+              sourceBitDepth: 24,
+              sourceSampleRate: 48000,
+              onConvert: (format, bitrate, quality, processing, keepOriginal) {
+                result = (format, bitrate, keepOriginal);
+              },
+            ),
+            brightness: brightness,
+          ),
+        );
+        await tester.pumpAndSettle();
+        await _tapVisible(tester, find.text('Opus'));
+        await _tapVisible(tester, find.text('160k'));
+        await _tapVisible(tester, find.byType(AppSwitch));
+        await _tapVisible(tester, find.text('Convert tracks'));
+        expect(result, ('Opus', '160k', true));
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
 
   testWidgets(
@@ -298,73 +303,74 @@ void main() {
     });
   }
 
-  testWidgets('SpotiFLAC metadata editor keeps edited text and Save available', (
-    tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(390, 844));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    _mockMetadataFile(tester);
-    await tester.pumpWidget(
-      _app(
-        TrackMetadataScreen(
-          item: DownloadHistoryItem(
-            id: 'edit-track',
-            trackName: 'Track',
-            artistName: 'Artist',
-            albumName: 'Album',
-            filePath: 'content://library/document/edit-track.flac',
-            service: 'provider-a',
-            downloadedAt: DateTime(2026),
+  testWidgets(
+    'SpotiFLAC metadata editor keeps edited text and Save available',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      _mockMetadataFile(tester);
+      await tester.pumpWidget(
+        _app(
+          TrackMetadataScreen(
+            item: DownloadHistoryItem(
+              id: 'edit-track',
+              trackName: 'Track',
+              artistName: 'Artist',
+              albumName: 'Album',
+              filePath: 'content://library/document/edit-track.flac',
+              service: 'provider-a',
+              downloadedAt: DateTime(2026),
+            ),
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await _tapVisible(tester, find.byIcon(CupertinoIcons.ellipsis));
-    await tester.tap(find.text('Edit Metadata'));
-    await tester.pump(const Duration(milliseconds: 400));
-    // The editor extracts its preview through real temporary-file I/O.
-    await tester.runAsync(() async {
-      for (var attempt = 0; attempt < 100; attempt++) {
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-        await tester.pump();
-        if (find.byType(LinearProgressIndicator).evaluate().isEmpty) break;
-      }
-    });
-    expect(find.byType(LinearProgressIndicator), findsNothing);
-    await tester.pumpAndSettle();
-    final title = find.byWidgetPredicate(
-      (widget) =>
-          widget is CupertinoTextField && widget.controller?.text == 'Track',
-    );
-    await tester.ensureVisible(title);
-    await tester.enterText(title, 'Edited track');
-    FocusManager.instance.primaryFocus?.unfocus();
-    await tester.pumpAndSettle();
-    expect(find.text('Edited track'), findsOneWidget);
-    expect(find.widgetWithText(AppActionButton, 'Save'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('Auto-fill from online'),
-      -250,
-      scrollable: find
-          .descendant(
-            of: find.byType(ListView).last,
-            matching: find.byType(Scrollable),
-          )
-          .first,
-    );
-    await _tapVisible(tester, find.text('Auto-fill from online'));
-    await _tapVisible(tester, find.text('None'));
-    final search = find.widgetWithText(AppActionButton, 'Find metadata');
-    expect(tester.widget<AppActionButton>(search).onPressed, isNull);
-    await _tapVisible(tester, find.text('All'));
-    expect(tester.widget<AppActionButton>(search).onPressed, isNotNull);
-    expect(
-      tester
-          .widgetList<SpotiFLACFilterChip>(find.byType(SpotiFLACFilterChip))
-          .every((chip) => chip.selected),
-      isTrue,
-    );
-    expect(tester.takeException(), isNull);
-  });
+      );
+      await tester.pumpAndSettle();
+      await _tapVisible(tester, find.byIcon(CupertinoIcons.ellipsis));
+      await tester.tap(find.text('Edit Metadata'));
+      await tester.pump(const Duration(milliseconds: 400));
+      // The editor extracts its preview through real temporary-file I/O.
+      await tester.runAsync(() async {
+        for (var attempt = 0; attempt < 100; attempt++) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+          await tester.pump();
+          if (find.byType(LinearProgressIndicator).evaluate().isEmpty) break;
+        }
+      });
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+      await tester.pumpAndSettle();
+      final title = find.byWidgetPredicate(
+        (widget) =>
+            widget is CupertinoTextField && widget.controller?.text == 'Track',
+      );
+      await tester.ensureVisible(title);
+      await tester.enterText(title, 'Edited track');
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+      expect(find.text('Edited track'), findsOneWidget);
+      expect(find.widgetWithText(AppActionButton, 'Save'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Auto-fill from online'),
+        -250,
+        scrollable: find
+            .descendant(
+              of: find.byType(ListView).last,
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await _tapVisible(tester, find.text('Auto-fill from online'));
+      await _tapVisible(tester, find.text('None'));
+      final search = find.widgetWithText(AppActionButton, 'Find metadata');
+      expect(tester.widget<AppActionButton>(search).onPressed, isNull);
+      await _tapVisible(tester, find.text('All'));
+      expect(tester.widget<AppActionButton>(search).onPressed, isNotNull);
+      expect(
+        tester
+            .widgetList<SpotiFLACFilterChip>(find.byType(SpotiFLACFilterChip))
+            .every((chip) => chip.selected),
+        isTrue,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

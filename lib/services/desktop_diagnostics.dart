@@ -309,8 +309,10 @@ class DesktopDiagnostics {
   void _rotate() {
     _log?.closeSync();
     _log = null;
-    String rotated(int index) =>
-        p.join(directory.path, index == 0 ? logFileName : 'spotiflac.$index.log');
+    String rotated(int index) => p.join(
+      directory.path,
+      index == 0 ? logFileName : 'spotiflac.$index.log',
+    );
     final oldest = File(rotated(keptLogFiles - 1));
     if (oldest.existsSync()) oldest.deleteSync();
     for (var index = keptLogFiles - 2; index >= 0; index--) {

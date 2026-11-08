@@ -31,7 +31,9 @@ void main() {
             UncontrolledProviderScope(
               container: container,
               child: MaterialApp(
-                theme: ThemeData(extensions: [if (spotiflac) const SpotiFLACTheme()]),
+                theme: ThemeData(
+                  extensions: [if (spotiflac) const SpotiFLACTheme()],
+                ),
                 localizationsDelegates: AppLocalizations.localizationsDelegates,
                 supportedLocales: AppLocalizations.supportedLocales,
                 home: const MetadataSeparatorSettingsPage(),

@@ -103,7 +103,10 @@ const _libraryLinks = [
 ];
 
 List<DesktopDestination> _destinations({required bool spotiflac}) => [
-  for (final tab in desktopDestinationTabs(spotiflac: spotiflac, showStore: true))
+  for (final tab in desktopDestinationTabs(
+    spotiflac: spotiflac,
+    showStore: true,
+  ))
     DesktopDestination(
       tab: tab,
       icon: Icons.circle_outlined,
@@ -287,25 +290,26 @@ void main() {
     });
 
     for (final state in ['playing', 'loading', 'remote', 'idle']) {
-      testWidgets('desktop player cannot dismiss $state playback ($spotiflac)', (
-        tester,
-      ) async {
-        await pumpShell(
-          tester,
-          spotiflac: spotiflac,
-          width: 900,
-          item: state == 'idle' ? null : _track,
-          playing: state == 'playing',
-          loading: state == 'loading',
-          remote: state == 'remote' ? _RemotePlayback() : null,
-        );
-        expect(
-          find.byKey(const ValueKey('desktop-player-dismiss')),
-          findsNothing,
-        );
-        expect(controller.calls, isEmpty);
-        expect(tester.takeException(), isNull);
-      });
+      testWidgets(
+        'desktop player cannot dismiss $state playback ($spotiflac)',
+        (tester) async {
+          await pumpShell(
+            tester,
+            spotiflac: spotiflac,
+            width: 900,
+            item: state == 'idle' ? null : _track,
+            playing: state == 'playing',
+            loading: state == 'loading',
+            remote: state == 'remote' ? _RemotePlayback() : null,
+          );
+          expect(
+            find.byKey(const ValueKey('desktop-player-dismiss')),
+            findsNothing,
+          );
+          expect(controller.calls, isEmpty);
+          expect(tester.takeException(), isNull);
+        },
+      );
     }
 
     testWidgets('external mode removes desktop player surfaces ($spotiflac)', (

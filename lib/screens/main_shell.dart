@@ -474,7 +474,9 @@ class _MainShellState extends ConsumerState<MainShell>
   void _onShellTabRequested(ShellTab tab) {
     // Picking a destination returns from Now Playing to the content pane.
     if (isDesktopPlatform) desktopNowPlayingOpen.value = false;
-    if (tab == ShellTab.settings && context.isSpotiFLAC && !_spotiflacSettingsTab) {
+    if (tab == ShellTab.settings &&
+        context.isSpotiFLAC &&
+        !_spotiflacSettingsTab) {
       unawaited(_openProfileSettings());
       return;
     }
@@ -514,7 +516,9 @@ class _MainShellState extends ConsumerState<MainShell>
       settingsProvider.select((s) => s.showExtensionStore),
     );
     _spotiflacChrome.expand();
-    if (index == 0 && resetHome && (context.isSpotiFLAC || _currentIndex == 0)) {
+    if (index == 0 &&
+        resetHome &&
+        (context.isSpotiFLAC || _currentIndex == 0)) {
       _resetHomeToMain();
     }
     if (index == 0 && _currentIndex == 0) {
@@ -953,7 +957,9 @@ class _MainShellState extends ConsumerState<MainShell>
         heroAnimationsEnabled: heroAnimationsEnabled,
         child: Builder(
           builder: (context) => HomeTab(
-            mode: context.isSpotiFLAC ? HomeTabMode.browse : HomeTabMode.combined,
+            mode: context.isSpotiFLAC
+                ? HomeTabMode.browse
+                : HomeTabMode.combined,
           ),
         ),
       ),
@@ -984,7 +990,8 @@ class _MainShellState extends ConsumerState<MainShell>
           heroAnimationsEnabled: heroAnimationsEnabled,
           child: const HomeTab(mode: HomeTabMode.search),
         ),
-      if (_spotiflacSettingsTab) const SettingsTab(key: ValueKey('tab-settings')),
+      if (_spotiflacSettingsTab)
+        const SettingsTab(key: ValueKey('tab-settings')),
     ];
 
     final maxIndex = tabs.length - 1;
@@ -1338,18 +1345,23 @@ class _MainShellState extends ConsumerState<MainShell>
                         ? const MiniPlayer()
                         : ValueListenableBuilder<bool>(
                             valueListenable: _spotiflacChrome,
-                            builder: (context, collapsed, _) => SpotiFLACBottomBar(
-                              collapsed:
-                                  canMinimizeChrome &&
-                                  collapsed &&
-                                  MediaQuery.viewInsetsOf(context).bottom == 0,
-                              destinations: destinations,
-                              selectedIndex: selectedDestination,
-                              onSelected: _onNavTap,
-                              onHome: () => _onNavTap(0),
-                              onSearch: ShellNavigationService.requestSearch,
-                              blurEnabled: ref.watch(spotiflacBlurEnabledProvider),
-                            ),
+                            builder: (context, collapsed, _) =>
+                                SpotiFLACBottomBar(
+                                  collapsed:
+                                      canMinimizeChrome &&
+                                      collapsed &&
+                                      MediaQuery.viewInsetsOf(context).bottom ==
+                                          0,
+                                  destinations: destinations,
+                                  selectedIndex: selectedDestination,
+                                  onSelected: _onNavTap,
+                                  onHome: () => _onNavTap(0),
+                                  onSearch:
+                                      ShellNavigationService.requestSearch,
+                                  blurEnabled: ref.watch(
+                                    spotiflacBlurEnabledProvider,
+                                  ),
+                                ),
                           ),
                   ),
                 ),

@@ -28,8 +28,8 @@ import 'package:spotiflac/widgets/app_shape.dart';
 import 'package:spotiflac/widgets/expressive_button.dart';
 
 /// The highlights of [AppInfo.whatsNewRelease] on phones and tablets, shown
-/// once after an update and again from About. It keeps the look of the
-/// 5.2 rebrand tour; pages list only what this device can use. Desktop uses
+/// once after an update and again from About. Pages list only what this
+/// device can use. Desktop uses
 /// [showWhatsNewDialog] instead.
 class WhatsNewScreen extends ConsumerStatefulWidget {
   const WhatsNewScreen({super.key, this.localNetworkAccess});

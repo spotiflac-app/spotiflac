@@ -84,7 +84,8 @@ class SpotiFLACTheme extends ThemeExtension<SpotiFLACTheme> {
       SpotiFLACAccent.pink => CupertinoColors.systemPink,
     };
     // Accents also label links and small controls on white surfaces.
-    if (!dark && accent == SpotiFLACAccent.green) return const Color(0xff24863d);
+    if (!dark && accent == SpotiFLACAccent.green)
+      return const Color(0xff24863d);
     // The system high contrast blue reads navy; this one still clears 4.5:1.
     if (!dark && accent == SpotiFLACAccent.blue) return const Color(0xff0071e3);
     return dark ? color.darkColor : color.highContrastColor;
@@ -465,20 +466,21 @@ class SpotiFLACTheme extends ThemeExtension<SpotiFLACTheme> {
   );
 
   @override
-  SpotiFLACTheme lerp(covariant SpotiFLACTheme? other, double t) => SpotiFLACTheme(
-    chromeSurface: Color.lerp(chromeSurface, other?.chromeSurface, t),
-    accent: t < 0.5 ? accent : other?.accent ?? accent,
-    fontFamily: t < 0.5 ? fontFamily : other?.fontFamily,
-    useSystemFont: t < 0.5
-        ? useSystemFont
-        : other?.useSystemFont ?? useSystemFont,
-    glassClarity:
-        glassClarity +
-        ((other?.glassClarity ?? glassClarity) - glassClarity) * t,
-    glassOutlines: t < 0.5
-        ? glassOutlines
-        : other?.glassOutlines ?? glassOutlines,
-  );
+  SpotiFLACTheme lerp(covariant SpotiFLACTheme? other, double t) =>
+      SpotiFLACTheme(
+        chromeSurface: Color.lerp(chromeSurface, other?.chromeSurface, t),
+        accent: t < 0.5 ? accent : other?.accent ?? accent,
+        fontFamily: t < 0.5 ? fontFamily : other?.fontFamily,
+        useSystemFont: t < 0.5
+            ? useSystemFont
+            : other?.useSystemFont ?? useSystemFont,
+        glassClarity:
+            glassClarity +
+            ((other?.glassClarity ?? glassClarity) - glassClarity) * t,
+        glassOutlines: t < 0.5
+            ? glassOutlines
+            : other?.glassOutlines ?? glassOutlines,
+      );
 
   @override
   bool operator ==(Object other) =>

@@ -85,7 +85,9 @@ Widget _app(
 }) => UncontrolledProviderScope(
   container: container,
   child: MaterialApp(
-    theme: spotiflac ? SpotiFLACTheme.build(Brightness.light) : AppTheme.light(),
+    theme: spotiflac
+        ? SpotiFLACTheme.build(Brightness.light)
+        : AppTheme.light(),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     home: Scaffold(body: child),

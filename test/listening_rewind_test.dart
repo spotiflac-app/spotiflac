@@ -392,7 +392,9 @@ void main() {
             ),
           ],
           child: MaterialApp(
-            theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : ThemeData(),
+            theme: spotiflac
+                ? SpotiFLACTheme.build(Brightness.dark)
+                : ThemeData(),
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             // Reduced motion: no auto-advance, so the story waits for taps.
@@ -580,7 +582,9 @@ void main() {
             listeningRewindProvider.overrideWith((ref, period) async => rewind),
           ],
           child: MaterialApp(
-            theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : ThemeData(),
+            theme: spotiflac
+                ? SpotiFLACTheme.build(Brightness.dark)
+                : ThemeData(),
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             builder: (context, child) => MediaQuery(

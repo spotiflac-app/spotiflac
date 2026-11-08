@@ -21,7 +21,9 @@ import 'package:spotiflac/widgets/track_card.dart';
 
 Widget _app(Widget child, {bool spotiflac = false}) => ProviderScope(
   child: MaterialApp(
-    theme: spotiflac ? SpotiFLACTheme.build(Brightness.light) : AppTheme.light(),
+    theme: spotiflac
+        ? SpotiFLACTheme.build(Brightness.light)
+        : AppTheme.light(),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     home: Scaffold(body: child),

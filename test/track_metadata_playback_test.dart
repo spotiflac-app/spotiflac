@@ -61,7 +61,9 @@ void main() {
       for (final format in ['flac', 'opus']) {
         for (final menu in [false, if (spotiflac) true]) {
           testWidgets('metadata Play carries $format file information '
-              '(SpotiFLAC=$spotiflac, local=$local, menu=$menu)', (tester) async {
+              '(SpotiFLAC=$spotiflac, local=$local, menu=$menu)', (
+            tester,
+          ) async {
             await tester.binding.setSurfaceSize(const Size(393, 852));
             addTearDown(() => tester.binding.setSurfaceSize(null));
             final player = _Player();

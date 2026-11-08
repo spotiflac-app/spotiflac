@@ -126,7 +126,8 @@ void main() {
             matching: find.byWidgetPredicate(
               (widget) =>
                   widget is Material &&
-                  widget.color == SpotiFLACTheme.controlFill(tester.element(row)),
+                  widget.color ==
+                      SpotiFLACTheme.controlFill(tester.element(row)),
             ),
           ),
           findsOneWidget,

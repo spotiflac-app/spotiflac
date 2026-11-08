@@ -27,7 +27,9 @@ void main() {
 
   test('rejects callbacks without both a grant and state', () {
     expect(
-      parseExtensionSessionGrantCallback('spotiflac://session-grant?grant=gr_456'),
+      parseExtensionSessionGrantCallback(
+        'spotiflac://session-grant?grant=gr_456',
+      ),
       isNull,
     );
     expect(

@@ -3,12 +3,12 @@
 use super::Backend;
 use cap_std::fs::OpenOptions;
 use chrono::{SecondsFormat, Utc};
+use serde_json::{Value, json};
 use spotiflac_core::cue::{self, CueSheet};
 use spotiflac_core::tags::{
     extract_cover, library_extension, library_id, library_metadata, read_library_metadata,
     read_library_metadata_with_cover,
 };
-use serde_json::{Value, json};
 use std::cell::RefCell;
 use std::path::Path;
 use std::time::UNIX_EPOCH;
@@ -130,7 +130,8 @@ impl Backend {
                 input.open_native_read().map_err(|error| error.to_string())
             };
             if let Ok(lyrics) = spotiflac_core::lyrics::file::sidecar(path, &open, check) {
-                result["hasLyrics"] = spotiflac_core::lyrics::lrc::has_usable_content(&lyrics).into();
+                result["hasLyrics"] =
+                    spotiflac_core::lyrics::lrc::has_usable_content(&lyrics).into();
             }
         }
         check()?;

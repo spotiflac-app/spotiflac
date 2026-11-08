@@ -723,29 +723,32 @@ void main() {
     expect(requested('getCoverArt'), hasLength(160));
   });
 
-  test('a SpotiFLAC desktop with smaller song pages syncs every song', () async {
-    server.type = 'spotiflac';
-    // The last page holds only the video.
-    server.library = library();
-    server.searchPage = 120;
-    final scan = await scanner().scan(
-      'network://fixture/',
-      checkpoint: () async {},
-      onProgress: (_, _, _) {},
-    );
-    expect(scan.expectedCount, 1200);
-    final paths = {
-      for (final row in await scan.rows().toList()) row['filePath'],
-    };
-    expect(paths, {
-      for (final song in library().take(1200))
-        NetworkStorageService.source('fixture', SubsonicSong(song).path),
-    });
-    expect(requested('search3').map((page) => page['songOffset']), [
-      for (var offset = 0; offset <= 1201; offset += 120) '$offset',
-      '1201',
-    ]);
-  });
+  test(
+    'a SpotiFLAC desktop with smaller song pages syncs every song',
+    () async {
+      server.type = 'spotiflac';
+      // The last page holds only the video.
+      server.library = library();
+      server.searchPage = 120;
+      final scan = await scanner().scan(
+        'network://fixture/',
+        checkpoint: () async {},
+        onProgress: (_, _, _) {},
+      );
+      expect(scan.expectedCount, 1200);
+      final paths = {
+        for (final row in await scan.rows().toList()) row['filePath'],
+      };
+      expect(paths, {
+        for (final song in library().take(1200))
+          NetworkStorageService.source('fixture', SubsonicSong(song).path),
+      });
+      expect(requested('search3').map((page) => page['songOffset']), [
+        for (var offset = 0; offset <= 1201; offset += 120) '$offset',
+        '1201',
+      ]);
+    },
+  );
 
   test(
     'a SpotiFLAC desktop that repeats full song pages cannot publish a truncated catalogue',

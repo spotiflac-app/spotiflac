@@ -203,43 +203,44 @@ void main() {
         },
       );
     }
-    testWidgets('local permission denial can be retried (SpotiFLAC: $spotiflac)', (
-      tester,
-    ) async {
-      final service = _NetworkFixture()
-        ..error = const LocalNetworkPermissionException();
-      await tester.pumpWidget(
-        ProviderScope(
-          child: MaterialApp(
-            theme: spotiflac
-                ? SpotiFLACTheme.build(Brightness.dark)
-                : ThemeData(useMaterial3: true),
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            home: NetworkStorageScreen(
-              service: service,
-              connection: const NetworkConnection(
-                id: 'nas',
-                name: 'NAS',
-                protocol: NetworkProtocol.smb,
-                address: 'smb://nas.local/music/',
+    testWidgets(
+      'local permission denial can be retried (SpotiFLAC: $spotiflac)',
+      (tester) async {
+        final service = _NetworkFixture()
+          ..error = const LocalNetworkPermissionException();
+        await tester.pumpWidget(
+          ProviderScope(
+            child: MaterialApp(
+              theme: spotiflac
+                  ? SpotiFLACTheme.build(Brightness.dark)
+                  : ThemeData(useMaterial3: true),
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: NetworkStorageScreen(
+                service: service,
+                connection: const NetworkConnection(
+                  id: 'nas',
+                  name: 'NAS',
+                  protocol: NetworkProtocol.smb,
+                  address: 'smb://nas.local/music/',
+                ),
               ),
             ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.textContaining('Allow Nearby devices'), findsOneWidget);
-      expect(
-        find.textContaining('The server rejected the sign-in'),
-        findsNothing,
-      );
-      service.error = null;
-      await tester.tap(find.text('Retry'));
-      await tester.pumpAndSettle();
-      expect(find.textContaining('Allow Nearby devices'), findsNothing);
-      expect(tester.takeException(), isNull);
-    });
+        );
+        await tester.pumpAndSettle();
+        expect(find.textContaining('Allow Nearby devices'), findsOneWidget);
+        expect(
+          find.textContaining('The server rejected the sign-in'),
+          findsNothing,
+        );
+        service.error = null;
+        await tester.tap(find.text('Retry'));
+        await tester.pumpAndSettle();
+        expect(find.textContaining('Allow Nearby devices'), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
 
     testWidgets(
       'certificate trust requires a tap and stays on its server (SpotiFLAC: $spotiflac)',
@@ -354,50 +355,51 @@ void main() {
         expect(tester.takeException(), isNull);
       },
     );
-    testWidgets('a paired computer shows as SpotiFLAC Link (SpotiFLAC: $spotiflac)', (
-      tester,
-    ) async {
-      final service = _NetworkFixture();
-      await service.save(
-        const NetworkConnection(
-          id: 'desk',
-          name: 'Studio Mac',
-          protocol: NetworkProtocol.subsonic,
-          address: 'https://192.168.1.20:4533/',
-        ),
-      );
-      await service.save(
-        const NetworkConnection(
-          id: 'nas',
-          name: 'My NAS',
-          protocol: NetworkProtocol.subsonic,
-          address: 'https://nas.test/',
-        ),
-      );
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            linkSourceNamesProvider.overrideWithValue(const {
-              'desk': 'Studio Mac',
-            }),
-          ],
-          child: MaterialApp(
-            theme: spotiflac
-                ? SpotiFLACTheme.build(Brightness.dark)
-                : ThemeData(useMaterial3: true),
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            home: NetworkStorageScreen(service: service),
+    testWidgets(
+      'a paired computer shows as SpotiFLAC Link (SpotiFLAC: $spotiflac)',
+      (tester) async {
+        final service = _NetworkFixture();
+        await service.save(
+          const NetworkConnection(
+            id: 'desk',
+            name: 'Studio Mac',
+            protocol: NetworkProtocol.subsonic,
+            address: 'https://192.168.1.20:4533/',
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('SpotiFLAC Link · 192.168.1.20'), findsOneWidget);
-      expect(find.text('Subsonic · nas.test'), findsOneWidget);
-      // Link manages the computer, so only the NAS can be edited here.
-      expect(find.byTooltip('Edit connection'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
+        );
+        await service.save(
+          const NetworkConnection(
+            id: 'nas',
+            name: 'My NAS',
+            protocol: NetworkProtocol.subsonic,
+            address: 'https://nas.test/',
+          ),
+        );
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              linkSourceNamesProvider.overrideWithValue(const {
+                'desk': 'Studio Mac',
+              }),
+            ],
+            child: MaterialApp(
+              theme: spotiflac
+                  ? SpotiFLACTheme.build(Brightness.dark)
+                  : ThemeData(useMaterial3: true),
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: NetworkStorageScreen(service: service),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('SpotiFLAC Link · 192.168.1.20'), findsOneWidget);
+        expect(find.text('Subsonic · nas.test'), findsOneWidget);
+        // Link manages the computer, so only the NAS can be edited here.
+        expect(find.byTooltip('Edit connection'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
     testWidgets(
       'connection form saves in the selected theme (SpotiFLAC: $spotiflac)',
       (tester) async {

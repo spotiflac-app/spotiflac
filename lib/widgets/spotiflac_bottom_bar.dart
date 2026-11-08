@@ -176,7 +176,9 @@ class _SpotiFLACBottomBarState extends ConsumerState<SpotiFLACBottomBar>
       blurEnabled: blurEnabled,
       liquidGlass: liquidGlass,
       contrastBlocked: ref.watch(
-        spotiflacGlassContrastBlockedProvider(MediaQuery.highContrastOf(context)),
+        spotiflacGlassContrastBlockedProvider(
+          MediaQuery.highContrastOf(context),
+        ),
       ),
     );
     final tabGap = glassTabs ? 0.0 : 8.0;

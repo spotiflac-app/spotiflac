@@ -107,7 +107,9 @@ Future<void> _mount(
         downloadHistoryProvider.overrideWith(() => history),
       ],
       child: MaterialApp(
-        theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : AppTheme.light(),
+        theme: spotiflac
+            ? SpotiFLACTheme.build(Brightness.dark)
+            : AppTheme.light(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: const LibrarySettingsPage(),
@@ -156,30 +158,34 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('failed load shows saved folder and offers retry ($spotiflac)', (
-      tester,
-    ) async {
-      final library = _RetryLibrary();
-      await _mount(
-        tester,
-        spotiflac: spotiflac,
-        library: library,
-        history: _History(0, () async => 0),
-      );
-      await tester.scrollUntilVisible(find.text('Retry'), -300);
-      await tester.pumpAndSettle();
-      expect(
-        find.textContaining('Library could not be loaded'),
-        findsOneWidget,
-      );
-      expect(find.text('Saved music'), findsOneWidget);
-      await tester.tap(find.text('Retry'));
-      await tester.pumpAndSettle();
-      expect(library._reloadCalls, 1);
-      expect(find.textContaining('Library could not be loaded'), findsNothing);
-      expect(find.text('Saved music'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
+    testWidgets(
+      'failed load shows saved folder and offers retry ($spotiflac)',
+      (tester) async {
+        final library = _RetryLibrary();
+        await _mount(
+          tester,
+          spotiflac: spotiflac,
+          library: library,
+          history: _History(0, () async => 0),
+        );
+        await tester.scrollUntilVisible(find.text('Retry'), -300);
+        await tester.pumpAndSettle();
+        expect(
+          find.textContaining('Library could not be loaded'),
+          findsOneWidget,
+        );
+        expect(find.text('Saved music'), findsOneWidget);
+        await tester.tap(find.text('Retry'));
+        await tester.pumpAndSettle();
+        expect(library._reloadCalls, 1);
+        expect(
+          find.textContaining('Library could not be loaded'),
+          findsNothing,
+        );
+        expect(find.text('Saved music'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
 
     testWidgets('cleanup works for download-only Library ($spotiflac)', (
       tester,
@@ -380,7 +386,9 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('cleanup cannot race an active scan ($spotiflac)', (tester) async {
+    testWidgets('cleanup cannot race an active scan ($spotiflac)', (
+      tester,
+    ) async {
       var localCalls = 0;
       var downloadCalls = 0;
       final library = _Library(LocalLibraryState(totalCount: 1), () async {

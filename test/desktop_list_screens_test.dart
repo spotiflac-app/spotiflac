@@ -51,7 +51,10 @@ final _tracks = [
     ),
 ];
 
-Future<_Playback> _pumpAlbum(WidgetTester tester, {bool spotiflac = false}) async {
+Future<_Playback> _pumpAlbum(
+  WidgetTester tester, {
+  bool spotiflac = false,
+}) async {
   SharedPreferences.setMockInitialValues({});
   tester.view.physicalSize = const Size(1280, 900);
   tester.view.devicePixelRatio = 1;
@@ -69,7 +72,9 @@ Future<_Playback> _pumpAlbum(WidgetTester tester, {bool spotiflac = false}) asyn
         playbackProvider.overrideWith(() => playback),
       ],
       child: MaterialApp(
-        theme: spotiflac ? SpotiFLACTheme.build(Brightness.light) : AppTheme.light(),
+        theme: spotiflac
+            ? SpotiFLACTheme.build(Brightness.light)
+            : AppTheme.light(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         navigatorKey: navigator,
@@ -112,65 +117,66 @@ void main() {
   });
 
   for (final spotiflac in [false, true]) {
-    testWidgets('desktop album lists songs in a table (spotiflac: $spotiflac)', (
-      tester,
-    ) async {
-      debugDesktopPlatformOverride = true;
-      final playback = await _pumpAlbum(tester, spotiflac: spotiflac);
-      expect(find.byType(AlbumTrackTile), findsNothing);
-      expect(find.byType(SliverTrackTable), findsOneWidget);
+    testWidgets(
+      'desktop album lists songs in a table (spotiflac: $spotiflac)',
+      (tester) async {
+        debugDesktopPlatformOverride = true;
+        final playback = await _pumpAlbum(tester, spotiflac: spotiflac);
+        expect(find.byType(AlbumTrackTile), findsNothing);
+        expect(find.byType(SliverTrackTable), findsOneWidget);
 
-      // A right-click opens the long-press actions, the selection bar's, as
-      // a menu on the row, without the bar under it.
-      await _click(tester, find.text('Charlie'), buttons: kSecondaryButton);
-      await tester.pumpAndSettle();
-      final menu = spotiflac
-          ? find.byType(SpotiFLACContextMenu)
-          : find.ancestor(
-              of: find.byType(MenuItemButton).first,
-              matching: find.byType(MenuAnchor),
-            );
-      expect(menu, findsOneWidget);
-      expect(
-        find.descendant(of: menu, matching: find.text('Play next')),
-        findsOneWidget,
-      );
-      expect(
-        find.descendant(of: menu, matching: find.textContaining('Delete')),
-        findsOneWidget,
-      );
-      expect(find.byType(SelectionBottomBar), findsNothing);
+        // A right-click opens the long-press actions, the selection bar's, as
+        // a menu on the row, without the bar under it.
+        await _click(tester, find.text('Charlie'), buttons: kSecondaryButton);
+        await tester.pumpAndSettle();
+        final menu = spotiflac
+            ? find.byType(SpotiFLACContextMenu)
+            : find.ancestor(
+                of: find.byType(MenuItemButton).first,
+                matching: find.byType(MenuAnchor),
+              );
+        expect(menu, findsOneWidget);
+        expect(
+          find.descendant(of: menu, matching: find.text('Play next')),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(of: menu, matching: find.textContaining('Delete')),
+          findsOneWidget,
+        );
+        expect(find.byType(SelectionBottomBar), findsNothing);
 
-      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-      await tester.pumpAndSettle();
-      expect(
-        find.byType(spotiflac ? SpotiFLACContextMenu : MenuItemButton),
-        findsNothing,
-      );
-      expect(find.byType(SelectionBottomBar), findsNothing);
-      expect(find.text('Play next'), findsNothing);
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pumpAndSettle();
+        expect(
+          find.byType(spotiflac ? SpotiFLACContextMenu : MenuItemButton),
+          findsNothing,
+        );
+        expect(find.byType(SelectionBottomBar), findsNothing);
+        expect(find.text('Play next'), findsNothing);
 
-      // A click plays the row, as a tap does on a phone, and the second
-      // click of a double click does not play it again.
-      await _click(tester, find.text('Alpha'));
-      await tester.pump();
-      await _click(tester, find.text('Alpha'));
-      await tester.pumpAndSettle();
-      expect(playback.started, ['2']);
-      expect(find.text('Play next'), findsNothing);
+        // A click plays the row, as a tap does on a phone, and the second
+        // click of a double click does not play it again.
+        await _click(tester, find.text('Alpha'));
+        await tester.pump();
+        await _click(tester, find.text('Alpha'));
+        await tester.pumpAndSettle();
+        expect(playback.started, ['2']);
+        expect(find.text('Play next'), findsNothing);
 
-      await _click(tester, find.text('Charlie'), buttons: kSecondaryButton);
-      await tester.pumpAndSettle();
-      await tester.tap(
-        find.descendant(
-          of: find.byType(spotiflac ? SpotiFLACContextMenu : MenuItemButton),
-          matching: find.text('Play'),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(playback.started, ['2', '3']);
-      expect(find.byType(SelectionBottomBar), findsNothing);
-    });
+        await _click(tester, find.text('Charlie'), buttons: kSecondaryButton);
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.descendant(
+            of: find.byType(spotiflac ? SpotiFLACContextMenu : MenuItemButton),
+            matching: find.text('Play'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(playback.started, ['2', '3']);
+        expect(find.byType(SelectionBottomBar), findsNothing);
+      },
+    );
 
     testWidgets('desktop selection bar stays bounded (spotiflac: $spotiflac)', (
       tester,
@@ -200,100 +206,103 @@ void main() {
       expect(selectAll.right, lessThanOrEqualTo(1280 / 2 + 320));
     });
 
-    testWidgets('desktop album header and rows are compact (spotiflac: $spotiflac)', (
-      tester,
-    ) async {
-      debugDesktopPlatformOverride = true;
-      final playback = await _pumpAlbum(tester, spotiflac: spotiflac);
+    testWidgets(
+      'desktop album header and rows are compact (spotiflac: $spotiflac)',
+      (tester) async {
+        debugDesktopPlatformOverride = true;
+        final playback = await _pumpAlbum(tester, spotiflac: spotiflac);
 
-      // No hero: the back control sits at the top of the pane and the
-      // details start beside the artwork, at the list's left edge.
-      expect(find.byType(FlexibleSpaceBar), findsNothing);
-      final back = find.byTooltip(
-        const DefaultMaterialLocalizations().backButtonTooltip,
-      );
-      expect(back, findsOneWidget);
-      expect(tester.getTopLeft(back).dy, lessThan(52));
-      final row = find
-          .ancestor(of: find.text('Alpha'), matching: find.byType(InkWell))
-          .first;
-      final playAll = find.text('Play').first;
-      expect(
-        tester.getTopLeft(playAll).dx,
-        greaterThan(tester.getTopLeft(row).dx + 200),
-      );
-      expect(
-        tester.getTopLeft(playAll).dy,
-        lessThan(tester.getTopLeft(row).dy),
-      );
-      // The Play button keeps its own width.
-      final playButton = find
-          .ancestor(
-            of: playAll,
-            matching: find.byWidgetPredicate(
-              (widget) =>
-                  widget is ButtonStyleButton || widget is CupertinoButton,
-            ),
-          )
-          .first;
-      expect(tester.getSize(playButton).width, lessThan(200));
+        // No hero: the back control sits at the top of the pane and the
+        // details start beside the artwork, at the list's left edge.
+        expect(find.byType(FlexibleSpaceBar), findsNothing);
+        final back = find.byTooltip(
+          const DefaultMaterialLocalizations().backButtonTooltip,
+        );
+        expect(back, findsOneWidget);
+        expect(tester.getTopLeft(back).dy, lessThan(52));
+        final row = find
+            .ancestor(of: find.text('Alpha'), matching: find.byType(InkWell))
+            .first;
+        final playAll = find.text('Play').first;
+        expect(
+          tester.getTopLeft(playAll).dx,
+          greaterThan(tester.getTopLeft(row).dx + 200),
+        );
+        expect(
+          tester.getTopLeft(playAll).dy,
+          lessThan(tester.getTopLeft(row).dy),
+        );
+        // The Play button keeps its own width.
+        final playButton = find
+            .ancestor(
+              of: playAll,
+              matching: find.byWidgetPredicate(
+                (widget) =>
+                    widget is ButtonStyleButton || widget is CupertinoButton,
+              ),
+            )
+            .first;
+        expect(tester.getSize(playButton).width, lessThan(200));
 
-      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
-      addTearDown(mouse.removePointer);
-      if (spotiflac) {
-        // Album rows of Apple Music: 46pt, no column headers, the number
-        // turns into a play button under the pointer and "More" shows.
-        expect(find.text('#'), findsNothing);
-        expect(tester.getSize(row).height, 46);
-        final more = find.descendant(
-          of: row,
+        final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+        addTearDown(mouse.removePointer);
+        if (spotiflac) {
+          // Album rows of Apple Music: 46pt, no column headers, the number
+          // turns into a play button under the pointer and "More" shows.
+          expect(find.text('#'), findsNothing);
+          expect(tester.getSize(row).height, 46);
+          final more = find.descendant(
+            of: row,
+            matching: find.byType(AnimatedOpacity),
+          );
+          double opacity() => tester.widget<AnimatedOpacity>(more).opacity;
+          expect(opacity(), 0);
+          expect(find.descendant(of: row, matching: find.text('2')), findsOne);
+          await mouse.addPointer(
+            location: tester.getCenter(find.text('Alpha')),
+          );
+          await tester.pumpAndSettle();
+          expect(opacity(), 1);
+          expect(
+            find.descendant(of: row, matching: find.text('2')),
+            findsNothing,
+          );
+          final rowPlay = find.descendant(
+            of: row,
+            matching: find.byTooltip('Play'),
+          );
+          await tester.tap(rowPlay);
+          await tester.pumpAndSettle();
+          expect(playback.started, ['2']);
+          return;
+        }
+
+        // Material desktop table density (compact, below the touch row), with
+        // the row's play button shown on hover.
+        expect(tester.getSize(row).height, 44);
+        final rowY = tester.getCenter(row).dy;
+        final rowPlay = find.ancestor(
+          of: find.byWidgetPredicate(
+            (widget) => widget is AlbumTrackPlayButton,
+            skipOffstage: true,
+          ),
           matching: find.byType(AnimatedOpacity),
         );
-        double opacity() => tester.widget<AnimatedOpacity>(more).opacity;
+        final alphaButton = rowPlay.evaluate().firstWhere(
+          (element) =>
+              ((element.renderObject! as RenderBox)
+                          .localToGlobal(Offset.zero)
+                          .dy -
+                      rowY)
+                  .abs() <
+              30,
+        );
+        double opacity() => (alphaButton.widget as AnimatedOpacity).opacity;
         expect(opacity(), 0);
-        expect(find.descendant(of: row, matching: find.text('2')), findsOne);
         await mouse.addPointer(location: tester.getCenter(find.text('Alpha')));
         await tester.pumpAndSettle();
         expect(opacity(), 1);
-        expect(
-          find.descendant(of: row, matching: find.text('2')),
-          findsNothing,
-        );
-        final rowPlay = find.descendant(
-          of: row,
-          matching: find.byTooltip('Play'),
-        );
-        await tester.tap(rowPlay);
-        await tester.pumpAndSettle();
-        expect(playback.started, ['2']);
-        return;
-      }
-
-      // Material desktop table density (compact, below the touch row), with
-      // the row's play button shown on hover.
-      expect(tester.getSize(row).height, 44);
-      final rowY = tester.getCenter(row).dy;
-      final rowPlay = find.ancestor(
-        of: find.byWidgetPredicate(
-          (widget) => widget is AlbumTrackPlayButton,
-          skipOffstage: true,
-        ),
-        matching: find.byType(AnimatedOpacity),
-      );
-      final alphaButton = rowPlay.evaluate().firstWhere(
-        (element) =>
-            ((element.renderObject! as RenderBox)
-                        .localToGlobal(Offset.zero)
-                        .dy -
-                    rowY)
-                .abs() <
-            30,
-      );
-      double opacity() => (alphaButton.widget as AnimatedOpacity).opacity;
-      expect(opacity(), 0);
-      await mouse.addPointer(location: tester.getCenter(find.text('Alpha')));
-      await tester.pumpAndSettle();
-      expect(opacity(), 1);
-    });
+      },
+    );
   }
 }

@@ -1,12 +1,12 @@
 //! Backend metadata options and operations: language and region settings, caches, and Deezer lookups.
 
 use super::Backend;
+use serde::Serialize;
+use serde_json::{Value, json};
 use spotiflac_core::metadata::TrackMetadata;
 use spotiflac_providers::deezer::MetadataLookup;
 use spotiflac_providers::musicbrainz::MusicBrainzOptions;
 use spotiflac_providers::resolver::{Check, ResolverError, ResolverOptions};
-use serde::Serialize;
-use serde_json::{Value, json};
 use std::time::{Duration, Instant};
 
 /// Trusted native configuration, never extension arguments or persisted settings.

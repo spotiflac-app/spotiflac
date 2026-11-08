@@ -8,12 +8,12 @@
 #[cfg(test)]
 mod tests;
 
+use serde::Serialize;
+use serde_json::{Value, json};
 use spotiflac_core::music_signature::{
     SIGNATURE_SAMPLE_RATE, Signature, rms_dbfs, signature_from_pcm16,
 };
 use spotiflac_network::{HttpRequest, NetworkService, NetworkSession};
-use serde::Serialize;
-use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};

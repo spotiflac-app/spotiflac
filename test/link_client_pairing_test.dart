@@ -81,7 +81,8 @@ void main() {
     });
     tearDown(() => server.close(force: true));
 
-    Uri info() => Uri.parse('https://127.0.0.1:${server.port}/spotiflac/v1/info');
+    Uri info() =>
+        Uri.parse('https://127.0.0.1:${server.port}/spotiflac/v1/info');
 
     test('accepts exactly the pinned certificate', () async {
       final client = linkPinnedHttpClient(fingerprint.toUpperCase());

@@ -142,7 +142,9 @@ class _ExtensionDetailsScreenState
         padding: EdgeInsetsDirectional.only(start: edgeInset),
         child: AppIconButton(
           tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-          icon: Icon(context.isSpotiFLAC ? CupertinoIcons.back : Icons.arrow_back),
+          icon: Icon(
+            context.isSpotiFLAC ? CupertinoIcons.back : Icons.arrow_back,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
       ),

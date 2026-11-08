@@ -180,7 +180,9 @@ class AppSliverHeader extends StatelessWidget {
                 style: TextStyle(
                   fontSize: fontSize,
                   fontWeight: FontWeight.bold,
-                  letterSpacing: context.isSpotiFLAC ? -0.7 * expandRatio : null,
+                  letterSpacing: context.isSpotiFLAC
+                      ? -0.7 * expandRatio
+                      : null,
                   color: colorScheme.onSurface,
                 ),
               ),

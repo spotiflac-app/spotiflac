@@ -1,7 +1,7 @@
 //! One method call: decoded arguments, the reply, errors, and cancellation.
 
-use spotiflac_mobile::RequestLease;
 use serde_json::{Map, Value, json};
+use spotiflac_mobile::RequestLease;
 use std::fmt::Display;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};

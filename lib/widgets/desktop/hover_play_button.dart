@@ -54,7 +54,9 @@ class _DesktopHoverPlayButtonState extends State<DesktopHoverPlayButton> {
     final background = spotiflac
         ? Colors.white.withValues(alpha: 0.92)
         : colorScheme.primaryContainer;
-    final foreground = spotiflac ? Colors.black : colorScheme.onPrimaryContainer;
+    final foreground = spotiflac
+        ? Colors.black
+        : colorScheme.onPrimaryContainer;
     final diameter = spotiflac
         ? DesktopHoverPlayButton._spotiflacDiameter
         : DesktopHoverPlayButton._diameter;

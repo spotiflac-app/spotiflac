@@ -63,7 +63,12 @@ Future<bool> showContextMenu(
       context: context,
       // The layout aligns the menu's trailing edge with the anchor's, so a
       // menu-wide anchor puts its leading edge at the pointer.
-      anchor: Rect.fromLTWH(position.dx, position.dy - 8, _spotiflacMenuWidth, 0),
+      anchor: Rect.fromLTWH(
+        position.dx,
+        position.dy - 8,
+        _spotiflacMenuWidth,
+        0,
+      ),
       maxWidth: _spotiflacMenuWidth,
       builder: (menuContext) => SpotiFLACContextMenu(
         dense: true,

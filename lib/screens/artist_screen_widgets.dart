@@ -320,7 +320,9 @@ extension _ArtistScreenSections on _ArtistScreenState {
                     HeaderCircleButton(
                       tonal: true,
                       icon: isFavoriteArtist
-                          ? (spotiflac ? CupertinoIcons.star_fill : Icons.favorite)
+                          ? (spotiflac
+                                ? CupertinoIcons.star_fill
+                                : Icons.favorite)
                           : (spotiflac
                                 ? CupertinoIcons.star
                                 : Icons.favorite_border),

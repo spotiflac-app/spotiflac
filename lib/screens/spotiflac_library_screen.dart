@@ -50,7 +50,8 @@ class SpotiFLACLibraryScreen extends ConsumerStatefulWidget {
       _SpotiFLACLibraryScreenState();
 }
 
-class _SpotiFLACLibraryScreenState extends ConsumerState<SpotiFLACLibraryScreen> {
+class _SpotiFLACLibraryScreenState
+    extends ConsumerState<SpotiFLACLibraryScreen> {
   final _scroll = ScrollController();
   final _search = TextEditingController();
   Timer? _debounce;

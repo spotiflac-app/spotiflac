@@ -97,7 +97,9 @@ void main() {
         await tester.pumpWidget(
           ProviderScope(
             child: MaterialApp(
-              theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : ThemeData(),
+              theme: spotiflac
+                  ? SpotiFLACTheme.build(Brightness.dark)
+                  : ThemeData(),
               home: Builder(
                 builder: (context) => Scaffold(
                   body: TextButton(

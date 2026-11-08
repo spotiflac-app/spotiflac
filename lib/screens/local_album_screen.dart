@@ -355,7 +355,8 @@ class _LocalAlbumScreenState extends ConsumerState<LocalAlbumScreen>
     String? coverPath,
   ) {
     final expandedHeight = calculateExpandedHeight(context);
-    final motion = context.isSpotiFLAC && !MediaQuery.disableAnimationsOf(context)
+    final motion =
+        context.isSpotiFLAC && !MediaQuery.disableAnimationsOf(context)
         ? ref
               .watch(
                 playerMotionArtworkProvider((

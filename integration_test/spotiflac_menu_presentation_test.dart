@@ -43,7 +43,9 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            spotiflacGlassLevelProvider.overrideWithValue(SpotiFLACGlassLevel.liquid),
+            spotiflacGlassLevelProvider.overrideWithValue(
+              SpotiFLACGlassLevel.liquid,
+            ),
             spotiflacBlurEnabledProvider.overrideWithValue(true),
           ],
           child: MaterialApp(

@@ -76,7 +76,10 @@ void main() {
     final initialization =
         methodCalls.firstWhere((call) => call.method == 'initialize').arguments
             as Map<Object?, Object?>;
-    expect(initialization['defaultIcon'], '@drawable/ic_notification_spotiflac');
+    expect(
+      initialization['defaultIcon'],
+      '@drawable/ic_notification_spotiflac',
+    );
     expect(androidDetails['icon'], '@drawable/ic_notification_spotiflac');
 
     expect(

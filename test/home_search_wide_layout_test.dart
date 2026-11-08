@@ -384,7 +384,10 @@ void main() {
       }
       expect(find.byType(DesktopScrollArrows), findsNWidgets(4));
       // Only SpotiFLAC's mixed preview cards form a grid.
-      expect(find.byType(SliverGrid), spotiflac ? findsOneWidget : findsNothing);
+      expect(
+        find.byType(SliverGrid),
+        spotiflac ? findsOneWidget : findsNothing,
+      );
 
       // Show all switches to that kind's filter.
       await tester.tap(find.bySemanticsLabel('Show all Albums'));

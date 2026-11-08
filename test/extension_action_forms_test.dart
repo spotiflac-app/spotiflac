@@ -28,7 +28,9 @@ void main() {
       ProviderScope(
         overrides: [settingsProvider.overrideWith(FixedSettingsNotifier.new)],
         child: MaterialApp(
-          theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : ThemeData(),
+          theme: spotiflac
+              ? SpotiFLACTheme.build(Brightness.dark)
+              : ThemeData(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
@@ -109,7 +111,9 @@ void main() {
       expect(find.text('Connect your account'), findsOneWidget);
       expect(result, isNull);
 
-      final fields = find.byType(spotiflac ? CupertinoTextField : TextFormField);
+      final fields = find.byType(
+        spotiflac ? CupertinoTextField : TextFormField,
+      );
       await tester.enterText(fields.first, 'invalid');
       await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();

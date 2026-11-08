@@ -469,7 +469,8 @@ String linkPairingProof({
   required String fingerprint,
   required String deviceId,
 }) {
-  final message = 'spotiflac-link-pair-v1:${fingerprint.toLowerCase()}:$deviceId';
+  final message =
+      'spotiflac-link-pair-v1:${fingerprint.toLowerCase()}:$deviceId';
   return Hmac(
     sha256,
     utf8.encode(pin),

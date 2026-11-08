@@ -59,7 +59,8 @@ class SpotiFLACArtworkContrast extends StatefulWidget {
   debugReadback;
 
   @override
-  State<SpotiFLACArtworkContrast> createState() => _SpotiFLACArtworkContrastState();
+  State<SpotiFLACArtworkContrast> createState() =>
+      _SpotiFLACArtworkContrastState();
 }
 
 class _SpotiFLACArtworkContrastState extends State<SpotiFLACArtworkContrast>
@@ -176,7 +177,10 @@ class _SpotiFLACArtworkContrastState extends State<SpotiFLACArtworkContrast>
       final scale = (48 / boundary.size.width).clamp(0.01, 1.0);
       _readbacks++;
       image =
-          await (SpotiFLACArtworkContrast.debugReadback?.call(boundary, scale) ??
+          await (SpotiFLACArtworkContrast.debugReadback?.call(
+                boundary,
+                scale,
+              ) ??
               boundary.toImage(pixelRatio: scale));
       final pixels = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
       if (!mounted || !widget.enabled || !_tickersEnabled || pixels == null) {

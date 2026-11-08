@@ -68,7 +68,9 @@ Widget _app(
     ),
   ],
   child: MaterialApp(
-    theme: spotiflac ? SpotiFLACTheme.build(Brightness.light) : AppTheme.light(),
+    theme: spotiflac
+        ? SpotiFLACTheme.build(Brightness.light)
+        : AppTheme.light(),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     builder: (context, child) => MediaQuery(

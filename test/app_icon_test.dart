@@ -8,7 +8,11 @@ import 'package:spotiflac/theme/spotiflac_theme.dart';
 import 'package:spotiflac/widgets/app_icon.dart';
 import 'package:spotiflac/widgets/app_icon_button.dart';
 
-Widget _host(Widget child, {bool spotiflac = false, bool reduceMotion = false}) {
+Widget _host(
+  Widget child, {
+  bool spotiflac = false,
+  bool reduceMotion = false,
+}) {
   return MaterialApp(
     theme: ThemeData(extensions: [if (spotiflac) const SpotiFLACTheme()]),
     home: MediaQuery(

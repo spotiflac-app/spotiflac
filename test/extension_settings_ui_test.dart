@@ -160,7 +160,9 @@ void main() {
               extensionProvider.overrideWith(_Extensions.new),
             ],
             child: MaterialApp(
-              theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : ThemeData(),
+              theme: spotiflac
+                  ? SpotiFLACTheme.build(Brightness.dark)
+                  : ThemeData(),
               localizationsDelegates: AppLocalizations.localizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
               builder: (context, child) => MediaQuery(

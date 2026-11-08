@@ -171,28 +171,29 @@ void main() {
     });
   }
 
-  testWidgets('SpotiFLAC mini player resolves the cover colour on track change', (
-    tester,
-  ) async {
-    final teal = await _writeCover(tester, Colors.teal);
-    final orange = await _writeCover(tester, Colors.deepOrange);
-    final items = StreamController<MediaItem?>();
-    addTearDown(items.close);
-    await tester.pumpWidget(_player(items.stream));
-    for (final (index, cover) in [teal, orange].indexed) {
-      expect(CoverPalette.peekSourceColor(cover.path), isNull);
-      items.add(
-        MediaItem(
-          id: 'track $index',
-          title: 'Track $index',
-          artUri: Uri.file(cover.path),
-        ),
-      );
-      await tester.pump();
-      expect(await _settledColor(tester, cover), isNotNull);
-    }
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
+  testWidgets(
+    'SpotiFLAC mini player resolves the cover colour on track change',
+    (tester) async {
+      final teal = await _writeCover(tester, Colors.teal);
+      final orange = await _writeCover(tester, Colors.deepOrange);
+      final items = StreamController<MediaItem?>();
+      addTearDown(items.close);
+      await tester.pumpWidget(_player(items.stream));
+      for (final (index, cover) in [teal, orange].indexed) {
+        expect(CoverPalette.peekSourceColor(cover.path), isNull);
+        items.add(
+          MediaItem(
+            id: 'track $index',
+            title: 'Track $index',
+            artUri: Uri.file(cover.path),
+          ),
+        );
+        await tester.pump();
+        expect(await _settledColor(tester, cover), isNotNull);
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 
   testWidgets('SpotiFLAC mini player resolves the cover colour of the track it '
       'mounts with', (tester) async {

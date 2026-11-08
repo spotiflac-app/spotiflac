@@ -8,7 +8,8 @@ Future<void> main() async {
   final adb = Platform.environment['ADB_PATH'] ?? 'adb';
   final serial = Platform.environment['ANDROID_SERIAL'];
   final package =
-      Platform.environment['SPOTIFLAC_TEST_PACKAGE'] ?? 'com.spotiflac.app.debug';
+      Platform.environment['SPOTIFLAC_TEST_PACKAGE'] ??
+      'com.spotiflac.app.debug';
   Future<String> runAdb(List<String> args) async {
     final result = await Process.run(adb, [
       if (serial != null) ...['-s', serial],

@@ -27,7 +27,9 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          spotiflacGlassLevelProvider.overrideWithValue(SpotiFLACGlassLevel.frosted),
+          spotiflacGlassLevelProvider.overrideWithValue(
+            SpotiFLACGlassLevel.frosted,
+          ),
           spotiflacBlurEnabledProvider.overrideWithValue(true),
         ],
         child: MaterialApp(
@@ -85,7 +87,9 @@ void main() {
   }
 
   Rect visibleBounds(WidgetTester tester) {
-    final box = tester.renderObject<RenderBox>(find.byType(SpotiFLACGlassPanel));
+    final box = tester.renderObject<RenderBox>(
+      find.byType(SpotiFLACGlassPanel),
+    );
     return Rect.fromPoints(
       box.localToGlobal(Offset.zero),
       box.localToGlobal(box.size.bottomRight(Offset.zero)),

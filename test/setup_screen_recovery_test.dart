@@ -173,7 +173,9 @@ void main() {
     (tester) async {
       debugAndroidTvOverride = true;
       addTearDown(() => debugAndroidTvOverride = null);
-      final directory = Directory.systemTemp.createTempSync('spotiflac-tv-setup-');
+      final directory = Directory.systemTemp.createTempSync(
+        'spotiflac-tv-setup-',
+      );
       addTearDown(() => directory.deleteSync(recursive: true));
       const paths = MethodChannel('plugins.flutter.io/path_provider');
       messenger.setMockMethodCallHandler(paths, (_) async => directory.path);

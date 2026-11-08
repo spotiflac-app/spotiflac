@@ -128,7 +128,8 @@ void main() {
       expect(
         UpdateHost.detectLinuxPackage(
           environment: {'APPIMAGE': '/home/user/SpotiFLAC.AppImage'},
-          resolvedExecutable: '/tmp/.mount_SpotiFLACAbc/usr/lib/spotiflac/spotiflac',
+          resolvedExecutable:
+              '/tmp/.mount_SpotiFLACAbc/usr/lib/spotiflac/spotiflac',
         ),
         LinuxPackageKind.appImage,
       );

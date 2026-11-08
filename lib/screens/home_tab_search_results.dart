@@ -969,7 +969,9 @@ extension _HomeTabSearchResultsUI on _HomeTabState {
                             SpotiFLACMenuAction(
                               icon: filter.icon == null
                                   ? null
-                                  : spotiflacIconFor(_getFilterIcon(filter.icon!)),
+                                  : spotiflacIconFor(
+                                      _getFilterIcon(filter.icon!),
+                                    ),
                               label: filter.label ?? filter.id,
                               selected: selectedFilter == filter.id,
                               onPressed: () =>

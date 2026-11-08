@@ -36,7 +36,10 @@ Future<ProviderContainer> _pumpPage(
       container: container,
       child: MaterialApp(
         theme: spotiflac
-            ? SpotiFLACTheme.build(Brightness.dark, accent: SpotiFLACAccent.blue)
+            ? SpotiFLACTheme.build(
+                Brightness.dark,
+                accent: SpotiFLACAccent.blue,
+              )
             : AppTheme.light(),
         locale: const Locale('en'),
         localizationsDelegates: AppLocalizations.localizationsDelegates,

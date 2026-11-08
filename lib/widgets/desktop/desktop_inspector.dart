@@ -93,7 +93,10 @@ bool desktopInspectorOverlays(double windowWidth, {required bool spotiflac}) =>
 
 /// Whether Escape or Back has a player layer to close in a window
 /// [windowWidth] wide.
-bool canDismissDesktopPlayerLayer(double windowWidth, {required bool spotiflac}) =>
+bool canDismissDesktopPlayerLayer(
+  double windowWidth, {
+  required bool spotiflac,
+}) =>
     desktopNowPlayingOpen.value ||
     (desktopInspectorPanel.value != null &&
         desktopInspectorOverlays(windowWidth, spotiflac: spotiflac));

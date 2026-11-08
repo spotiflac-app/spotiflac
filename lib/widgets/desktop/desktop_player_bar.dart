@@ -206,9 +206,15 @@ class _SpotiFLACPlayerBar extends StatelessWidget {
             padding: const EdgeInsetsDirectional.fromSTEB(8, 4, 8, 4),
             child: Row(
               children: [
-                _SpotiFLACModeButton(mode: _SpotiFLACMode.shuffle, enabled: loaded),
+                _SpotiFLACModeButton(
+                  mode: _SpotiFLACMode.shuffle,
+                  enabled: loaded,
+                ),
                 _Transport(enabled: loaded),
-                _SpotiFLACModeButton(mode: _SpotiFLACMode.repeat, enabled: loaded),
+                _SpotiFLACModeButton(
+                  mode: _SpotiFLACMode.repeat,
+                  enabled: loaded,
+                ),
                 const SizedBox(width: 8),
                 Expanded(child: _SpotiFLACLcd(mediaItem: mediaItem)),
                 const SizedBox(width: 8),
@@ -875,7 +881,9 @@ class _TrailingControls extends ConsumerWidget {
                   l10n.nowPlayingUpNext,
                   DesktopCommand.upNext,
                 ),
-                icon: spotiflac ? CupertinoIcons.list_bullet : Icons.queue_music,
+                icon: spotiflac
+                    ? CupertinoIcons.list_bullet
+                    : Icons.queue_music,
               ),
             ],
           ),
@@ -966,7 +974,8 @@ class _SpotiFLACVolumeButton extends ConsumerStatefulWidget {
       _SpotiFLACVolumeButtonState();
 }
 
-class _SpotiFLACVolumeButtonState extends ConsumerState<_SpotiFLACVolumeButton> {
+class _SpotiFLACVolumeButtonState
+    extends ConsumerState<_SpotiFLACVolumeButton> {
   final _menu = MenuController();
   final _cast = CastOutput.instance;
 

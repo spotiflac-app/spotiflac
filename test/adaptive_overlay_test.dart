@@ -564,45 +564,46 @@ void main() {
       });
     }
 
-    testWidgets('announcement keeps explicit dismissal (SpotiFLAC: $spotiflac)', (
-      tester,
-    ) async {
-      var dismissals = 0;
-      await tester.pumpWidget(
-        _app(
-          spotiflac ? SpotiFLACTheme.build(Brightness.dark) : ThemeData(),
-          Builder(
-            builder: (context) => Scaffold(
-              body: TextButton(
-                child: const Text('Open notice'),
-                onPressed: () => showAppAnnouncementDialog(
-                  context,
-                  announcement: const RemoteAnnouncement(
-                    id: 'notice',
-                    enabled: true,
-                    title: 'Service notice',
-                    message: 'An announcement without an external action.',
-                    dismissible: false,
+    testWidgets(
+      'announcement keeps explicit dismissal (SpotiFLAC: $spotiflac)',
+      (tester) async {
+        var dismissals = 0;
+        await tester.pumpWidget(
+          _app(
+            spotiflac ? SpotiFLACTheme.build(Brightness.dark) : ThemeData(),
+            Builder(
+              builder: (context) => Scaffold(
+                body: TextButton(
+                  child: const Text('Open notice'),
+                  onPressed: () => showAppAnnouncementDialog(
+                    context,
+                    announcement: const RemoteAnnouncement(
+                      id: 'notice',
+                      enabled: true,
+                      title: 'Service notice',
+                      message: 'An announcement without an external action.',
+                      dismissible: false,
+                    ),
+                    onDismiss: () => dismissals++,
                   ),
-                  onDismiss: () => dismissals++,
                 ),
               ),
             ),
           ),
-        ),
-      );
-      await tester.tap(find.text('Open notice'));
-      await tester.pumpAndSettle();
-      await tester.tapAt(const Offset(5, 5));
-      await tester.binding.handlePopRoute();
-      await tester.pumpAndSettle();
-      expect(find.text('Service notice'), findsOneWidget);
-      expect(dismissals, 0);
-      await tester.tap(find.byTooltip('Close'));
-      await tester.pumpAndSettle();
-      expect(find.text('Service notice'), findsNothing);
-      expect(dismissals, 1);
-      expect(tester.takeException(), isNull);
-    });
+        );
+        await tester.tap(find.text('Open notice'));
+        await tester.pumpAndSettle();
+        await tester.tapAt(const Offset(5, 5));
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        expect(find.text('Service notice'), findsOneWidget);
+        expect(dismissals, 0);
+        await tester.tap(find.byTooltip('Close'));
+        await tester.pumpAndSettle();
+        expect(find.text('Service notice'), findsNothing);
+        expect(dismissals, 1);
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
 }

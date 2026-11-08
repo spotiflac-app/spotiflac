@@ -350,7 +350,8 @@ Future<void> _startBackgroundPlayback() async {
     final dependencies = runtime.dependencies;
     runtime.configureBackgroundNotification(
       presentation: PlaybackNotification(
-        spotiflac: loadBootstrapThemeSettings(prefs).style == AppThemeStyle.spotiflac,
+        spotiflac:
+            loadBootstrapThemeSettings(prefs).style == AppThemeStyle.spotiflac,
         favoriteLabel: l10n.trackOptionAddToLoved,
         unfavoriteLabel: l10n.trackOptionRemoveFromLoved,
         shuffleOnLabel: l10n.nowPlayingShuffleOn,

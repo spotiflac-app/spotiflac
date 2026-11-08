@@ -460,7 +460,8 @@ class SettingsItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final showIcon = icon != null && (!context.isSpotiFLAC || showIconInSpotiFLAC);
+    final showIcon =
+        icon != null && (!context.isSpotiFLAC || showIconInSpotiFLAC);
 
     final content = Column(
       mainAxisSize: MainAxisSize.min,

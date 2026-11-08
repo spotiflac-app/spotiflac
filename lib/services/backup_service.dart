@@ -342,7 +342,9 @@ class BackupService {
     final stamp =
         '${now.year}${two(now.month)}${two(now.day)}_'
         '${two(now.hour)}${two(now.minute)}${two(now.second)}';
-    return File(p.join(backupsDir.path, 'spotiflac_backup_$stamp.$fileExtension'));
+    return File(
+      p.join(backupsDir.path, 'spotiflac_backup_$stamp.$fileExtension'),
+    );
   }
 
   static Future<BackupBundle?> parseFile(

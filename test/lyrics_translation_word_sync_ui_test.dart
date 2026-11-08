@@ -107,7 +107,9 @@ void main() {
     for (final spotiflac in [false, true]) {
       for (final aiRomaji in [false, true]) {
         testWidgets('translation and pronunciation share pause/seek clock '
-            '(desktop=$desktop, spotiflac=$spotiflac, ai=$aiRomaji)', (tester) async {
+            '(desktop=$desktop, spotiflac=$spotiflac, ai=$aiRomaji)', (
+          tester,
+        ) async {
           debugDesktopPlatformOverride = desktop;
           addTearDown(() => debugDesktopPlatformOverride = null);
           tester.view.physicalSize = Size(desktop ? 1200 : 390, 800);

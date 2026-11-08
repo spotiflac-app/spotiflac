@@ -74,7 +74,9 @@ void main() {
           ),
         ],
         child: MaterialApp(
-          theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : AppTheme.dark(),
+          theme: spotiflac
+              ? SpotiFLACTheme.build(Brightness.dark)
+              : AppTheme.dark(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           builder: (context, child) => MediaQuery(
@@ -284,39 +286,40 @@ void main() {
   });
 
   for (final spotiflac in [false, true]) {
-    testWidgets('TV shell keeps destinations reachable, SpotiFLAC: $spotiflac', (
-      tester,
-    ) async {
-      int? selected;
-      await pumpTv(
-        tester,
-        TvShell(
-          destinations: const [
-            NavigationDestination(icon: Icon(Icons.home), label: 'Home'),
-            NavigationDestination(
-              icon: Icon(Icons.library_music),
-              label: 'Library',
-            ),
-            NavigationDestination(icon: Icon(Icons.extension), label: 'Repo'),
-            NavigationDestination(
-              icon: Icon(Icons.settings),
-              label: 'Settings',
-            ),
-          ],
-          selectedIndex: 0,
-          onSelected: (value) => selected = value,
-          child: const Center(child: Text('Content')),
-        ),
-        spotiflac: spotiflac,
-        productionMetrics: true,
-      );
-      await key(tester, LogicalKeyboardKey.arrowDown);
-      await key(tester, LogicalKeyboardKey.select);
-      expect(selected, 1);
-      expect(find.text('Settings'), findsOneWidget);
-      expect(find.byType(NavigationBar), findsNothing);
-      expect(tester.takeException(), isNull);
-    });
+    testWidgets(
+      'TV shell keeps destinations reachable, SpotiFLAC: $spotiflac',
+      (tester) async {
+        int? selected;
+        await pumpTv(
+          tester,
+          TvShell(
+            destinations: const [
+              NavigationDestination(icon: Icon(Icons.home), label: 'Home'),
+              NavigationDestination(
+                icon: Icon(Icons.library_music),
+                label: 'Library',
+              ),
+              NavigationDestination(icon: Icon(Icons.extension), label: 'Repo'),
+              NavigationDestination(
+                icon: Icon(Icons.settings),
+                label: 'Settings',
+              ),
+            ],
+            selectedIndex: 0,
+            onSelected: (value) => selected = value,
+            child: const Center(child: Text('Content')),
+          ),
+          spotiflac: spotiflac,
+          productionMetrics: true,
+        );
+        await key(tester, LogicalKeyboardKey.arrowDown);
+        await key(tester, LogicalKeyboardKey.select);
+        expect(selected, 1);
+        expect(find.text('Settings'), findsOneWidget);
+        expect(find.byType(NavigationBar), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
 
     testWidgets(
       'shared cards, settings and actions accept OK, SpotiFLAC: $spotiflac',
@@ -353,32 +356,33 @@ void main() {
       },
     );
 
-    testWidgets('seek can be adjusted and left with Down, SpotiFLAC: $spotiflac', (
-      tester,
-    ) async {
-      Duration? seek;
-      var below = 0;
-      await pumpTv(
-        tester,
-        Column(
-          children: [
-            PlaybackSeekSlider(
-              position: const Duration(seconds: 10),
-              duration: const Duration(minutes: 3),
-              onSeek: (value) async => seek = value,
-            ),
-            TextButton(onPressed: () => below++, child: const Text('Next')),
-          ],
-        ),
-        spotiflac: spotiflac,
-      );
-      await key(tester, LogicalKeyboardKey.arrowRight);
-      expect(seek, greaterThan(const Duration(seconds: 10)));
-      await key(tester, LogicalKeyboardKey.arrowDown);
-      await key(tester, LogicalKeyboardKey.select);
-      expect(below, 1);
-      expect(tester.takeException(), isNull);
-    });
+    testWidgets(
+      'seek can be adjusted and left with Down, SpotiFLAC: $spotiflac',
+      (tester) async {
+        Duration? seek;
+        var below = 0;
+        await pumpTv(
+          tester,
+          Column(
+            children: [
+              PlaybackSeekSlider(
+                position: const Duration(seconds: 10),
+                duration: const Duration(minutes: 3),
+                onSeek: (value) async => seek = value,
+              ),
+              TextButton(onPressed: () => below++, child: const Text('Next')),
+            ],
+          ),
+          spotiflac: spotiflac,
+        );
+        await key(tester, LogicalKeyboardKey.arrowRight);
+        expect(seek, greaterThan(const Duration(seconds: 10)));
+        await key(tester, LogicalKeyboardKey.arrowDown);
+        await key(tester, LogicalKeyboardKey.select);
+        expect(below, 1);
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
 
   testWidgets('SpotiFLAC level slider adjusts by remote and releases focus', (

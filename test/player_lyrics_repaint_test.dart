@@ -70,71 +70,72 @@ void main() {
   for (final spotiflac in [false, true]) {
     for (final reducedMotion in [false, true]) {
       for (final milliseconds in [200, 650]) {
-        testWidgets('short final word completes its lift clock '
-            '(SpotiFLAC: $spotiflac, reduced: $reducedMotion, ms: $milliseconds)', (
-          tester,
-        ) async {
-          final playback = StreamController<PlaybackState>.broadcast();
-          final preview = ValueNotifier<Duration?>(null);
-          addTearDown(playback.close);
-          addTearDown(preview.dispose);
-          final theme = spotiflac
-              ? SpotiFLACTheme.build(Brightness.dark)
-              : ThemeData.dark();
-          final position = Duration(milliseconds: milliseconds);
-          await tester.pumpWidget(
-            ProviderScope(
-              overrides: [
-                playbackStateProvider.overrideWith((ref) => playback.stream),
-              ],
-              child: MaterialApp(
-                theme: theme,
-                builder: (context, child) => MediaQuery(
-                  data: MediaQuery.of(
-                    context,
-                  ).copyWith(disableAnimations: reducedMotion),
-                  child: child!,
-                ),
-                home: Scaffold(
-                  body: WordTimedLyricLine(
-                    line: const LyricLine(
-                      time: Duration.zero,
-                      end: Duration(milliseconds: 100),
-                      text: _text,
-                      words: [
-                        LyricWord(
-                          time: Duration.zero,
-                          end: Duration(milliseconds: 100),
-                          text: _text,
-                        ),
-                      ],
+        testWidgets(
+          'short final word completes its lift clock '
+          '(SpotiFLAC: $spotiflac, reduced: $reducedMotion, ms: $milliseconds)',
+          (tester) async {
+            final playback = StreamController<PlaybackState>.broadcast();
+            final preview = ValueNotifier<Duration?>(null);
+            addTearDown(playback.close);
+            addTearDown(preview.dispose);
+            final theme = spotiflac
+                ? SpotiFLACTheme.build(Brightness.dark)
+                : ThemeData.dark();
+            final position = Duration(milliseconds: milliseconds);
+            await tester.pumpWidget(
+              ProviderScope(
+                overrides: [
+                  playbackStateProvider.overrideWith((ref) => playback.stream),
+                ],
+                child: MaterialApp(
+                  theme: theme,
+                  builder: (context, child) => MediaQuery(
+                    data: MediaQuery.of(
+                      context,
+                    ).copyWith(disableAnimations: reducedMotion),
+                    child: child!,
+                  ),
+                  home: Scaffold(
+                    body: WordTimedLyricLine(
+                      line: const LyricLine(
+                        time: Duration.zero,
+                        end: Duration(milliseconds: 100),
+                        text: _text,
+                        words: [
+                          LyricWord(
+                            time: Duration.zero,
+                            end: Duration(milliseconds: 100),
+                            text: _text,
+                          ),
+                        ],
+                      ),
+                      initialPosition: position,
+                      seekPreview: preview,
+                      style: theme.textTheme.titleLarge!,
                     ),
-                    initialPosition: position,
-                    seekPreview: preview,
-                    style: theme.textTheme.titleLarge!,
                   ),
                 ),
               ),
-            ),
-          );
-          playback.add(
-            PlaybackState(
-              playing: true,
-              processingState: AudioProcessingState.ready,
-              updatePosition: position,
-            ),
-          );
-          await tester.pump();
-          final painter = tester.widget<CustomPaint>(_paint).painter!;
-          var paints = 0;
-          void onPaint() => paints++;
-          painter.addListener(onPaint);
-          await tester.pump(const Duration(milliseconds: 16));
-          expect(paints > 0, !reducedMotion && milliseconds == 200);
-          painter.removeListener(onPaint);
-          expect(tester.takeException(), isNull);
-          await tester.pumpWidget(const SizedBox.shrink());
-        });
+            );
+            playback.add(
+              PlaybackState(
+                playing: true,
+                processingState: AudioProcessingState.ready,
+                updatePosition: position,
+              ),
+            );
+            await tester.pump();
+            final painter = tester.widget<CustomPaint>(_paint).painter!;
+            var paints = 0;
+            void onPaint() => paints++;
+            painter.addListener(onPaint);
+            await tester.pump(const Duration(milliseconds: 16));
+            expect(paints > 0, !reducedMotion && milliseconds == 200);
+            painter.removeListener(onPaint);
+            expect(tester.takeException(), isNull);
+            await tester.pumpWidget(const SizedBox.shrink());
+          },
+        );
       }
     }
   }

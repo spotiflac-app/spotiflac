@@ -99,7 +99,10 @@ class _ConcertDetailScreenState extends State<ConcertDetailScreen> {
         ),
       );
     }
-    final base = SpotiFLACTheme.fromContext(context, brightness: Brightness.dark);
+    final base = SpotiFLACTheme.fromContext(
+      context,
+      brightness: Brightness.dark,
+    );
     return Theme(
       data: base,
       child: CoverPaletteBuilder(

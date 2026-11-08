@@ -197,7 +197,9 @@ void main() {
             child: child!,
           ),
           // SpotiFLAC opens Songs as a section page from its Library root.
-          home: Scaffold(body: QueueTab(librarySection: spotiflac ? 'all' : null)),
+          home: Scaffold(
+            body: QueueTab(librarySection: spotiflac ? 'all' : null),
+          ),
         ),
       ),
     );
@@ -360,7 +362,9 @@ void main() {
         await tester.tap(
           find
               .text(
-                spotiflac ? l10n.libraryFilterTitle : l10n.libraryFilterSortLatest,
+                spotiflac
+                    ? l10n.libraryFilterTitle
+                    : l10n.libraryFilterSortLatest,
               )
               .hitTestable(),
         );
@@ -417,7 +421,9 @@ void main() {
         await tester.tap(
           find
               .text(
-                spotiflac ? l10n.libraryFilterTitle : l10n.libraryFilterSortLatest,
+                spotiflac
+                    ? l10n.libraryFilterTitle
+                    : l10n.libraryFilterSortLatest,
               )
               .hitTestable(),
         );

@@ -155,7 +155,9 @@ class _PlaybackSettingsPageState extends ConsumerState<PlaybackSettingsPage>
         settings.exclusiveOutput &&
         defaultTargetPlatform == TargetPlatform.linux;
     final colorScheme = Theme.of(context).colorScheme;
-    final coverStyle = settings.playerCoverStyleFor(spotiflac: context.isSpotiFLAC);
+    final coverStyle = settings.playerCoverStyleFor(
+      spotiflac: context.isSpotiFLAC,
+    );
     // The charging rule applies to Android's background sweep only.
     final chargingOption = settings.songAnalysis && Platform.isAndroid;
     final progress = _songAnalysis.progress.value;

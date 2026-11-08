@@ -92,94 +92,96 @@ void main() {
   });
 
   for (final spotiflac in [false, true]) {
-    testWidgets('dragging a handle reorders and saves (SpotiFLAC: $spotiflac)', (
-      tester,
-    ) async {
-      final collections = _Collections();
-      await tester.pumpWidget(
-        _app(
-          Builder(
-            builder: (context) => Scaffold(
-              body: TextButton(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) =>
-                        const PlaylistReorderPage(playlistId: 'mix'),
+    testWidgets(
+      'dragging a handle reorders and saves (SpotiFLAC: $spotiflac)',
+      (tester) async {
+        final collections = _Collections();
+        await tester.pumpWidget(
+          _app(
+            Builder(
+              builder: (context) => Scaffold(
+                body: TextButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) =>
+                          const PlaylistReorderPage(playlistId: 'mix'),
+                    ),
                   ),
+                  child: const Text('open'),
                 ),
-                child: const Text('open'),
               ),
             ),
+            collections,
+            spotiflac: spotiflac,
           ),
-          collections,
-          spotiflac: spotiflac,
-        ),
-      );
-      await tester.tap(find.text('open'));
-      await tester.pumpAndSettle();
-      expect(find.text('Save'), findsNothing);
+        );
+        await tester.tap(find.text('open'));
+        await tester.pumpAndSettle();
+        expect(find.text('Save'), findsNothing);
 
-      final handles = find.byWidgetPredicate(
-        (widget) => widget is AppIcon && widget.icon == Icons.drag_handle,
-      );
-      expect(handles, findsNWidgets(3));
-      final rowHeight =
-          tester.getTopLeft(handles.at(1)).dy -
-          tester.getTopLeft(handles.at(0)).dy;
-      final gesture = await tester.startGesture(
-        tester.getCenter(handles.at(2)),
-      );
-      await tester.pump();
-      for (var step = 0; step < 10; step++) {
-        await gesture.moveBy(Offset(0, -rowHeight * 0.25));
+        final handles = find.byWidgetPredicate(
+          (widget) => widget is AppIcon && widget.icon == Icons.drag_handle,
+        );
+        expect(handles, findsNWidgets(3));
+        final rowHeight =
+            tester.getTopLeft(handles.at(1)).dy -
+            tester.getTopLeft(handles.at(0)).dy;
+        final gesture = await tester.startGesture(
+          tester.getCenter(handles.at(2)),
+        );
         await tester.pump();
-      }
-      await gesture.up();
-      await tester.pumpAndSettle();
+        for (var step = 0; step < 10; step++) {
+          await gesture.moveBy(Offset(0, -rowHeight * 0.25));
+          await tester.pump();
+        }
+        await gesture.up();
+        await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Save'));
-      await tester.pumpAndSettle();
-      expect(collections.orders, [
-        ['Third', 'First', 'Second'],
-      ]);
-      expect(find.text('Playlist order saved'), findsOneWidget);
-      expect(find.byType(PlaylistReorderPage), findsNothing);
-    });
+        await tester.tap(find.text('Save'));
+        await tester.pumpAndSettle();
+        expect(collections.orders, [
+          ['Third', 'First', 'Second'],
+        ]);
+        expect(find.text('Playlist order saved'), findsOneWidget);
+        expect(find.byType(PlaylistReorderPage), findsNothing);
+      },
+    );
 
-    testWidgets('create playlist offers three sources (SpotiFLAC: $spotiflac)', (
-      tester,
-    ) async {
-      final collections = _Collections();
-      await tester.pumpWidget(
-        _app(
-          Consumer(
-            builder: (context, ref, _) => Scaffold(
-              body: TextButton(
-                onPressed: () => showCreatePlaylistSheet(context, ref),
-                child: const Text('create'),
+    testWidgets(
+      'create playlist offers three sources (SpotiFLAC: $spotiflac)',
+      (tester) async {
+        final collections = _Collections();
+        await tester.pumpWidget(
+          _app(
+            Consumer(
+              builder: (context, ref, _) => Scaffold(
+                body: TextButton(
+                  onPressed: () => showCreatePlaylistSheet(context, ref),
+                  child: const Text('create'),
+                ),
               ),
             ),
+            collections,
+            spotiflac: spotiflac,
           ),
-          collections,
-          spotiflac: spotiflac,
-        ),
-      );
-      await tester.tap(find.text('create'));
-      await tester.pumpAndSettle();
-      for (final title in [
-        'Empty playlist',
-        'From a folder',
-        'Import playlist file',
-      ]) {
-        expect(find.text(title), findsOneWidget);
-      }
+        );
+        await tester.tap(find.text('create'));
+        await tester.pumpAndSettle();
+        for (final title in [
+          'Empty playlist',
+          'From a folder',
+          'Import playlist file',
+        ]) {
+          expect(find.text(title), findsOneWidget);
+        }
 
-      await tester.tap(find.text('Empty playlist'));
-      await tester.pumpAndSettle();
-      await tester.enterText(find.byType(EditableText), 'Evening');
-      await tester.tap(find.text('Create'));
-      await tester.pumpAndSettle();
-      expect(collections.createdNames, ['Evening']);
-    });
+        await tester.tap(find.text('Empty playlist'));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(EditableText), 'Evening');
+        await tester.tap(find.text('Create'));
+        await tester.pumpAndSettle();
+        expect(collections.createdNames, ['Evening']);
+      },
+    );
   }
 }
