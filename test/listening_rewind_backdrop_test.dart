@@ -211,8 +211,9 @@ void main() {
       ]) async {
         await tester.pump(duration);
         frames++;
-        if (tester.layers.whereType<ImageFilterLayer>().isNotEmpty)
+        if (tester.layers.whereType<ImageFilterLayer>().isNotEmpty) {
           liveFrames++;
+        }
         for (final blur in blurs(tester)) {
           if (blur.debugImage case final image?) images.add(image);
         }

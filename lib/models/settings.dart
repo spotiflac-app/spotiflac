@@ -741,13 +741,13 @@ class AppSettings {
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
     final settings = _$AppSettingsFromJson(json);
-    if (!settings.lyricsProviders.contains('spotiflac_lyrics')) {
+    if (!settings.lyricsProviders.contains('mornye_lyrics')) {
       return settings;
     }
     return settings.copyWith(
       lyricsProviders: {
         for (final provider in settings.lyricsProviders)
-          provider == 'spotiflac_lyrics' ? 'spotiflac_lyrics' : provider,
+          provider == 'mornye_lyrics' ? 'spotiflac_lyrics' : provider,
       }.toList(),
     );
   }
