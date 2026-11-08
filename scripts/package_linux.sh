@@ -128,7 +128,19 @@ fetch_tool() {
   local url="$1" expected="$2" destination="$3"
   if [[ ! -f "$destination" || "$(sha256_of "$destination")" != "$expected" ]]; then
     rm -f "$destination"
-    curl -fsSL --retry 3 -o "$destination.part" "$url"
+    if ! curl -fsSL --retry 3 -o "$destination.part" "$url"; then
+      # Release download URLs can return cached gateway errors while the
+      # asset API is healthy. Keep the exact release, asset and checksum.
+      if command -v gh >/dev/null 2>&1 &&
+          [[ -n "${GH_TOKEN:-${GITHUB_TOKEN:-}}" ]] &&
+          [[ "$url" =~ ^https://github.com/([^/]+/[^/]+)/releases/download/([^/]+)/([^/]+)$ ]]; then
+        gh release download "${BASH_REMATCH[2]}" --repo "${BASH_REMATCH[1]}" \
+          --pattern "${BASH_REMATCH[3]}" --output "$destination.part" --clobber
+      else
+        echo "Error: unable to fetch the pinned packaging tool." >&2
+        exit 1
+      fi
+    fi
     if [[ "$(sha256_of "$destination.part")" != "$expected" ]]; then
       echo "Error: checksum mismatch for $url." >&2
       rm -f "$destination.part"

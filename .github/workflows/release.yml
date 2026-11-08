@@ -626,6 +626,7 @@ jobs:
 
       - name: Package AppImage and deb
         env:
+          GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.get-version.outputs.version }}
           ARCH: ${{ matrix.arch }}
           DEB_ARCH: ${{ matrix.deb_arch }}
