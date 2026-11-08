@@ -19,6 +19,14 @@ endif()
 
 set(LIBMPV_ARCHIVE "${CMAKE_CURRENT_BINARY_DIR}/${LIBMPV}")
 set(LIBMPV_SRC "${CMAKE_CURRENT_BINARY_DIR}/${LIBMPV}-extracted")
+if(DEFINED ENV{SPOTIFLAC_VERIFIED_LIBMPV})
+  # Release recovery can reuse an architecture-checked DLL from an immutable,
+  # checksum-verified package when GitHub's binary download endpoint is down.
+  set(LIBMPV_SRC "$ENV{SPOTIFLAC_VERIFIED_LIBMPV}")
+  if(NOT EXISTS "${LIBMPV_SRC}/libmpv-2.dll")
+    message(FATAL_ERROR "The verified libmpv directory has no playback DLL.")
+  endif()
+else()
 file(DOWNLOAD "${LIBMPV_URL}" "${LIBMPV_ARCHIVE}"
   EXPECTED_HASH "${LIBMPV_HASH}" TLS_VERIFY ON STATUS LIBMPV_DOWNLOAD_STATUS)
 list(GET LIBMPV_DOWNLOAD_STATUS 0 LIBMPV_DOWNLOAD_CODE)
@@ -45,6 +53,7 @@ if(NOT EXISTS "${LIBMPV_SRC}/.complete")
     message(FATAL_ERROR "The libmpv archive contains no playback DLL.")
   endif()
   file(WRITE "${LIBMPV_SRC}/.complete" "${LIBMPV_HASH}")
+endif()
 endif()
 
 set(PLUGIN_NAME "media_kit_libs_windows_audio_plugin")

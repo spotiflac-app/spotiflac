@@ -1,0 +1,77 @@
+name: Final Windows branding packages
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  build:
+    name: Final Windows (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: pwsh
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-2022
+          - arch: arm64
+            runner: windows-11-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - name: Verify version and native provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python scripts/check_release_version.py --version v5.2.6
+          $run = gh api repos/spotiflac-app/spotiflac/actions/runs/42238210013 | ConvertFrom-Json
+          if ($run.head_sha -ne '9553af072d78936efe03ea80e3d3ae69b041d4f8' -or $run.conclusion -ne 'success') { throw 'Unexpected native provenance' }
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          github-token: ${{ github.token }}
+          run-id: 42238210013
+          name: desktop-release-windows-${{ matrix.arch }}
+          path: native-package
+      - name: Stage verified native components
+        run: ./scripts/stage_verified_windows_native.ps1 -Arch ${{ matrix.arch }}
+      - name: Setup Flutter
+        if: matrix.arch == 'x64'
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          channel: stable
+          flutter-version-file: .fvmrc
+          cache: true
+      - name: Setup native ARM64 Flutter
+        if: matrix.arch == 'arm64'
+        run: ./scripts/setup_flutter_windows_arm64.ps1
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ~\AppData\Local\Pub\Cache
+          key: pub-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('pubspec.lock') }}
+          restore-keys: pub-${{ runner.os }}-${{ matrix.arch }}-
+      - name: Build final branded app
+        run: |
+          python scripts/prepare_release_config.py --repository spotiflac-app/spotiflac-releases
+          flutter pub get
+          dart scripts/prepare_flutter_sdk.dart
+          $commit = git rev-parse --short=8 HEAD
+          flutter build windows --release --target lib/main.dart --dart-define="GIT_COMMIT=$commit" --dart-define-from-file=.release-defines.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./scripts/check_windows_bundle.ps1 -BundleDir 'build\windows\${{ matrix.arch }}\runner\Release' -Arch ${{ matrix.arch }}
+      - name: Package final branded app
+        run: |
+          ./scripts/package_windows.ps1 -Version v5.2.6 -Arch ${{ matrix.arch }} -BundleDir 'build\windows\${{ matrix.arch }}\runner\Release'
+          $lines = Get-ChildItem build\desktop -File -Filter 'SpotiFLAC-*' | Sort-Object Name | ForEach-Object { '{0}  {1}' -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name }
+          [IO.File]::WriteAllText("$PWD\build\desktop\SHA256SUMS-windows-${{ matrix.arch }}.txt", (($lines -join "`n") + "`n"))
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: desktop-release-windows-${{ matrix.arch }}
+          path: |
+            build/desktop/SpotiFLAC-*-setup.exe
+            build/desktop/SpotiFLAC-*-portable.zip
+            build/desktop/SHA256SUMS-windows-*.txt
