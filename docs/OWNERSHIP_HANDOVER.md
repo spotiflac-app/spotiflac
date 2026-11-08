@@ -1,4 +1,4 @@
-# SpotiFLAC ownership and release status
+# SpotiFLAC project and release status
 
 Updated 2026-11-08.
 
@@ -8,13 +8,12 @@ Updated 2026-11-08.
 - Product version: **5.2.6+165**
 - Application namespace: `com.spotiflac.app`
 
-## Completed rename and publication
+## Published application
 
-Mornye has been renamed to SpotiFLAC across the application, native bindings,
-platform metadata and installers. Version numbering continues from the original
-5.2.6+165 source baseline. The About screen and diagnostics also retain build 165.
-Publisher metadata uses SpotiFLAC; inherited copyright and contributor notices
-remain. Renaming the project does not transfer copyright in inherited code.
+The application, native bindings, platform metadata and installers use SpotiFLAC
+and the `com.spotiflac.app` namespace. The published product version is 5.2.6+165;
+the About screen and diagnostics also retain build 165. Copyright and contributor
+notices are retained with the corresponding source and third-party components.
 
 The owner approved public source hosting on 2026-11-06. The final release was
 published on 2026-11-08 in the separate project-owned downloads repository.
@@ -71,7 +70,7 @@ and Linux x64/ARM64 on Ubuntu 22.04 and 24.04. They apply to the package hashes
 tested in those runs, rather than constituting a repeated GUI test of every final
 package. Isolated provider tests used synthetic loopback audio. Physical phone
 installation, hardware audio and commercial-provider GUI coverage are not claimed.
-Those checks are outside the completed rename and packaging scope.
+Build and package verification do not establish those runtime results.
 
 Linux packaging rebuilds the original dart_smb2 0.1.3/r8 native sources and pinned
 LGPL FFmpeg sources against Ubuntu 22.04. It rejects GLIBC_PRIVATE and GLIBC

@@ -80,23 +80,23 @@ commands directly; without it, the footer shows only the copyright.
 
 ### Android APKs
 
-For production releases, stage the official Discord Social SDK with
-`bash scripts/setup_discord_sdk.sh /path/to/discord_social_sdk`, then build:
+Official Android releases use the Rust backend with the optional Discord SDK
+disabled. Prepare the public update endpoints, then build:
 
 ```bash
-bash scripts/build_android.sh --production
+python3 scripts/prepare_release_config.py --repository spotiflac-app/spotiflac-releases
+bash scripts/build_android.sh --lite --dart-define-from-file=.release-defines.json
 ```
 
-Production mode requires the staged SDK and rejects `--lite`. Release CI uses
-this mode and requires Discord on both Android and iOS. Fresh hosted runners
-must prepare the SDK before the release checks can pass. See
-[Discord build setup](third_party/spotiflac_discord/README.md#build-setup) for
-local staging and the CI decryption secret. Unencrypted SDK files are not
-committed to the repository.
+Configure the project signing credentials before distributing an APK. See
+[release setup](docs/RELEASE_SETUP.md) for signing and package verification.
+Playback and downloads remain available without Discord.
 
-For development release APKs, use `bash scripts/build_android.sh`. Full builds
-remain the default; add `--lite` to omit the optional Discord SDK while keeping
-playback and downloads. Debug builds can also run without the SDK.
+For an explicitly configured Discord integration, stage the authorized SDK and
+use `--production`, which requires that SDK and cannot be combined with `--lite`.
+This optional mode is separate from the official release CI configuration. See
+[Discord build setup](third_party/spotiflac_discord/README.md#build-setup).
+Never commit the unencrypted SDK or its credentials.
 
 To build only ARM64, set `SPOTIFLAC_RUST_ANDROID_ABIS=arm64-v8a`. The script uses
 the Flutter version in `.fvmrc` and audits the selected split APKs and universal
@@ -107,9 +107,9 @@ APK. Android Gradle builds the Rust native artifacts automatically.
 On macOS, run `bash scripts/build_ios.sh`, then `(cd ios && pod install)` before
 opening `ios/Runner.xcworkspace`. The application uses the Rust backend.
 
-For iOS Lite, run CocoaPods and the app build with `SPOTIFLAC_DISCORD_SDK=0`.
-An existing Pods installation must be regenerated with that setting. Production
-release CI requires the staged Discord SDK on iOS as well.
+Run CocoaPods and the app build with `SPOTIFLAC_DISCORD_SDK=0`, matching official
+iOS release CI. Regenerate an existing Pods installation with that setting.
+The published IPA is unsigned and requires signing before installation.
 
 For native iOS codec checks, see the
 [FFmpeg capability probe](scripts/README_ios_ffmpeg_capabilities.md).

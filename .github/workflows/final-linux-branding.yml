@@ -1,4 +1,4 @@
-name: Final Linux branding packages
+name: Final Linux release packages
 on:
   workflow_dispatch:
 permissions:
@@ -64,14 +64,14 @@ jobs:
           path: ~/.pub-cache
           key: pub-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pubspec.lock') }}
           restore-keys: pub-${{ runner.os }}-${{ runner.arch }}-
-      - name: Build final branded app
+      - name: Build release app
         run: |
           python3 scripts/prepare_release_config.py --repository spotiflac-app/spotiflac-releases
           flutter pub get
           python3 scripts/stage_verified_sqlite.py linux '${{ matrix.flutter_arch }}'
           dart scripts/prepare_flutter_sdk.dart
           flutter build linux --release --target lib/main.dart --dart-define="GIT_COMMIT=$(git rev-parse --short=8 HEAD)" --dart-define-from-file=.release-defines.json
-      - name: Package final branded app
+      - name: Package release app
         env:
           GH_TOKEN: ${{ github.token }}
           SPOTIFLAC_PACKAGE_ARCH: ${{ matrix.arch }}

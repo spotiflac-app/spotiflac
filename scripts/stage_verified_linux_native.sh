@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Reuse immutable native components when only Flutter/Dart branding changed.
+# Reuse immutable native components after verifying their source is unchanged.
 set -euo pipefail
 ARCH="${1:?x64 or arm64}"
 case "$ARCH" in x64) DEB=amd64; MACHINE='Advanced Micro Devices X86-64' ;; arm64) DEB=arm64; MACHINE='AArch64' ;; *) exit 1 ;; esac

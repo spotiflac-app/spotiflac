@@ -173,9 +173,9 @@ opens dynamically, and recommend Mesa and desktop integration tools. AppImages
 use host GTK, EGL/GLES, libsecret, playback and codec libraries; they do not
 remove the runtime dependency requirements.
 
-The final Linux branding build reuses verified native components from
+The final Linux package build reuses verified native components from
 [run 42468204499](https://github.com/spotiflac-app/spotiflac/actions/runs/42468204499)
-after comparing native source and dependency trees. The final Windows branding
+after comparing native source and dependency trees. The final Windows package
 build follows the same provenance check against
 [run 42238210013](https://github.com/spotiflac-app/spotiflac/actions/runs/42238210013).
 `stage_verified_sqlite.py` additionally requires the pinned upstream SQLite hash.
@@ -183,6 +183,6 @@ Rebuild native components when their source or dependency graph changes.
 
 Manual Release runs support `build_only`, `linux_only`, `windows_only` and
 `android_only` to recover individual builds without replacing a release.
-The final branding workflows are recovery recipes tied to the immutable
+The final package workflows are recovery recipes tied to the immutable
 verified native runs above. Use the normal release workflow for changed native
 source or dependencies.

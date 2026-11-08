@@ -18,7 +18,7 @@ void main() {
   });
   tearDownAll(() => messenger.setMockMethodCallHandler(secure, null));
 
-  test('the removed rebrand tour leaves no flag behind', () async {
+  test('the retired upgrade introduction preference is removed', () async {
     SharedPreferences.setMockInitialValues({
       'app_settings': jsonEncode(const AppSettings().toJson()),
       'settings_migration_version': 14,

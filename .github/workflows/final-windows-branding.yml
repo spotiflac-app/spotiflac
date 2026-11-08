@@ -1,4 +1,4 @@
-name: Final Windows branding packages
+name: Final Windows release packages
 on:
   workflow_dispatch:
     inputs:
@@ -55,7 +55,7 @@ jobs:
           path: ~\AppData\Local\Pub\Cache
           key: pub-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('pubspec.lock') }}
           restore-keys: pub-${{ runner.os }}-${{ matrix.arch }}-
-      - name: Build final branded app
+      - name: Build release app
         run: |
           python scripts/prepare_release_config.py --repository spotiflac-app/spotiflac-releases
           flutter pub get
@@ -71,7 +71,7 @@ jobs:
             exit $buildExit
           }
           ./scripts/check_windows_bundle.ps1 -BundleDir 'build\windows\${{ matrix.arch }}\runner\Release' -Arch ${{ matrix.arch }}
-      - name: Package final branded app
+      - name: Package release app
         run: |
           ./scripts/package_windows.ps1 -Version v5.2.6 -Arch ${{ matrix.arch }} -BundleDir 'build\windows\${{ matrix.arch }}\runner\Release'
           $lines = Get-ChildItem build\desktop -File -Filter 'SpotiFLAC-*' | Sort-Object Name | ForEach-Object { '{0}  {1}' -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name }
