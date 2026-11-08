@@ -15,9 +15,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('directory', type=Path)
     parser.add_argument('--report', type=Path, required=True)
+    parser.add_argument('--version', default='5.2.6')
+    parser.add_argument('--build-number', default='165')
     args = parser.parse_args()
     directory = args.directory.resolve()
-    packages = list(directory.glob('SpotiFLAC-v5.2.6-macos-universal.dmg'))
+    packages = list(directory.glob(f'SpotiFLAC-v{args.version}-macos-universal.dmg'))
     assert len(packages) == 1
     package = packages[0]
     manifest = (directory / 'SHA256SUMS-macos.txt').read_text().splitlines()
@@ -26,7 +28,7 @@ def main():
     digest = hashlib.sha256(package.read_bytes()).hexdigest()
     assert digest == expected[package.name]
     report = {'architecture': platform.machine(), 'package_sha256': digest,
-              'version': '5.2.6+165', 'passed': False,
+              'version': f'{args.version}+{args.build_number}', 'passed': False,
               'limits': 'Native startup only; no device audio, commercial provider or GUI interaction coverage.'}
     mount = directory / 'mount'
     mount.mkdir(exist_ok=True)
@@ -42,7 +44,7 @@ def main():
         app = apps[0]
         info = plistlib.loads((app / 'Contents/Info.plist').read_bytes())
         assert info['CFBundleIdentifier'] == 'com.spotiflac.app'
-        assert info['CFBundleShortVersionString'] == '5.2.6' and info['CFBundleVersion'] == '165'
+        assert info['CFBundleShortVersionString'] == args.version and info['CFBundleVersion'] == args.build_number
         subprocess.run(['codesign', '--verify', '--deep', '--strict', '--verbose=2', str(app)], check=True)
         binary = app / 'Contents/MacOS' / info['CFBundleExecutable']
         for name in [binary, app / 'Contents/Resources/ffmpeg/ffmpeg',
