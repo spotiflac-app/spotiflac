@@ -22,7 +22,7 @@ jobs:
           mkdir evidence
           docker run --rm -v "$PWD/package:/packages:ro" -v "$PWD/scripts:/checks:ro" -v "$PWD/evidence:/evidence" ubuntu:22.04 bash -euc '
             apt-get update -qq
-            DEBIAN_FRONTEND=noninteractive apt-get install -y /packages/*.deb python3 python3-pyatspi xvfb x11-utils imagemagick gnome-keyring libsecret-tools xdotool
+            DEBIAN_FRONTEND=noninteractive apt-get install -y /packages/*.deb python3 python3-pyatspi xvfb x11-utils imagemagick gnome-keyring libsecret-tools xdotool libglib2.0-bin gsettings-desktop-schemas at-spi2-core
             export LD_LIBRARY_PATH=/usr/lib/spotiflac/lib
             dbus-run-session -- xvfb-run -a python3 /checks/inspect_release_gui.py
           '
