@@ -2,13 +2,12 @@
 
 Website: https://spotiflac.com
 Source: https://github.com/spotiflac-app/spotiflac
-Downloads: https://github.com/spotiflac-app/spotiflac-releases/releases/tag/v5.2.6
+Downloads: https://github.com/spotiflac-app/spotiflac-releases/releases/tag/v5.2.7
 Namespace: `com.spotiflac.app`
-Published product version: `5.2.6+165`
+Published product version: `5.2.7+166`
 
 The application, native bindings, platform metadata and installers use the
-SpotiFLAC identity. Version numbering continues from the original source;
-the About screen and diagnostics also retain build 165.
+SpotiFLAC identity. The About screen and diagnostics identify build 166.
 
 Official mobile and desktop builds check the project-owned downloads repository.
 Announcements use that repository's `config/app.json`; funding is disabled.
