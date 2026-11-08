@@ -53,6 +53,7 @@ manifest = {'name': extension_id, 'displayName': 'SpotiFLAC Isolated QA', 'versi
 (source / 'index.js').write_text('''const base = BASE;
 registerExtension({
  searchTracks(query) { const response = http.get(base + '/catalog'); if (!response.ok) throw new Error('catalog failed'); return JSON.parse(response.body); },
+ customSearch(query) { const response = http.get(base + '/catalog'); if (!response.ok) throw new Error('catalog failed'); return JSON.parse(response.body).tracks; },
  checkAvailability() { return {available: true, track_id: 'synthetic-tone'}; },
  download(trackId, quality, outputPath) {
    const response = fetch(base + '/tone.flac');
