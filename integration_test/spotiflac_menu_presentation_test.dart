@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:spotiflac/providers/runtime_profile_provider.dart';
 import 'package:spotiflac/services/custom_font_service.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
+import 'package:spotiflac/widgets/spotiflac_chrome.dart';
 import 'package:spotiflac/widgets/spotiflac_context_menu.dart';
 import 'package:spotiflac/widgets/spotiflac_glass_preparation.dart';
 
@@ -42,9 +43,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            spotiflacGlassLevelProvider.overrideWithValue(
-              SpotiFLACGlassLevel.liquid,
-            ),
+            spotiflacGlassLevelProvider.overrideWithValue(SpotiFLACGlassLevel.liquid),
             spotiflacBlurEnabledProvider.overrideWithValue(true),
           ],
           child: MaterialApp(
@@ -146,8 +145,52 @@ void main() {
         ),
       );
       await probe.wait(const Duration(milliseconds: 500));
-      Future<void> open() async {
+
+      Future<void> captureMenu(String phase) async {
+        await tester.runAsync(() async {
+          final boundary = tester.renderObject<RenderRepaintBoundary>(
+            find.byKey(capture),
+          );
+          final image = await boundary.toImage(
+            pixelRatio: tester.view.devicePixelRatio,
+          );
+          try {
+            final png = (await image.toByteData(
+              format: ui.ImageByteFormat.png,
+            ))!;
+            final file = File(
+              '${(await getTemporaryDirectory()).path}/menu-$phase-${brightness.name}.png',
+            );
+            await file.writeAsBytes(
+              png.buffer.asUint8List(png.offsetInBytes, png.lengthInBytes),
+            );
+            debugPrint('MENU_PRESENTATION: ${file.path}');
+          } finally {
+            image.dispose();
+          }
+        });
+      }
+
+      Future<void> open({bool captureOpening = false}) async {
         await tester.tap(find.byKey(button));
+        if (captureOpening) {
+          await probe.wait(const Duration(milliseconds: 64));
+          final menu = tester.renderObject<RenderBox>(
+            find.byType(SpotiFLACContextMenu),
+          );
+          final width =
+              (menu.localToGlobal(Offset(menu.size.width, 0)) -
+                      menu.localToGlobal(Offset.zero))
+                  .dx;
+          expect(width, lessThan(menu.size.width));
+          expect(
+            tester
+                .widget<SpotiFLACGlassPanel>(find.byType(SpotiFLACGlassPanel))
+                .glassProgress,
+            1,
+          );
+          await captureMenu('opening');
+        }
         await probe.wait(const Duration(milliseconds: 450));
         expect(find.byType(SpotiFLACContextMenu), findsOneWidget);
       }
@@ -162,29 +205,10 @@ void main() {
         await open();
         await close();
       });
-      await open();
+      await open(captureOpening: true);
       final menuContext = tester.element(find.byType(SpotiFLACContextMenu));
       expect(Theme.of(menuContext).textTheme.bodyLarge?.fontFamily, family);
-      await tester.runAsync(() async {
-        final boundary = tester.renderObject<RenderRepaintBoundary>(
-          find.byKey(capture),
-        );
-        final image = await boundary.toImage(
-          pixelRatio: tester.view.devicePixelRatio,
-        );
-        try {
-          final png = (await image.toByteData(format: ui.ImageByteFormat.png))!;
-          final file = File(
-            '${(await getTemporaryDirectory()).path}/menu-650-${brightness.name}.png',
-          );
-          await file.writeAsBytes(
-            png.buffer.asUint8List(png.offsetInBytes, png.lengthInBytes),
-          );
-          debugPrint('MENU_PRESENTATION: ${file.path}');
-        } finally {
-          image.dispose();
-        }
-      });
+      await captureMenu('settled');
       await close();
       await probe.finish();
       expect(tester.takeException(), isNull);

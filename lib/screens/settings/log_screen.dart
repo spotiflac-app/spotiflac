@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:spotiflac/widgets/app_alert_dialog.dart';
 import 'package:spotiflac/widgets/app_bottom_sheet.dart';
 import 'package:spotiflac/widgets/app_content_card.dart';
@@ -14,6 +15,7 @@ import 'package:spotiflac/widgets/app_icon_button.dart';
 import 'package:spotiflac/widgets/app_menu_button.dart';
 import 'package:spotiflac/widgets/app_sliver_header.dart';
 import 'package:spotiflac/widgets/app_search_field.dart';
+import 'package:spotiflac/widgets/sliver_layout_info_builder.dart';
 import 'package:spotiflac/utils/ordered_range_selection.dart';
 
 part 'log_screen_widgets.dart';
@@ -34,6 +36,8 @@ class _LogScreenState extends State<LogScreen> {
   bool _selectionMode = false;
   final Set<LogEntry> _selectedEntries = <LogEntry>{};
   LogEntry? _selectionAnchor;
+  int? _logUpdateFrame;
+  int _scrollGeneration = 0;
 
   final List<String> _levels = ['ALL', 'DEBUG', 'INFO', 'WARN', 'ERROR'];
 
@@ -42,19 +46,27 @@ class _LogScreenState extends State<LogScreen> {
     super.initState();
     LogBuffer().addListener(_onLogUpdate);
     LogBuffer().startNativeLogPolling();
+    _scrollController.addListener(_onScroll);
   }
 
   @override
   void dispose() {
     LogBuffer().removeListener(_onLogUpdate);
     LogBuffer().stopNativeLogPolling();
+    final frame = _logUpdateFrame;
+    if (frame != null) WidgetsBinding.instance.cancelFrameCallbackWithId(frame);
     _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
   void _onLogUpdate() {
-    if (mounted) {
+    if (_logUpdateFrame != null) return;
+    // A burst of Dart logs can notify once per entry. Read the final buffer
+    // once before the next frame, including selection pruning and tailing.
+    _logUpdateFrame = WidgetsBinding.instance.scheduleFrameCallback((_) {
+      _logUpdateFrame = null;
+      if (!mounted) return;
       if (_selectionMode) {
         final currentEntries = LogBuffer().entries.toSet();
         _selectedEntries.removeWhere(
@@ -69,16 +81,35 @@ class _LogScreenState extends State<LogScreen> {
       }
       setState(() {});
       if (_autoScroll && _scrollController.hasClients) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_scrollController.hasClients) {
-            _scrollController.animateTo(
-              _scrollController.position.maxScrollExtent,
-              duration: const Duration(milliseconds: 100),
-              curve: Curves.easeOut,
-            );
-          }
-        });
+        _scrollToLatest(++_scrollGeneration);
       }
+    });
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.userScrollDirection !=
+        ScrollDirection.idle) {
+      _scrollGeneration++;
+    }
+  }
+
+  Future<void> _scrollToLatest(int generation) async {
+    await WidgetsBinding.instance.endOfFrame;
+    while (mounted &&
+        generation == _scrollGeneration &&
+        _autoScroll &&
+        !_selectionMode &&
+        _scrollController.hasClients) {
+      final position = _scrollController.position;
+      if (position.extentAfter <= 0.5) return;
+      await position.animateTo(
+        position.maxScrollExtent,
+        duration: const Duration(milliseconds: 100),
+        curve: Curves.easeOut,
+      );
+      // A lazy list refines its extent as new multiline rows are laid out.
+      // Follow that estimate until the final row is actually visible.
+      await WidgetsBinding.instance.endOfFrame;
     }
   }
 
@@ -201,33 +232,20 @@ class _LogScreenState extends State<LogScreen> {
     );
   }
 
-  void _clearLogs() {
-    showAppDialog<void>(
-      context: context,
-      builder: (context) => AppAlertDialog(
-        title: Text(context.l10n.logClearLogsTitle),
-        content: Text(context.l10n.logClearLogsMessage),
-        actions: [
-          AppDialogAction(
-            isDefault: true,
-            onPressed: () => Navigator.pop(context),
-            child: Text(context.l10n.dialogCancel),
-          ),
-          AppDialogAction(
-            filled: true,
-            isDestructive: true,
-            onPressed: () {
-              _selectionMode = false;
-              _selectedEntries.clear();
-              _selectionAnchor = null;
-              LogBuffer().clear();
-              Navigator.pop(context);
-            },
-            child: Text(context.l10n.dialogClear),
-          ),
-        ],
-      ),
+  Future<void> _clearLogs() async {
+    final confirmed = await showAppConfirmDialog(
+      context,
+      title: context.l10n.logClearLogsTitle,
+      message: context.l10n.logClearLogsMessage,
+      confirmLabel: context.l10n.dialogClear,
+      cancelIsDefault: true,
+      destructive: true,
     );
+    if (!confirmed) return;
+    _selectionMode = false;
+    _selectedEntries.clear();
+    _selectionAnchor = null;
+    LogBuffer().clear();
   }
 
   Future<void> _showLevelPicker(BuildContext context) async {
@@ -379,88 +397,81 @@ class _LogScreenState extends State<LogScreen> {
             ),
 
             const SliverToBoxAdapter(child: AppCrashBanner(diagnostic: true)),
-            SliverToBoxAdapter(
-              child: SettingsSectionHeader(
-                title: context.l10n.logFilterSection,
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: SettingsGroup(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
-                    child: Row(
-                      children: [
-                        AppIcon(
-                          Icons.filter_list,
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                context.l10n.logFilterLevel,
-                                style: Theme.of(context).textTheme.bodyLarge,
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                context.l10n.logFilterBySeverity,
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(
-                                      color: colorScheme.onSurfaceVariant,
-                                    ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        ExpressiveButton(
-                          tonal: true,
-                          onPressed: () => _showLevelPicker(context),
-                          icon: const Icon(Icons.arrow_drop_down, size: 20),
-                          style: FilledButton.styleFrom(
-                            minimumSize: const Size(0, 40),
-                            padding: const EdgeInsets.symmetric(horizontal: 14),
-                          ),
-                          child: Text(
-                            _selectedLevel,
-                            style: TextStyle(
-                              color: _selectedLevel == 'ALL'
-                                  ? null
-                                  : _getLevelColor(_selectedLevel, colorScheme),
-                              fontWeight: FontWeight.w600,
+            ...settingsSectionSlivers(
+              title: context.l10n.logFilterSection,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
+                  child: Row(
+                    children: [
+                      AppIcon(
+                        Icons.filter_list,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              context.l10n.logFilterLevel,
+                              style: Theme.of(context).textTheme.bodyLarge,
                             ),
+                            const SizedBox(height: 2),
+                            Text(
+                              context.l10n.logFilterBySeverity,
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      ExpressiveButton(
+                        tonal: true,
+                        onPressed: () => _showLevelPicker(context),
+                        icon: const Icon(Icons.arrow_drop_down, size: 20),
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(0, 40),
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                        ),
+                        child: Text(
+                          _selectedLevel,
+                          style: TextStyle(
+                            color: _selectedLevel == 'ALL'
+                                ? null
+                                : _getLevelColor(_selectedLevel, colorScheme),
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  Divider(
-                    height: 1,
-                    indent: 56,
-                    endIndent: 20,
-                    color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+                ),
+                Divider(
+                  height: 1,
+                  indent: 56,
+                  endIndent: 20,
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
                   ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
-                    child: AppSearchField(
-                      controller: _searchController,
-                      hintText: context.l10n.logSearchHint,
-                      clearTooltip: context.l10n.logClearSearch,
-                      onClear: () => setState(() => _searchQuery = ''),
-                      onChanged: (value) =>
-                          setState(() => _searchQuery = value),
-                    ),
+                  child: AppSearchField(
+                    controller: _searchController,
+                    hintText: context.l10n.logSearchHint,
+                    clearTooltip: context.l10n.logClearSearch,
+                    onClear: () => setState(() => _searchQuery = ''),
+                    onChanged: (value) => setState(() => _searchQuery = value),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
 
             SliverToBoxAdapter(
@@ -514,25 +525,28 @@ class _LogScreenState extends State<LogScreen> {
                       ],
                     ),
                   )
-                : SliverToBoxAdapter(
-                    child: SettingsGroup(
-                      children: [
-                        ...logs.asMap().entries.map((entry) {
-                          final index = entry.key;
-                          final log = entry.value;
-                          return _LogEntryTile(
-                            entry: log,
-                            levelColor: _getLevelColor(log.level, colorScheme),
-                            showDivider: index < logs.length - 1,
-                            selectionMode: _selectionMode,
-                            selected: _selectedEntries.contains(log),
-                            onTap: () => _toggleEntrySelection(log),
-                            onLongPress: () => _selectionMode
-                                ? _selectRangeTo(log)
-                                : _enterSelectionMode(log),
-                          );
-                        }),
-                      ],
+                : SliverLayoutInfoBuilder<double>(
+                    select: (constraints) => constraints.crossAxisExtent,
+                    builder: (context, width) => SliverSettingsGroup(
+                      margin: EdgeInsets.symmetric(
+                        horizontal: settingsHorizontalInset(context, width),
+                        vertical: 4,
+                      ),
+                      itemCount: logs.length,
+                      itemBuilder: (context, index) {
+                        final log = logs[index];
+                        return _LogEntryTile(
+                          entry: log,
+                          levelColor: _getLevelColor(log.level, colorScheme),
+                          showDivider: index < logs.length - 1,
+                          selectionMode: _selectionMode,
+                          selected: _selectedEntries.contains(log),
+                          onTap: () => _toggleEntrySelection(log),
+                          onLongPress: () => _selectionMode
+                              ? _selectRangeTo(log)
+                              : _enterSelectionMode(log),
+                        );
+                      },
                     ),
                   ),
 

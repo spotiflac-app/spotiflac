@@ -83,8 +83,6 @@ PlaylistPickerSummary _playlist(String name, {bool contains = false}) =>
     PlaylistPickerSummary(
       id: name,
       name: name,
-      createdAt: DateTime(2026),
-      updatedAt: DateTime(2026),
       trackCount: 2,
       containsAllRequestedTracks: contains,
     );
@@ -129,6 +127,101 @@ void main() {
           rootBundle.load('packages/cupertino_icons/assets/CupertinoIcons.ttf'),
         ))
         .load();
+  });
+
+  for (final spotiflac in [true, false]) {
+    testWidgets('track menu copies the service link (SpotiFLAC: $spotiflac)', (
+      tester,
+    ) async {
+      String? copied;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copied = (call.arguments as Map)['text'] as String?;
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      const linked = Track(
+        id: 'example-track',
+        name: 'Example track',
+        artistName: 'Example artist',
+        albumName: 'Example album',
+        duration: 180,
+        deezerId: '42',
+      );
+      await tester.pumpWidget(
+        _app(
+          const TrackCollectionQuickActions(track: linked),
+          _Collections(),
+          brightness: Brightness.light,
+          spotiflac: spotiflac,
+        ),
+      );
+      await tester.tap(find.byType(TrackCollectionQuickActions));
+      await tester.pumpAndSettle();
+      final action = find.text('Copy Deezer link');
+      await tester.ensureVisible(action);
+      await tester.tap(action);
+      await tester.pumpAndSettle();
+      expect(copied, 'https://www.deezer.com/track/42');
+      expect(find.text('Deezer URL copied to clipboard'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('desktop track menu offers the link only when known', (
+    tester,
+  ) async {
+    final labels = <String, List<String>>{};
+    const linked = Track(
+      id: 'deezer:42',
+      name: 'Example track',
+      artistName: 'Example artist',
+      albumName: 'Example album',
+      duration: 180,
+    );
+    await tester.pumpWidget(
+      _app(
+        Consumer(
+          builder: (context, ref, _) {
+            for (final track in [_track, linked]) {
+              labels[track.id] = [
+                for (final group in trackOptionMenuGroups(context, ref, track))
+                  for (final action in group) action.label,
+              ];
+            }
+            return const SizedBox();
+          },
+        ),
+        _Collections(),
+        brightness: Brightness.light,
+      ),
+    );
+    expect(labels['deezer:42'], contains('Copy Deezer link'));
+    expect(labels['example-track']!.where((l) => l.contains('link')), isEmpty);
+  });
+
+  testWidgets('track menu hides the link for an unknown service', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _app(
+        const TrackCollectionQuickActions(track: _track),
+        _Collections(),
+        brightness: Brightness.light,
+      ),
+    );
+    await tester.tap(find.byIcon(CupertinoIcons.ellipsis));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('link'), findsNothing);
   });
 
   for (final brightness in Brightness.values) {
@@ -228,55 +321,54 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets(
-      'picker retains selections after failure (SpotiFLAC: $spotiflac)',
-      (tester) async {
-        final firstAddition = Completer<void>()..complete();
-        final secondAddition = Completer<void>();
-        final collections = _Collections()
-          .._summaries = [_playlist('Road trip'), _playlist('Evening music')]
-          ..pendingAdditions.addAll([firstAddition, secondAddition]);
-        final observer = _PopObserver();
-        await tester.pumpWidget(
-          _app(
-            Consumer(
-              builder: (context, ref, _) => TextButton(
-                onPressed: () =>
-                    showAddTracksToPlaylistSheet(context, ref, [_track]),
-                child: const Text('Open'),
-              ),
+    testWidgets('picker retains selections after failure (SpotiFLAC: $spotiflac)', (
+      tester,
+    ) async {
+      final firstAddition = Completer<void>()..complete();
+      final secondAddition = Completer<void>();
+      final collections = _Collections()
+        .._summaries = [_playlist('Road trip'), _playlist('Evening music')]
+        ..pendingAdditions.addAll([firstAddition, secondAddition]);
+      final observer = _PopObserver();
+      await tester.pumpWidget(
+        _app(
+          Consumer(
+            builder: (context, ref, _) => TextButton(
+              onPressed: () =>
+                  showAddTracksToPlaylistSheet(context, ref, [_track]),
+              child: const Text('Open'),
             ),
-            collections,
-            brightness: Brightness.light,
-            spotiflac: spotiflac,
-            navigatorObservers: [observer],
           ),
-        );
-        await tester.tap(find.text('Open'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Road trip'));
-        await tester.tap(find.text('Evening music'));
-        await tester.pump();
-        await tester.tap(find.text('Done'));
-        await tester.pump();
-        expect(collections.additions, ['Road trip', 'Evening music']);
-        secondAddition.completeError(StateError('write failed'));
-        await tester.pump();
-        expect(observer.pops, 0);
-        expect(_doneAction(tester, spotiflac), isNotNull);
+          collections,
+          brightness: Brightness.light,
+          spotiflac: spotiflac,
+          navigatorObservers: [observer],
+        ),
+      );
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Road trip'));
+      await tester.tap(find.text('Evening music'));
+      await tester.pump();
+      await tester.tap(find.text('Done'));
+      await tester.pump();
+      expect(collections.additions, ['Road trip', 'Evening music']);
+      secondAddition.completeError(StateError('write failed'));
+      await tester.pump();
+      expect(observer.pops, 0);
+      expect(_doneAction(tester, spotiflac), isNotNull);
 
-        // Retrying keeps the failed selection and skips the persisted playlist.
-        await tester.tap(find.text('Done'));
-        await tester.pumpAndSettle();
-        expect(collections.additions, [
-          'Road trip',
-          'Evening music',
-          'Evening music',
-        ]);
-        expect(observer.pops, 1);
-        expect(tester.takeException(), isNull);
-      },
-    );
+      // Retrying keeps the failed selection and skips the persisted playlist.
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+      expect(collections.additions, [
+        'Road trip',
+        'Evening music',
+        'Evening music',
+      ]);
+      expect(observer.pops, 1);
+      expect(tester.takeException(), isNull);
+    });
 
     testWidgets('picker adds only new selections (SpotiFLAC: $spotiflac)', (
       tester,

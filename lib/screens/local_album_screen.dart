@@ -1,48 +1,53 @@
 import 'dart:io';
 import 'dart:math';
-
 import 'package:audio_service/audio_service.dart' show MediaItem;
-import 'package:spotiflac/services/deleted_library_files.dart';
 import 'package:flutter/material.dart';
 import 'package:spotiflac/theme/app_tokens.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
-import 'package:spotiflac/services/local_track_batch_actions.dart';
 import 'package:spotiflac/theme/cover_palette.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:spotiflac/l10n/l10n.dart';
 import 'package:spotiflac/providers/settings_provider.dart';
 import 'package:spotiflac/utils/adaptive_layout.dart';
 import 'package:spotiflac/utils/audio_quality_badge_policy.dart';
-import 'package:spotiflac/utils/confirm_and_delete_tracks.dart';
 import 'package:spotiflac/utils/file_access.dart';
 import 'package:spotiflac/utils/image_cache_utils.dart';
 import 'package:spotiflac/services/library_database.dart';
 import 'package:spotiflac/services/batch_track_actions.dart';
 import 'package:spotiflac/models/album_track_order.dart';
+import 'package:spotiflac/models/track.dart';
 import 'package:spotiflac/models/unified_library_item.dart';
 import 'package:spotiflac/services/local_track_redownload_service.dart';
+import 'package:spotiflac/providers/deleted_library_files.dart';
 import 'package:spotiflac/providers/local_library_provider.dart';
 import 'package:spotiflac/providers/playback_provider.dart';
 import 'package:spotiflac/providers/music_player_provider.dart';
 import 'package:spotiflac/providers/player_motion_artwork_provider.dart';
-import 'package:spotiflac/screens/collapsing_header_scroll_mixin.dart';
-import 'package:spotiflac/screens/selection_mode_mixin.dart';
+import 'package:spotiflac/controllers/collapsing_header_scroll_mixin.dart';
+import 'package:spotiflac/controllers/confirm_and_delete_tracks.dart';
+import 'package:spotiflac/controllers/local_track_batch_actions.dart';
+import 'package:spotiflac/controllers/selection_mode_mixin.dart';
 import 'package:spotiflac/screens/track_metadata_screen.dart';
+import 'package:spotiflac/widgets/cached_cover_image.dart';
 import 'package:spotiflac/widgets/collection_scaffold.dart';
+import 'package:spotiflac/widgets/collection_suggestions_section.dart';
 import 'package:spotiflac/utils/desktop_platform.dart';
 import 'package:spotiflac/widgets/desktop/context_menu.dart';
 import 'package:spotiflac/widgets/desktop/desktop_selection.dart';
 import 'package:spotiflac/widgets/desktop/detail_header.dart';
 import 'package:spotiflac/widgets/desktop/library_track_menu.dart';
+import 'package:spotiflac/widgets/link/link_library_actions.dart';
+import 'package:spotiflac/services/link/link_library_jobs.dart';
 import 'package:spotiflac/widgets/playlist_picker_sheet.dart';
 import 'package:spotiflac/widgets/desktop/track_table.dart';
 import 'package:spotiflac/widgets/expressive_button.dart';
 import 'package:spotiflac/widgets/album_track_tile.dart';
 import 'package:spotiflac/widgets/animation_utils.dart';
 import 'package:spotiflac/widgets/app_snack_bar.dart';
-import 'package:spotiflac/widgets/destructive_selection_button.dart';
-import 'package:spotiflac/widgets/selection_action_button.dart';
-import 'package:spotiflac/widgets/selection_bottom_bar.dart';
+import 'package:spotiflac/widgets/library_track_selection_bar.dart';
+import 'package:spotiflac/widgets/link/link_actions.dart';
+import 'package:spotiflac/widgets/network_offline_actions.dart';
+import 'package:spotiflac/widgets/network_upload_actions.dart';
 import 'package:spotiflac/widgets/library_selection_playback_actions.dart';
 import 'package:spotiflac/widgets/local_library_artwork_builder.dart';
 import 'package:spotiflac/widgets/disc_separator_chip.dart';
@@ -147,6 +152,19 @@ class _LocalAlbumScreenState extends ConsumerState<LocalAlbumScreen>
 
   Future<void> _deleteSelected(List<LocalLibraryItem> currentTracks) async {
     final container = ProviderScope.containerOf(context, listen: false);
+    final selected = _selectedUnifiedItems(currentTracks);
+    if (hasLinkLibrarySongs(container, selected)) {
+      await runLinkLibraryAction(
+        context,
+        container,
+        selected,
+        LinkLibraryAction.delete,
+        onAccepted: () {
+          if (mounted) exitSelectionMode();
+        },
+      );
+      return;
+    }
     final libraryNotifier = ref.read(localLibraryProvider.notifier);
     final tracksById = {for (final track in currentTracks) track.id: track};
 
@@ -292,15 +310,27 @@ class _LocalAlbumScreenState extends ConsumerState<LocalAlbumScreen>
               child: AlbumTrackListSkeleton(itemCount: 8, showQuality: true),
             ),
           )
-        else
+        else ...[
           _buildTrackList(context, colorScheme, tracks),
+          if (!showsSelectionBar)
+            CollectionSuggestionsSliver(
+              collectionKey:
+                  'local-album:${widget.artistName}:${widget.albumName}',
+              tracks: [
+                for (final item in tracks)
+                  Track(
+                    id: item.id,
+                    name: item.trackName,
+                    artistName: item.artistName,
+                    albumName: item.albumName,
+                    duration: item.duration ?? 0,
+                    isrc: item.isrc,
+                  ),
+              ],
+            ),
+        ],
       ],
-      selectionBar: _buildSelectionBottomBar(
-        context,
-        colorScheme,
-        tracks,
-        bottomPadding,
-      ),
+      selectionBar: _buildSelectionBottomBar(tracks, bottomPadding),
     );
     return DesktopListScope(
       onSelectAll: tracks.isEmpty
@@ -325,8 +355,7 @@ class _LocalAlbumScreenState extends ConsumerState<LocalAlbumScreen>
     String? coverPath,
   ) {
     final expandedHeight = calculateExpandedHeight(context);
-    final motion =
-        context.isSpotiFLAC && !MediaQuery.disableAnimationsOf(context)
+    final motion = context.isSpotiFLAC && !MediaQuery.disableAnimationsOf(context)
         ? ref
               .watch(
                 playerMotionArtworkProvider((
@@ -341,13 +370,10 @@ class _LocalAlbumScreenState extends ConsumerState<LocalAlbumScreen>
 
     final cacheWidth = coverCacheWidthForViewport(context);
     final Widget background = coverPath != null
-        ? Image.file(
-            File(coverPath),
-            fit: BoxFit.cover,
-            cacheWidth: cacheWidth,
-            gaplessPlayback: true,
-            filterQuality: FilterQuality.low,
-            errorBuilder: (_, _, _) => Container(color: colorScheme.surface),
+        ? LocalOrNetworkCoverImage(
+            url: coverPath,
+            localCacheWidth: cacheWidth,
+            placeholder: (_) => Container(color: colorScheme.surface),
           )
         : Container(
             color: colorScheme.surfaceContainerHighest,
@@ -363,7 +389,8 @@ class _LocalAlbumScreenState extends ConsumerState<LocalAlbumScreen>
       immersive: context.isSpotiFLAC,
       squareArtwork: motion == null,
       expandedHeight: expandedHeight,
-      showTitleInAppBar: showTitleInAppBar,
+      showTitleInAppBar: false,
+      showTitleListenable: showTitleNotifier,
       background: motion == null
           ? background
           : MotionHeaderBanner(videoUrl: motion.source, fallback: background),
@@ -415,6 +442,12 @@ class _LocalAlbumScreenState extends ConsumerState<LocalAlbumScreen>
         ),
       ),
       meta: _buildLocalHeaderMeta(context, qualityLabelMode),
+      appBarActions: [
+        NetworkOfflineButton(items: _albumItems()),
+        NetworkUploadButton(items: _albumItems()),
+        if (ref.watch(linkPhoneClientProvider) != null)
+          LinkTransferButtons(items: _albumItems()),
+      ],
       actions: Consumer(
         builder: (context, ref, _) {
           final isCurrent = ref.watch(
@@ -550,7 +583,7 @@ class _LocalAlbumScreenState extends ConsumerState<LocalAlbumScreen>
               child: StaggeredListItem(
                 index: index,
                 animate: widget.loadTracks == null,
-                child: _buildTrackItem(context, colorScheme, track),
+                child: _buildTrackItem(context, track),
               ),
             );
           }, childCount: discTracks.length),
@@ -675,11 +708,7 @@ class _LocalAlbumScreenState extends ConsumerState<LocalAlbumScreen>
     );
   }
 
-  Widget _buildTrackItem(
-    BuildContext context,
-    ColorScheme colorScheme,
-    LocalLibraryItem track,
-  ) {
+  Widget _buildTrackItem(BuildContext context, LocalLibraryItem track) {
     return Consumer(
       builder: (context, ref, _) {
         final isCurrent = ref.watch(
@@ -700,30 +729,19 @@ class _LocalAlbumScreenState extends ConsumerState<LocalAlbumScreen>
                   track.artistName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: colorScheme.onSurfaceVariant),
                 ),
               ),
               if (track.format != null) ...[
-                Text(
-                  ' • ',
-                  style: TextStyle(
-                    color: colorScheme.onSurfaceVariant,
-                    fontSize: 12,
-                  ),
-                ),
+                const Text(' • ', style: TextStyle(fontSize: 12)),
                 Text(
                   track.format!.toUpperCase(),
-                  style: TextStyle(
-                    color: colorScheme.onSurfaceVariant,
-                    fontSize: 12,
-                  ),
+                  style: const TextStyle(fontSize: 12),
                 ),
               ],
             ],
           ),
           isSelectionMode: isSelectionMode,
           isSelected: selectedIds.contains(track.id),
-          colorScheme: colorScheme,
           onToggleSelection: () => toggleSelection(track.id),
           onOpen: () => _openMetadata(track),
           onEnterSelectionMode: () => enterSelectionMode(track.id),
@@ -786,92 +804,41 @@ class _LocalAlbumScreenState extends ConsumerState<LocalAlbumScreen>
   }
 
   Widget _buildSelectionBottomBar(
-    BuildContext context,
-    ColorScheme colorScheme,
     List<LocalLibraryItem> tracks,
     double bottomPadding,
   ) {
-    final selectedCount = selectedIds.length;
-    final flacEligibleCount = _selectedFlacEligibleItems(tracks).length;
-    final allSelected = selectedCount == tracks.length && tracks.isNotEmpty;
+    final allSelected =
+        selectedIds.length == tracks.length && tracks.isNotEmpty;
 
-    return SelectionBottomBar(
-      selectedCount: selectedCount,
+    return LibraryTrackSelectionBar(
+      selectedCount: selectedIds.length,
       allSelected: allSelected,
       onClose: exitSelectionMode,
-      onToggleSelectAll: () {
-        if (allSelected) {
-          exitSelectionMode();
-        } else {
-          selectAll(tracks.map((e) => e.id));
-        }
-      },
+      onToggleSelectAll: allSelected
+          ? exitSelectionMode
+          : () => selectAll(tracks.map((e) => e.id)),
       bottomPadding: bottomPadding,
-      children: [
-        LibrarySelectionPlaybackActions(
-          items: _selectedUnifiedItems(tracks),
-          onClose: exitSelectionMode,
-        ),
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Text(context.l10n.trackEditMetadata),
-        ),
-        SelectionActionGrid(
-          children: [
-            if (flacEligibleCount > 0)
-              SelectionActionButton(
-                icon: Icons.download_for_offline_outlined,
-                label: '${context.l10n.queueFlacAction} ($flacEligibleCount)',
-                onPressed: () => _queueSelectedAsFlac(tracks),
-                colorScheme: colorScheme,
-              ),
-            SelectionActionButton(
-              icon: Icons.auto_fix_high_outlined,
-              label: '${context.l10n.trackReEnrich} ($selectedCount)',
-              onPressed: selectedCount > 0
-                  ? () => _reEnrichSelected(tracks)
-                  : null,
-              colorScheme: colorScheme,
-            ),
-            SelectionActionButton(
-              icon: Icons.swap_horiz,
-              label: context.l10n.selectionConvertCount(selectedCount),
-              onPressed: selectedCount > 0
-                  ? () => showBatchConvertSheet(
-                      this.context,
-                      ref,
-                      _selectedUnifiedItems(tracks),
-                      onExitSelectionMode: exitSelectionMode,
-                    )
-                  : null,
-              colorScheme: colorScheme,
-            ),
-            for (final remove in [false, true])
-              SelectionActionButton(
-                icon: remove ? Icons.remove_circle_outline : Icons.graphic_eq,
-                label: remove
-                    ? context.l10n.selectionRemoveReplayGainCount(selectedCount)
-                    : context.l10n.selectionReplayGainCount(selectedCount),
-                onPressed: selectedCount > 0
-                    ? () => runBatchReplayGain(
-                        this.context,
-                        _selectedUnifiedItems(tracks),
-                        onExitSelectionMode: exitSelectionMode,
-                        remove: remove,
-                      )
-                    : null,
-                colorScheme: colorScheme,
-              ),
-          ],
-        ),
-
-        const SizedBox(height: 8),
-        DestructiveSelectionButton(
-          count: selectedCount,
-          colorScheme: colorScheme,
-          onPressed: () => _deleteSelected(tracks),
-        ),
-      ],
+      albumDelete: true,
+      playbackActions: LibrarySelectionPlaybackActions(
+        items: _selectedUnifiedItems(tracks),
+        onClose: exitSelectionMode,
+      ),
+      flacEligibleCount: _selectedFlacEligibleItems(tracks).length,
+      onQueueFlac: () => _queueSelectedAsFlac(tracks),
+      onReEnrich: () => _reEnrichSelected(tracks),
+      onConvert: () => showBatchConvertSheet(
+        context,
+        ref,
+        _selectedUnifiedItems(tracks),
+        onExitSelectionMode: exitSelectionMode,
+      ),
+      onReplayGain: ({required remove}) => runBatchReplayGain(
+        context,
+        _selectedUnifiedItems(tracks),
+        onExitSelectionMode: exitSelectionMode,
+        remove: remove,
+      ),
+      onDelete: () => _deleteSelected(tracks),
     );
   }
 }

@@ -1,9 +1,10 @@
 //! The installed extension manifest contract, independent of JavaScript execution.
 
 use crate::storage::valid_extension_id;
+use spotiflac_network::policy::GrantedOrigin;
+use spotiflac_network::url::UrlParts;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value};
-use spotiflac_network::url::UrlParts;
 
 trait GoNull {
     fn set_null(&mut self);
@@ -115,6 +116,8 @@ manifest_struct!(ExtensionSetting {
     options: Vec<String> => "options",
     #[serde(skip_serializing_if = "String::is_empty")]
     action: String => "action",
+    #[serde(skip_serializing_if = "is_false")]
+    grants_network: bool => "grantsNetwork",
 });
 
 manifest_struct!(QualitySpecificSetting {
@@ -395,6 +398,8 @@ impl ExtensionManifest {
                 Some(("options", "select type requires options"))
             } else if setting.kind == "button" && setting.action.is_empty() {
                 Some(("action", "button type requires action (JS function name)"))
+            } else if setting.grants_network && setting.kind != "string" {
+                Some(("grantsNetwork", "grantsNetwork requires a string setting"))
             } else {
                 None
             };
@@ -496,6 +501,23 @@ impl ExtensionManifest {
         self.capabilities.get(name) == Some(&Value::Bool(true))
     }
 
+    /// Hosts the user entered in `grantsNetwork` settings. An unset value falls
+    /// back to the setting's default; anything that is not an http(s) URL is ignored.
+    pub fn network_grants(&self, settings: &Map<String, Value>) -> Vec<GrantedOrigin> {
+        self.settings
+            .iter()
+            .filter(|setting| setting.grants_network)
+            .filter_map(|setting| {
+                settings
+                    .get(&setting.key)
+                    .and_then(Value::as_str)
+                    .filter(|value| !value.trim().is_empty())
+                    .or_else(|| setting.default.as_str())
+                    .and_then(GrantedOrigin::parse)
+            })
+            .collect()
+    }
+
     pub(crate) fn account_download_enabled(&self, settings: &Map<String, Value>) -> bool {
         self.capabilities
             .get("accountDownloadMode")
@@ -594,7 +616,9 @@ impl ExtensionManifest {
             .iter()
             .any(|allowed| {
                 let allowed = allowed.trim().to_lowercase();
-                allowed == domain || (allowed.starts_with("*.") && domain.ends_with(&allowed[1..]))
+                allowed == "*"
+                    || allowed == domain
+                    || (allowed.starts_with("*.") && domain.ends_with(&allowed[1..]))
             })
     }
 
@@ -626,5 +650,105 @@ impl ExtensionManifest {
                 && (parsed.hostname == host || parsed.hostname.ends_with(&format!(".{host}")))
                 && (path.is_empty() || parsed.path.starts_with(format!("/{path}").as_bytes()))
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn manifest(network: Value) -> Result<ExtensionManifest, ManifestError> {
+        ExtensionManifest::parse(
+            &serde_json::json!({
+                "name":"generic-media","version":"1.0.0","description":"Generic fixture",
+                "type":["download_provider"],"permissions":{"storage":true,"network":network},
+                "signedSession":{"namespace":"generic","baseUrl":"https://accounts.example.test"}
+            })
+            .to_string(),
+        )
+    }
+
+    #[test]
+    fn any_domain_wildcard_covers_listed_hosts() {
+        let any = manifest(serde_json::json!(["*"])).unwrap();
+        assert!(any.is_domain_allowed("accounts.example.test"));
+        assert!(any.is_domain_allowed("192.168.178.20"));
+        let scoped = manifest(serde_json::json!(["*.example.test"])).unwrap();
+        assert!(!scoped.is_domain_allowed("example.org"));
+        assert!(manifest(serde_json::json!(["example.org"])).is_err());
+    }
+
+    fn with_settings(settings: Value) -> Result<ExtensionManifest, ManifestError> {
+        ExtensionManifest::parse(
+            &serde_json::json!({
+                "name":"generic-media","version":"1.0.0","description":"Generic fixture",
+                "type":["download_provider"],"permissions":{"network":["api.example.test"]},
+                "settings":settings
+            })
+            .to_string(),
+        )
+    }
+
+    #[test]
+    fn grants_network_settings_yield_user_hosts() {
+        let manifest = with_settings(serde_json::json!([
+            {"key":"endpoint","type":"string","label":"Endpoint","grantsNetwork":true},
+            {"key":"mirror","type":"string","label":"Mirror","grantsNetwork":true,
+             "default":"https://Mirror.Example.test/v1"},
+            {"key":"other","type":"string","label":"Other"}
+        ]))
+        .unwrap();
+        assert!(
+            manifest
+                .network_grants(&Map::new())
+                .iter()
+                .map(|g| g.host.as_str())
+                .eq(["mirror.example.test"])
+        );
+
+        let settings = serde_json::json!({
+            "endpoint":"http://192.168.1.20:8000/",
+            "mirror":"  ",
+            "other":"https://ignored.example.test"
+        });
+        let grants = manifest.network_grants(settings.as_object().unwrap());
+        assert_eq!(
+            grants,
+            [
+                GrantedOrigin {
+                    scheme: "http".into(),
+                    host: "192.168.1.20".into()
+                },
+                GrantedOrigin {
+                    scheme: "https".into(),
+                    host: "mirror.example.test".into()
+                },
+            ]
+        );
+
+        for value in [
+            "ftp://files.example.test",
+            "https://user:pw@example.test",
+            "not a url",
+        ] {
+            let settings = serde_json::json!({ "endpoint": value });
+            assert!(
+                !manifest
+                    .network_grants(settings.as_object().unwrap())
+                    .iter()
+                    .any(|grant| grant.host != "mirror.example.test"),
+                "{value}"
+            );
+        }
+    }
+
+    #[test]
+    fn grants_network_requires_a_string_setting() {
+        assert!(
+            with_settings(serde_json::json!([
+                {"key":"flag","type":"boolean","label":"Flag","grantsNetwork":true}
+            ]))
+            .is_err()
+        );
     }
 }

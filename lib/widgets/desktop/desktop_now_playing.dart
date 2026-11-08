@@ -6,9 +6,14 @@ import 'package:audio_service/audio_service.dart';
 import 'package:flutter/cupertino.dart' show CupertinoButton, CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:spotiflac/controllers/clickable_metadata.dart' show pushPage;
 import 'package:spotiflac/controllers/player_metadata_controller.dart';
+import 'package:spotiflac/controllers/player_track_navigation.dart';
 import 'package:spotiflac/l10n/l10n.dart';
+import 'package:spotiflac/providers/library_collections_provider.dart';
+import 'package:spotiflac/providers/lyrics_translation_provider.dart';
 import 'package:spotiflac/providers/music_player_provider.dart';
+import 'package:spotiflac/screens/equalizer_screen.dart';
 import 'package:spotiflac/theme/app_motion.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
 import 'package:spotiflac/theme/player_artwork_theme.dart';
@@ -16,21 +21,28 @@ import 'package:spotiflac/utils/playback_seek_preview.dart';
 import 'package:spotiflac/widgets/app_icon.dart';
 import 'package:spotiflac/widgets/desktop/desktop_inspector.dart';
 import 'package:spotiflac/widgets/desktop/desktop_window.dart';
+import 'package:spotiflac/widgets/lyrics_options_button.dart';
 import 'package:spotiflac/widgets/material_player_backdrop.dart';
+import 'package:spotiflac/widgets/spotiflac_context_menu.dart';
+import 'package:spotiflac/widgets/spotiflac_playback_button.dart';
 import 'package:spotiflac/widgets/spotiflac_player_background.dart';
 import 'package:spotiflac/widgets/spotiflac_player_favorite_button.dart';
 import 'package:spotiflac/widgets/spotiflac_player_queue.dart';
 import 'package:spotiflac/widgets/no_scrollbars.dart';
 import 'package:spotiflac/widgets/player_artwork.dart';
+import 'package:spotiflac/widgets/player_details_sheet.dart';
 import 'package:spotiflac/widgets/player_lyrics_section.dart';
 import 'package:spotiflac/widgets/player_metadata_title.dart';
+import 'package:spotiflac/widgets/playback_source_label.dart';
 import 'package:spotiflac/widgets/player_playback_controls.dart';
 import 'package:spotiflac/widgets/player_volume_control.dart';
+import 'package:spotiflac/widgets/playlist_picker_sheet.dart';
+import 'package:share_plus/share_plus.dart';
 
-/// Now Playing on the desktop, covering the whole window as Music's player
-/// does: the cover, title and transport on the leading side, lyrics or Up
-/// Next ([desktopInspectorPanel]) on the trailing side, the volume at the
-/// top and the panel toggles at the bottom. With no panel the cover column
+/// Now Playing covers the desktop window: cover, title and transport on the
+/// leading side, lyrics or Up Next ([desktopInspectorPanel]) on the trailing
+/// side, the volume at the top and the panel toggles at the bottom. With no
+/// panel the cover column
 /// stands alone in the middle. Close or Escape return to the shell
 /// ([desktopNowPlayingOpen]).
 class DesktopNowPlaying extends ConsumerStatefulWidget {
@@ -47,6 +59,7 @@ class _DesktopNowPlayingState extends ConsumerState<DesktopNowPlaying> {
       widget.metadataControllerFactory?.call() ?? PlayerMetadataController();
   final _seekPreview = PlaybackSeekPreview();
   ProviderSubscription<AsyncValue<MediaItem?>>? _mediaItemSub;
+  late final LyricsTranslationController _lyricsTranslation;
 
   /// The panel on the trailing side, kept while it animates closed.
   DesktopInspectorPanel? _lastPanel;
@@ -54,6 +67,7 @@ class _DesktopNowPlayingState extends ConsumerState<DesktopNowPlaying> {
   @override
   void initState() {
     super.initState();
+    _lyricsTranslation = ref.read(lyricsTranslationProvider.notifier);
     _mediaItemSub = ref.listenManual<AsyncValue<MediaItem?>>(
       currentMediaItemProvider,
       (previous, next) {
@@ -70,6 +84,7 @@ class _DesktopNowPlayingState extends ConsumerState<DesktopNowPlaying> {
   @override
   void dispose() {
     _mediaItemSub?.close();
+    _lyricsTranslation.cancel(owner: this);
     _metadata.dispose();
     _seekPreview.dispose();
     super.dispose();
@@ -328,6 +343,11 @@ class _DesktopNowPlayingState extends ConsumerState<DesktopNowPlaying> {
                                   colorScheme: colorScheme,
                                   isActive: true,
                                   animateWords: showsLyrics,
+                                  options: LyricsOptionsButton(
+                                    metadata: _metadata,
+                                    colorScheme: colorScheme,
+                                    translationOwner: this,
+                                  ),
                                 ),
                               ),
                             ),
@@ -432,15 +452,12 @@ class _PlayerColumn extends StatelessWidget {
                     mediaItem: mediaItem,
                     metadata: metadata,
                     style:
-                        (spotiflac
-                                ? textTheme.titleMedium
-                                : textTheme.titleLarge)
+                        (spotiflac ? textTheme.titleMedium : textTheme.titleLarge)
                             ?.copyWith(
                               fontWeight: FontWeight.w600,
                               color: colorScheme.onSurface,
                             ),
                     maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                   if (subtitle.isNotEmpty)
                     Text(
@@ -448,20 +465,35 @@ class _PlayerColumn extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style:
-                          (spotiflac
-                                  ? textTheme.bodyMedium
-                                  : textTheme.titleSmall)
+                          (spotiflac ? textTheme.bodyMedium : textTheme.titleSmall)
                               ?.copyWith(color: colorScheme.onSurfaceVariant),
                     ),
+                  PlaybackSourceLabel(
+                    item: mediaItem,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
                 ],
               ),
             ),
-            if (spotiflac)
-              SpotiFLACPlayerFavoriteButton(
-                mediaItem: mediaItem,
-                color: colorScheme.onSurface,
-                iconSize: 20,
+            if (spotiflac) ...[
+              const SizedBox(width: 8),
+              _ActionDisc(
+                child: SpotiFLACPlayerFavoriteButton(
+                  mediaItem: mediaItem,
+                  color: colorScheme.onSurface,
+                  iconSize: _actionIconSize,
+                  padding: _actionPadding,
+                ),
               ),
+              const SizedBox(width: 8),
+              _ActionDisc(
+                child: _PlayerMoreButton(
+                  mediaItem: mediaItem,
+                  metadata: metadata,
+                  colorScheme: colorScheme,
+                ),
+              ),
+            ],
           ],
         ),
         PlayerPlaybackControls(
@@ -477,6 +509,180 @@ class _PlayerColumn extends StatelessWidget {
       ],
     );
   }
+}
+
+const _actionIconSize = 16.0;
+const _actionPadding = EdgeInsets.all(8);
+
+/// The translucent disc behind the Favorite and More buttons.
+class _ActionDisc extends StatelessWidget {
+  const _ActionDisc({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => SizedBox.square(
+    dimension: 32,
+    child: ClipOval(
+      child: ColoredBox(
+        color: Colors.white.withValues(alpha: 0.14),
+        child: child,
+      ),
+    ),
+  );
+}
+
+/// Actions for the playing song, including the desktop Equalizer entry.
+class _PlayerMoreButton extends ConsumerWidget {
+  const _PlayerMoreButton({
+    required this.mediaItem,
+    required this.metadata,
+    required this.colorScheme,
+  });
+
+  final MediaItem mediaItem;
+  final PlayerMetadataController metadata;
+  final ColorScheme colorScheme;
+
+  Future<void> _open(BuildContext context, WidgetRef ref) async {
+    final l10n = context.l10n;
+    final track = ref.read(playerCollectionTrackProvider(mediaItem)).value;
+    final loved =
+        track != null && ref.read(libraryCollectionsProvider).isLoved(track);
+    SpotiFLACMenuAction row(
+      BuildContext menuContext,
+      String value,
+      String label, {
+      IconData? icon,
+      bool disclosure = false,
+      bool selected = false,
+    }) => SpotiFLACMenuAction(
+      icon: icon,
+      label: label,
+      disclosure: disclosure,
+      selected: selected,
+      onPressed: () => Navigator.of(menuContext).pop(value),
+    );
+    final anchor = spotiflacMenuAnchor(context);
+    final action = await showSpotiFLACContextMenu<String>(
+      context: context,
+      anchor: anchor,
+      preferAbove: true,
+      maxWidth: 240,
+      builder: (menuContext) => SpotiFLACContextMenu(
+        dense: true,
+        groups: [
+          [
+            row(
+              menuContext,
+              'playlist',
+              l10n.collectionAddToPlaylist,
+              disclosure: true,
+            ),
+          ],
+          [
+            row(menuContext, 'details', l10n.spotiflacGetInfo),
+            row(
+              menuContext,
+              'favorite',
+              loved ? l10n.spotiflacFavorited : l10n.spotiflacFavorite,
+              selected: loved,
+            ),
+            row(menuContext, 'equalizer', l10n.equalizerTitle),
+          ],
+          [
+            if ((mediaItem.album ?? '').trim().isNotEmpty)
+              row(menuContext, 'album', l10n.homeGoToAlbum),
+            if ((mediaItem.artist ?? '').trim().isNotEmpty)
+              row(menuContext, 'artist', l10n.spotiflacGoToArtist),
+          ],
+          [
+            row(
+              menuContext,
+              'share',
+              l10n.trackMetadataShare,
+              icon: CupertinoIcons.share,
+              disclosure: true,
+            ),
+          ],
+        ],
+      ),
+    );
+    if (action == null || !context.mounted) return;
+    switch (action) {
+      case 'playlist' || 'favorite':
+        await _updateCollection(context, ref, favorite: action == 'favorite');
+      case 'details':
+        unawaited(
+          showPlayerDetailsSheet(
+            context,
+            colorScheme,
+            metadata: metadata,
+            mediaItem: mediaItem,
+          ),
+        );
+      case 'equalizer':
+        await pushPage<void>(context, (_) => const EqualizerScreen());
+      case 'album':
+        await openPlayingAlbum(
+          context,
+          ref,
+          mediaItem: mediaItem,
+          source: mediaItem.extras?['source']?.toString() ?? '',
+        );
+      case 'artist':
+        await openPlayingArtist(context, ref, mediaItem);
+      case 'share':
+        final artist = mediaItem.artist ?? '';
+        await SharePlus.instance.share(
+          ShareParams(
+            text: artist.isEmpty
+                ? mediaItem.title
+                : '${mediaItem.title}, $artist',
+            sharePositionOrigin: anchor,
+          ),
+        );
+    }
+  }
+
+  Future<void> _updateCollection(
+    BuildContext context,
+    WidgetRef ref, {
+    required bool favorite,
+  }) async {
+    try {
+      final provider = playerCollectionTrackProvider(mediaItem);
+      if (ref.read(provider).hasError) ref.invalidate(provider);
+      final track = await ref.read(provider.future);
+      if (!context.mounted) return;
+      if (favorite) {
+        await ref.read(libraryCollectionsProvider.notifier).toggleLoved(track);
+      } else {
+        await showAddTrackToPlaylistSheet(context, ref, track);
+      }
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.l10n.snackbarError(context.friendlyError(error)),
+          ),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => Builder(
+    builder: (buttonContext) => SpotiFLACPlaybackButton(
+      icon: CupertinoIcons.ellipsis,
+      tooltip: MaterialLocalizations.of(context).moreButtonTooltip,
+      color: colorScheme.onSurface,
+      iconSize: _actionIconSize,
+      padding: _actionPadding,
+      onPressed: () => _open(buttonContext, ref),
+    ),
+  );
 }
 
 class _Capsule extends StatelessWidget {

@@ -1,18 +1,17 @@
 import 'dart:async';
 import 'dart:convert';
-
 import 'package:flutter/services.dart';
 import 'package:spotiflac/providers/settings_provider.dart';
 import 'package:spotiflac/providers/local_library_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:spotiflac/controllers/local_track_batch_actions.dart';
 import 'package:spotiflac/l10n/app_localizations.dart';
 import 'package:spotiflac/models/settings.dart';
 import 'package:spotiflac/models/track.dart';
 import 'package:spotiflac/services/batch_metadata_re_enrich.dart';
 import 'package:spotiflac/services/library_database.dart';
-import 'package:spotiflac/services/local_track_batch_actions.dart';
 import 'package:spotiflac/services/local_track_redownload_service.dart';
 
 LocalLibraryItem item(String id) => LocalLibraryItem(
@@ -42,13 +41,80 @@ class _BatchLibrary extends LocalLibraryNotifier {
   @override
   LocalLibraryState build() => LocalLibraryState();
   @override
-  Future<void> scanAllSources({bool forceFullScan = false}) {
+  Future<void> scanAllSources({
+    bool forceFullScan = false,
+    bool notify = true,
+  }) {
     _refreshStarted = true;
     return refreshed.future;
   }
 }
 
 void main() {
+  test(
+    'motion is saved only after successful native or FFmpeg writes',
+    () async {
+      final events = <String>[];
+      final runner = BatchReEnrichRunner(
+        beginPhase: () async => const AppSettings(),
+        reEnrich: (request) async {
+          if (request['preview_only'] == true) {
+            return {
+              'method': 'preview',
+              'enriched_metadata': {
+                'header_video': 'https://example.invalid/motion.m3u8',
+              },
+            };
+          }
+          events.add('write:${request['file_path']}');
+          return {
+            'method': request['file_path'] == '/music/1.flac'
+                ? 'native'
+                : 'ffmpeg',
+          };
+        },
+        writeSidecar:
+            ({required audioFilePath, required reEnrichResult}) async {},
+        applyFfmpeg:
+            ({required item, required result, required artistTagMode}) async {
+              events.add('ffmpeg:${item.id}');
+              return item.id == '2';
+            },
+        saveMotionArtwork: (item, metadata) async {
+          expect(
+            metadata['header_video'],
+            'https://example.invalid/motion.m3u8',
+          );
+          events.add('motion:${item.id}');
+          if (item.id == '1') throw StateError('optional video unavailable');
+        },
+      );
+      final previews = await runner.preview(
+        [item('1'), item('2'), item('3')],
+        const ReEnrichFieldSelection(
+          mode: ReEnrichBatchMode.selectedFields,
+          fields: [ReEnrichFields.cover],
+        ),
+        shouldStop: running,
+        onProgress: progress,
+      );
+      expect(previews, hasLength(3));
+      expect(events, isEmpty);
+      expect(
+        await runner.apply(previews, shouldStop: running, onProgress: progress),
+        2,
+      );
+      expect(events, [
+        'write:/music/1.flac',
+        'motion:1',
+        'write:/music/2.flac',
+        'ffmpeg:2',
+        'motion:2',
+        'write:/music/3.flac',
+        'ffmpeg:3',
+      ]);
+    },
+  );
   test(
     'lyrics-only batch retains provider identity without metadata lookups',
     () async {
@@ -110,6 +176,7 @@ void main() {
       final sidecars = <String>[];
       final ffmpegModes = <String>[];
       final reported = <String>[];
+      final written = <String>[];
       final runner = BatchReEnrichRunner(
         beginPhase: () async {
           phaseCount++;
@@ -162,9 +229,11 @@ void main() {
         shouldStop: running,
         onProgress: progress,
         onResult: (result) => reported.add(result['method'] as String),
+        onWritten: (item) => written.add(item.id),
       );
       expect(successes, 2);
       expect(reported, ['native', 'ffmpeg']);
+      expect(written, ['1', '2']);
       expect(phaseCount, 2);
       expect(sidecars, ['/music/1.flac']);
       expect(ffmpegModes, ['split_vorbis']);
@@ -182,6 +251,42 @@ void main() {
       );
     },
   );
+
+  test('cancelling during a write reports only the completed track', () async {
+    var cancelled = false;
+    final written = <String>[];
+    final requests = <String>[];
+    final runner = BatchReEnrichRunner(
+      beginPhase: () async => const AppSettings(),
+      reEnrich: (request) async {
+        requests.add(request['file_path'] as String);
+        cancelled = true;
+        return {'method': 'native'};
+      },
+      writeSidecar:
+          ({required audioFilePath, required reEnrichResult}) async {},
+    );
+    final previews = await runner.preview(
+      [item('1'), item('2')],
+      const ReEnrichFieldSelection(
+        mode: ReEnrichBatchMode.manualValues,
+        manualValues: {'genre': 'Jazz'},
+      ),
+      shouldStop: running,
+      onProgress: progress,
+    );
+    expect(
+      await runner.apply(
+        previews,
+        shouldStop: () => cancelled,
+        onProgress: progress,
+        onWritten: (item) => written.add(item.id),
+      ),
+      1,
+    );
+    expect(requests, ['/music/1.flac']);
+    expect(written, ['1']);
+  });
 
   test(
     'manual previews avoid lookups; cancellation before apply performs no writes or phase sync',
@@ -264,7 +369,6 @@ void main() {
           if (local.id == '2') throw StateError('lookup failed');
           if (local.id == '4') cancelled = true;
           return LocalTrackRedownloadResolution(
-            localItem: local,
             match: local.id == '3'
                 ? null
                 : Track(
@@ -274,8 +378,6 @@ void main() {
                     albumName: 'Album',
                     duration: 1,
                   ),
-            score: 100,
-            reason: 'fixture',
           );
         },
       );

@@ -71,11 +71,13 @@ class _WordHighlightedLyricLineState
   ProviderSubscription<Duration>? _positionSubscription;
   ProviderSubscription<bool>? _playingSubscription;
   ProviderSubscription<bool>? _loadingSubscription;
+  ProviderSubscription<double>? _speedSubscription;
 
   late Duration _anchorPosition;
   Duration _anchorElapsed = Duration.zero;
   bool _playing = false;
   bool _loading = false;
+  double _speed = 1;
   bool _tickerEnabled = true;
   bool _useInitialPosition = true;
   Duration _visualEnd = Duration.zero;
@@ -91,14 +93,22 @@ class _WordHighlightedLyricLineState
       };
 
   bool get _advancing =>
-      _visible && _playing && !_loading && widget.seekPreview.value == null;
+      _visible &&
+      _playing &&
+      !_loading &&
+      _speed > 0 &&
+      widget.seekPreview.value == null;
 
   bool get _shouldAnimate => _advancing && _currentPosition() < _visualEnd;
 
   Duration _positionAt({required bool advance}) {
     return interpolatedSyncedLyricsPosition(
       anchorPosition: _anchorPosition,
-      elapsedSinceAnchor: _elapsedClock.elapsed - _anchorElapsed,
+      elapsedSinceAnchor: Duration(
+        microseconds:
+            ((_elapsedClock.elapsed - _anchorElapsed).inMicroseconds * _speed)
+                .round(),
+      ),
       isPlaying: advance,
     );
   }
@@ -133,9 +143,11 @@ class _WordHighlightedLyricLineState
       _positionSubscription?.close();
       _playingSubscription?.close();
       _loadingSubscription?.close();
+      _speedSubscription?.close();
       _positionSubscription = null;
       _playingSubscription = null;
       _loadingSubscription = null;
+      _speedSubscription = null;
       _animationClock.stop();
       return;
     }
@@ -145,6 +157,8 @@ class _WordHighlightedLyricLineState
     }
     _playing = ref.read(playbackPlayingProvider);
     _loading = ref.read(playbackLoadingProvider);
+    final speed = ref.read(playbackStateProvider).value?.speed ?? 1;
+    _speed = speed.isFinite && speed > 0 ? speed : 0;
     if (!_useInitialPosition) {
       _anchorAt(widget.seekPreview.value ?? ref.read(playbackPositionProvider));
     }
@@ -160,6 +174,10 @@ class _WordHighlightedLyricLineState
     _loadingSubscription = ref.listenManual<bool>(
       playbackLoadingProvider,
       (previous, next) => _updateTransportState(loading: next),
+    );
+    _speedSubscription = ref.listenManual<double>(
+      playbackStateProvider.select((state) => state.value?.speed ?? 1),
+      (previous, next) => _updateTransportState(speed: next),
     );
     _syncAnimationClock();
   }
@@ -224,11 +242,12 @@ class _WordHighlightedLyricLineState
     }
   }
 
-  void _updateTransportState({bool? playing, bool? loading}) {
+  void _updateTransportState({bool? playing, bool? loading, double? speed}) {
     if (!mounted) return;
     final position = _currentPosition();
     if (playing != null) _playing = playing;
     if (loading != null) _loading = loading;
+    if (speed != null) _speed = speed.isFinite && speed > 0 ? speed : 0;
     _anchorAt(
       widget.seekPreview.value ??
           (_advancing ? position : ref.read(playbackPositionProvider)),
@@ -252,16 +271,20 @@ class _WordHighlightedLyricLineState
   }
 
   void _updateVisualEnd() {
-    final decorativeMotion =
-        context.isSpotiFLAC && !MediaQuery.disableAnimationsOf(context);
+    final decorativeMotion = !MediaQuery.disableAnimationsOf(context);
+    final glow = context.isSpotiFLAC;
     var end = Duration.zero;
-    for (final words in [widget.line.words, widget.line.romanizationWords]) {
+    for (final words in [
+      widget.line.words,
+      widget.line.romanizationWords,
+      widget.line.translationWords,
+    ]) {
       for (var index = 0; index < words.length; index++) {
         var wordEnd = _segmentEnd(words, index);
-        if (decorativeMotion) {
+        if (decorativeMotion && identical(words, widget.line.words)) {
           // Glow fades for 500ms after a held word; short-word lift may finish
           // later than the color sweep (start + 540ms).
-          wordEnd += const Duration(milliseconds: 500);
+          if (glow) wordEnd += const Duration(milliseconds: 500);
           final liftEnd = words[index].time + const Duration(milliseconds: 540);
           if (liftEnd > wordEnd) wordEnd = liftEnd;
         }
@@ -291,6 +314,7 @@ class _WordHighlightedLyricLineState
     _positionSubscription?.close();
     _playingSubscription?.close();
     _loadingSubscription?.close();
+    _speedSubscription?.close();
     _animationClock.dispose();
     _elapsedClock.stop();
     super.dispose();
@@ -351,8 +375,10 @@ class _WordHighlightedLyricLineState
       pendingColor: pendingColor,
       highlightedColor: highlightedColor,
       semanticsLabel: text,
-      liftEnabled:
-          lift && spotiflac && !MediaQuery.disableAnimationsOf(context),
+      // Sung words rise in both styles; the glow behind held words belongs
+      // to SpotiFLAC's look.
+      liftEnabled: lift && !MediaQuery.disableAnimationsOf(context),
+      glowEnabled: spotiflac,
       maxLines: widget.maxLines,
     );
   }
@@ -370,6 +396,9 @@ class _SweepingTimedLyricText extends StatefulWidget {
   final Color highlightedColor;
   final String semanticsLabel;
   final bool liftEnabled;
+
+  /// Glows behind held words while [liftEnabled].
+  final bool glowEnabled;
   final int? maxLines;
 
   const _SweepingTimedLyricText({
@@ -384,6 +413,7 @@ class _SweepingTimedLyricText extends StatefulWidget {
     required this.highlightedColor,
     required this.semanticsLabel,
     required this.liftEnabled,
+    required this.glowEnabled,
     this.maxLines,
   });
 
@@ -548,7 +578,7 @@ class _SweepingTimedLyricTextState extends State<_SweepingTimedLyricText> {
                   ? (textScaler.scale(widget.style.fontSize ?? 24) * 0.05)
                         .clamp(0.0, 2.0)
                   : 0,
-              glowSigma: widget.liftEnabled
+              glowSigma: widget.liftEnabled && widget.glowEnabled
                   ? textScaler.scale(widget.style.fontSize ?? 24) * 0.2
                   : 0,
             ),

@@ -17,7 +17,7 @@ import 'package:spotiflac/providers/download_queue_provider.dart';
 import 'package:spotiflac/providers/extension_provider.dart';
 import 'package:spotiflac/providers/settings_provider.dart';
 import 'package:spotiflac/services/app_state_database.dart';
-import 'package:spotiflac/services/ffmpeg_service.dart';
+import 'package:spotiflac/services/ffmpeg_probe.dart';
 import 'package:spotiflac/services/platform_bridge.dart';
 
 class _Paths extends PathProviderPlatform {
@@ -187,12 +187,9 @@ registerExtension({
             final item = await done.future.timeout(const Duration(seconds: 45));
             expect(item.status, DownloadStatus.completed, reason: item.error);
             expect(item.filePath, endsWith(extension));
+            expect(await FFmpegProbe.audioCodec(item.filePath!), codec);
             expect(
-              await FFmpegService.probePrimaryAudioCodec(item.filePath!),
-              codec,
-            );
-            expect(
-              await FFmpegService.isNativeFlacFile(item.filePath!),
+              await FFmpegProbe.isNativeFlacFile(item.filePath!),
               codec == 'flac',
             );
             final tags = await PlatformBridge.readFileMetadata(item.filePath!);

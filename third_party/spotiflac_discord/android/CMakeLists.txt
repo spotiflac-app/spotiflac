@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.22.1)
 project(spotiflac_discord LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
-option(SPOTIFLAC_DISCORD_SDK "Include the staged Discord Social SDK" OFF)
+option(SPOTIFLAC_DISCORD_SDK "Include the staged Discord Social SDK" ON)
 add_library(spotiflac_discord SHARED src/main/cpp/presence.cpp)
 target_compile_options(spotiflac_discord PRIVATE -Wall -Wextra -Werror -fvisibility=hidden)
 # Keep every JNI entry point while hiding the wrapper's static C++ runtime.

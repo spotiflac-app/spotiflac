@@ -6,24 +6,22 @@ import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:spotiflac/controllers/clickable_metadata.dart';
+import 'package:spotiflac/controllers/player_track_navigation.dart';
 import 'package:spotiflac/controllers/player_metadata_controller.dart';
 import 'package:spotiflac/l10n/l10n.dart';
-import 'package:spotiflac/providers/download_history_provider.dart';
 import 'package:spotiflac/providers/library_collections_provider.dart';
+import 'package:spotiflac/providers/lyrics_translation_provider.dart';
 import 'package:spotiflac/providers/music_player_provider.dart';
 import 'package:spotiflac/providers/settings_provider.dart';
 import 'package:spotiflac/routes/now_playing_route.dart';
-import 'package:spotiflac/screens/downloaded_album_screen.dart';
-import 'package:spotiflac/screens/local_album_screen.dart';
 import 'package:spotiflac/screens/equalizer_screen.dart';
 import 'package:spotiflac/screens/lyrics_share_screen.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
 import 'package:spotiflac/theme/player_artwork_theme.dart';
-import 'package:spotiflac/utils/clickable_metadata.dart';
 import 'package:spotiflac/utils/file_access.dart';
 import 'package:spotiflac/utils/lyrics_parser.dart';
 import 'package:spotiflac/utils/playback_seek_preview.dart';
-import 'package:spotiflac/utils/logger.dart';
 import 'package:spotiflac/widgets/app_bottom_sheet.dart';
 import 'package:spotiflac/widgets/app_snack_bar.dart';
 import 'package:spotiflac/widgets/app_icon.dart';
@@ -33,9 +31,14 @@ import 'package:spotiflac/widgets/audio_output_button.dart';
 import 'package:spotiflac/widgets/desktop/desktop_commands.dart'
     show DesktopCommand, desktopTooltip;
 import 'package:spotiflac/widgets/desktop/desktop_inspector.dart';
+import 'package:spotiflac/widgets/link/link_actions.dart';
+import 'package:spotiflac/widgets/network_offline_actions.dart';
+import 'package:spotiflac/widgets/link/link_devices_sheet.dart';
+import 'package:spotiflac/widgets/lyrics_options_button.dart';
 import 'package:spotiflac/widgets/lyrics_screen_awake.dart';
 import 'package:spotiflac/widgets/player_artwork.dart';
 import 'package:spotiflac/widgets/player_gesture_regions.dart';
+import 'package:spotiflac/widgets/player_playback_controls.dart';
 import 'package:spotiflac/widgets/player_queue_sheet.dart';
 import 'package:spotiflac/widgets/player_details_sheet.dart';
 import 'package:spotiflac/widgets/material_player_backdrop.dart';
@@ -54,7 +57,21 @@ import 'package:spotiflac/providers/player_motion_artwork_provider.dart';
 
 export 'package:spotiflac/routes/now_playing_route.dart';
 
-final _log = AppLogger('NowPlaying');
+/// Portrait's "Playing on" row, kept while empty.
+const _playingOnRowHeight = 36.0;
+
+/// Screens shorter than this keep SpotiFLAC's volume row clear by leaving the
+/// empty row out; its cover and controls need the height.
+const _spotiflacPlayingOnMinScreenHeight = 720.0;
+
+/// What SpotiFLAC holds back above its volume row, so the toolbar reaches
+/// Material's height while the track header stays level with Material's.
+const _spotiflacControlsHeadroom = 20.0;
+
+/// How much of an iPhone's home indicator inset stays under that row. The
+/// indicator sits in the screen's bottom 13pt, and the label's text ends 8pt
+/// above the row's bottom, so it still clears the indicator.
+const _homeIndicatorBelowRow = 12.0;
 
 /// AppBar wrapper that fades with the route transition (see contentOpacity
 /// in [_NowPlayingScreenState.build]).
@@ -62,14 +79,23 @@ class _FadingAppBar extends StatelessWidget implements PreferredSizeWidget {
   final Animation<double> opacity;
   final AppBar child;
 
-  const _FadingAppBar({required this.opacity, required this.child});
+  /// Material's immersive lyrics fade the bar's buttons away too.
+  final bool hidden;
+
+  const _FadingAppBar({
+    required this.opacity,
+    required this.child,
+    this.hidden = false,
+  });
 
   @override
   Size get preferredSize => child.preferredSize;
 
   @override
-  Widget build(BuildContext context) =>
-      FadeTransition(opacity: opacity, child: child);
+  Widget build(BuildContext context) => FadeTransition(
+    opacity: opacity,
+    child: PlayerLyricsControlsVisibility(hidden: hidden, child: child),
+  );
 }
 
 class NowPlayingScreen extends ConsumerStatefulWidget {
@@ -98,8 +124,10 @@ class NowPlayingScreen extends ConsumerStatefulWidget {
 class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
   ProviderSubscription<AsyncValue<MediaItem?>>? _mediaItemSub;
   ProviderSubscription<bool>? _lyricsPlayingSub;
+  ProviderSubscription<bool>? _lyricsAutoHideSub;
   late final _trackMetadata =
       widget.metadataControllerFactory?.call() ?? PlayerMetadataController();
+  late final LyricsTranslationController _lyricsTranslation;
   late int _currentPage = widget.initialPage;
   bool _landscape = false;
   bool _queueSheetShowing = false;
@@ -114,6 +142,9 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
   Timer? _lyricsIdleTimer;
   final _lyricsPointers = <int, Offset>{};
   bool _lyricsPointerMoved = false;
+  // Skipping, seeking or opening the queue from the compact player keeps it
+  // compact; only a touch elsewhere restores the full player.
+  bool _compactPlayerTouched = false;
   final _artworkHeaderKey = GlobalKey();
   final _artworkControlsKey = GlobalKey();
   final _artworkVolumeKey = GlobalKey();
@@ -127,6 +158,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
   @override
   void initState() {
     super.initState();
+    _lyricsTranslation = ref.read(lyricsTranslationProvider.notifier);
     if (widget.embedded) desktopInspectorPanel.addListener(_onInspectorChanged);
     _mediaItemSub = ref.listenManual<AsyncValue<MediaItem?>>(
       currentMediaItemProvider,
@@ -149,6 +181,19 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
       }
       _scheduleLyricsControlsHide();
     });
+    _lyricsAutoHideSub = ref.listenManual<bool>(
+      settingsProvider.select((settings) => settings.autoHideLyricsControls),
+      (_, enabled) {
+        if (!enabled) {
+          _lyricsPointers.clear();
+          _lyricsScrollDistance = 0;
+          if (_lyricsControlsHidden) {
+            setState(() => _lyricsControlsHidden = false);
+          }
+        }
+        _scheduleLyricsControlsHide();
+      },
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       unawaited(
@@ -165,7 +210,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
     super.didChangeDependencies();
     final size = MediaQuery.sizeOf(context);
     _landscape = context.isSpotiFLAC && size.width > size.height;
-    if (_landscape || MediaQuery.accessibleNavigationOf(context)) {
+    if (!_lyricsAutoHideLayout || MediaQuery.accessibleNavigationOf(context)) {
       _lyricsControlsHidden = false;
     }
     _scheduleLyricsControlsHide();
@@ -219,6 +264,8 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
     _lyricsIdleTimer?.cancel();
     _mediaItemSub?.close();
     _lyricsPlayingSub?.close();
+    _lyricsAutoHideSub?.close();
+    _lyricsTranslation.cancel(owner: this);
     _trackMetadata.dispose();
     _artworkForeground.dispose();
     _seekPreview.dispose();
@@ -227,13 +274,24 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!ref.watch(playerUiEnabledProvider)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && ModalRoute.of(context)?.isCurrent == true) {
+          Navigator.of(context).maybePop();
+        }
+      });
+      return const SizedBox.shrink();
+    }
     final mediaItem = ref.watch(currentMediaItemProvider).value;
+    final spotiflac = context.isSpotiFLAC;
     final fullScreenCover = ref.watch(
-      settingsProvider.select((s) => s.playerCoverStyle == 'fullscreen'),
+      settingsProvider.select(
+        (s) => s.playerCoverStyleFor(spotiflac: spotiflac) == 'fullscreen',
+      ),
     );
     return LyricsScreenAwake(
       visible: _currentPage == 1 && mediaItem != null,
-      child: context.isSpotiFLAC
+      child: spotiflac
           ? _buildPlayer(context, mediaItem, fullScreenCover: fullScreenCover)
           // Material takes the track's artwork scheme. The providers it needs
           // are read above, so the scoped builder reads none.
@@ -311,12 +369,24 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
               ? 1.0
               : (screen.width / (screen.height * 0.56)).clamp(0.5, 1.0)
         : motionRatio;
-    // Two-pane landscape keeps its side-by-side cover.
+    final materialBackdrop = !spotiflac && fullScreenCover;
+    // Two-pane landscape keeps its side-by-side cover over the blurred surface.
     final materialFullScreen =
-        !spotiflac &&
-        fullScreenCover &&
+        materialBackdrop &&
         MediaQuery.orientationOf(context) == Orientation.portrait;
     final overCover = materialFullScreen && _currentPage != 1;
+    // Portrait keeps the "Playing on" row while empty, so the controls stay
+    // put when a computer takes over playback. On an iPhone the row reaches
+    // into the home indicator's inset rather than stacking a second empty
+    // band on top of it.
+    final reservesPlayingOnRow =
+        MediaQuery.orientationOf(context) == Orientation.portrait &&
+        screen.height >= (spotiflac ? _spotiflacPlayingOnMinScreenHeight : 640);
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    final homeIndicatorBelowRow =
+        reservesPlayingOnRow && Theme.of(context).platform == TargetPlatform.iOS
+        ? bottomInset.clamp(0.0, _homeIndicatorBelowRow)
+        : null;
     if (!fullBleed && _artworkForeground.value.isNotEmpty) {
       _artworkForeground.value = {};
     }
@@ -370,10 +440,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
           ),
           fullBleed: key == _motionArtworkKey,
           child: Theme(
-            data: SpotiFLACTheme.fromContext(
-              context,
-              brightness: Brightness.dark,
-            ),
+            data: SpotiFLACTheme.fromContext(context, brightness: Brightness.dark),
             child: key == _compactArtworkKey
                 ? PlayerArtwork(
                     artUri: mediaItem.artUri?.toString(),
@@ -400,14 +467,21 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
         : MediaQuery.orientationOf(context) == Orientation.landscape
         ? 0
         : 36;
+    final materialLandscapeArtwork =
+        !spotiflac &&
+        !widget.embedded &&
+        MediaQuery.orientationOf(context) == Orientation.landscape &&
+        ref.watch(settingsProvider.select((s) => s.landscapeLyricsArtwork));
     final player = Scaffold(
-      backgroundColor: spotiflac || materialFullScreen
+      extendBodyBehindAppBar: materialLandscapeArtwork,
+      backgroundColor: spotiflac || materialBackdrop
           ? Colors.transparent
           : colorScheme.surface,
       appBar: _FadingAppBar(
         opacity: contentOpacity,
+        hidden: !spotiflac && _lyricsImmersive,
         child: AppBar(
-          backgroundColor: spotiflac || materialFullScreen
+          backgroundColor: spotiflac || materialBackdrop
               ? Colors.transparent
               : colorScheme.surface,
           foregroundColor: overCover ? Colors.white : colorScheme.onSurface,
@@ -453,6 +527,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
           actions: spotiflac
               ? null
               : [
+                  LinkDevicesButton(color: overCover ? Colors.white : null),
                   AppIconButton(
                     tooltip: context.l10n.nowPlayingUpNext,
                     color: overCover ? Colors.white : null,
@@ -478,8 +553,18 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
       body: FadeTransition(
         opacity: contentOpacity,
         child: SafeArea(
+          top: !materialLandscapeArtwork,
+          bottom: homeIndicatorBelowRow == null,
           child: Column(
             children: [
+              if (materialLandscapeArtwork) ...[
+                SizedBox(height: MediaQuery.viewPaddingOf(context).top),
+                PlayerLyricsControlsCollapse(
+                  key: const ValueKey('material-landscape-toolbar-space'),
+                  hidden: _lyricsImmersive,
+                  child: const SizedBox(height: kToolbarHeight),
+                ),
+              ],
               Expanded(
                 child: spotiflac
                     ? NotificationListener<ScrollUpdateNotification>(
@@ -492,6 +577,9 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
                           page: _currentPage,
                           motionArtwork: artwork(),
                           artworkAspectRatio: artworkRatio,
+                          controlsHeadroom: reservesPlayingOnRow
+                              ? _spotiflacControlsHeadroom
+                              : 0,
                           insetArtwork: !fullBleed,
                           artworkTopInset:
                               MediaQuery.paddingOf(context).top +
@@ -531,7 +619,18 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
                         seekPreview: _seekPreview,
                         colorScheme: colorScheme,
                         showLyrics: _currentPage == 1,
+                        immersive: _lyricsImmersive,
+                        compactPlayer: ref.watch(
+                          settingsProvider.select((s) => s.compactPlayer),
+                        ),
+                        onCompactPlayerTouch: () =>
+                            _compactPlayerTouched = true,
                         fullScreenArtwork: materialFullScreen,
+                        landscapeLyricsArtwork: ref.watch(
+                          settingsProvider.select(
+                            (s) => s.landscapeLyricsArtwork,
+                          ),
+                        ),
                         lyricsBuilder: (_) =>
                             _lyricsSection(colorScheme, isActive: true),
                         onOpenQueue: () =>
@@ -574,6 +673,10 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
                                   _scheduleLyricsControlsHide();
                                 },
                               ),
+                              // The row spreads its buttons apart, so the
+                              // Devices entry only takes a slot when paired.
+                              if (ref.watch(linkPhoneClientProvider) != null)
+                                const LinkDevicesButton(color: Colors.white),
                               IconButton(
                                 tooltip: context.l10n.nowPlayingUpNext,
                                 color: Colors.white,
@@ -584,9 +687,8 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
                                       : Colors.transparent,
                                 ),
                                 icon: const AppIcon(CupertinoIcons.list_bullet),
-                                onPressed: () => _setSpotiFLACPage(
-                                  _currentPage == 2 ? 0 : 2,
-                                ),
+                                onPressed: () =>
+                                    _setSpotiFLACPage(_currentPage == 2 ? 0 : 2),
                               ),
                             ],
                           ),
@@ -597,48 +699,81 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
+                              // Filled pills like the shuffle and repeat
+                              // segments between them.
                               ExpressiveIconButton(
                                 key: const ValueKey('material-lyrics-toggle'),
                                 tooltip: _currentPage == 1
                                     ? context.l10n.nowPlayingTabPlayer
                                     : context.l10n.nowPlayingTabLyrics,
                                 selected: _showsPage(1),
+                                width: PlayerPlaybackModeToolbar.segmentWidth,
                                 foregroundColor: _showsPage(1)
                                     ? colorScheme.onPrimaryContainer
                                     : colorScheme.onSurfaceVariant,
                                 backgroundColor: _showsPage(1)
                                     ? colorScheme.primaryContainer
-                                    : null,
+                                    : colorScheme.surfaceContainerHigh,
                                 icon: const AppIcon(Icons.lyrics_outlined),
                                 onPressed: _toggleMaterialLyrics,
                               ),
+                              PlayerPlaybackModeToolbar(
+                                colorScheme: colorScheme,
+                              ),
                               AudioOutputButton(
                                 color: colorScheme.onSurfaceVariant,
+                                backgroundColor:
+                                    colorScheme.surfaceContainerHigh,
+                                width: PlayerPlaybackModeToolbar.segmentWidth,
                               ),
                             ],
                           ),
                         ),
-                      if (!_landscape) const SizedBox(height: 8),
+                      // Landscape has no row to spare; the toolbar's devices
+                      // button shows the device there. Short phones' lyrics
+                      // keep the room an empty row would take.
+                      if (MediaQuery.orientationOf(context) ==
+                          Orientation.portrait) ...[
+                        if (!reservesPlayingOnRow) ...[
+                          LinkPlayingOnLabel(
+                            color: spotiflac ? Colors.white : null,
+                          ),
+                          const SizedBox(height: 8),
+                        ] else
+                          SizedBox(
+                            key: const ValueKey('link-playing-on-row'),
+                            height: _playingOnRowHeight,
+                            child: Center(
+                              child: LinkPlayingOnLabel(
+                                color: spotiflac ? Colors.white : null,
+                                height: _playingOnRowHeight,
+                              ),
+                            ),
+                          ),
+                      ],
                     ],
                   ),
                 ),
+                collapse: true,
               ),
+              if (homeIndicatorBelowRow != null)
+                SizedBox(height: homeIndicatorBelowRow),
             ],
           ),
         ),
       ),
     );
     if (!spotiflac) {
-      if (!materialFullScreen) return player;
+      if (!materialBackdrop) return _lyricsPointerListener(player);
       return Stack(
         fit: StackFit.expand,
         children: [
           MaterialPlayerBackdrop(
             mediaItem: mediaItem,
             colorScheme: colorScheme,
-            showArtwork: _currentPage != 1,
+            showArtwork: materialFullScreen && _currentPage != 1,
           ),
-          player,
+          _lyricsPointerListener(player),
         ],
       );
     }
@@ -679,34 +814,42 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
                     : null,
               ),
             ),
-            Listener(
-              behavior: HitTestBehavior.translucent,
-              onPointerDown: (event) {
-                if (!_canAutoHideLyricsControls) return;
-                if (_lyricsPointers.isEmpty) _lyricsPointerMoved = false;
-                _lyricsPointers[event.pointer] = event.position;
-                _lyricsIdleTimer?.cancel();
-              },
-              onPointerMove: (event) {
-                final origin = _lyricsPointers[event.pointer];
-                if (origin != null && (event.position - origin).distance > 12) {
-                  _lyricsPointerMoved = true;
-                }
-              },
-              onPointerUp: (event) => _endLyricsInteraction(event.pointer),
-              onPointerCancel: (event) =>
-                  _endLyricsInteraction(event.pointer, cancelled: true),
-              child: player,
-            ),
+            _lyricsPointerListener(player),
           ],
         ),
       ),
     );
   }
 
+  /// A touch on the lyrics page holds the controls; a tap brings hidden
+  /// ones back.
+  Widget _lyricsPointerListener(Widget child) => Listener(
+    behavior: HitTestBehavior.translucent,
+    onPointerDown: (event) {
+      if (!_canAutoHideLyricsControls) return;
+      if (_lyricsPointers.isEmpty) _lyricsPointerMoved = false;
+      _lyricsPointers[event.pointer] = event.position;
+      _lyricsIdleTimer?.cancel();
+    },
+    onPointerMove: (event) {
+      final origin = _lyricsPointers[event.pointer];
+      if (origin != null && (event.position - origin).distance > 12) {
+        _lyricsPointerMoved = true;
+      }
+    },
+    onPointerUp: (event) => _endLyricsInteraction(event.pointer),
+    onPointerCancel: (event) =>
+        _endLyricsInteraction(event.pointer, cancelled: true),
+    child: child,
+  );
+
   void _toggleMaterialLyrics() {
     if (_toggleInspector(1)) return;
-    setState(() => _currentPage = _currentPage == 1 ? 0 : 1);
+    setState(() {
+      _currentPage = _currentPage == 1 ? 0 : 1;
+      _lyricsControlsHidden = false;
+    });
+    _scheduleLyricsControlsHide();
     if (_currentPage == 1) {
       unawaited(
         _trackMetadata.load(
@@ -739,9 +882,20 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
     }
   }
 
+  /// Lyrics fill the column, so idle controls can hide: SpotiFLAC in portrait
+  /// (its landscape player hides its own actions), and Material's portrait
+  /// column or its landscape artwork beside lyrics, which shows no transport
+  /// either, like SpotiFLAC's. Two plain panes keep the transport beside the
+  /// lyrics, and the desktop opens lyrics in the inspector.
+  bool get _lyricsAutoHideLayout => context.isSpotiFLAC
+      ? !_landscape
+      : !widget.embedded &&
+            (MediaQuery.orientationOf(context) == Orientation.portrait ||
+                ref.read(settingsProvider).landscapeLyricsArtwork);
+
   bool get _canAutoHideLyricsControls =>
-      context.isSpotiFLAC &&
-      !_landscape &&
+      _lyricsAutoHideLayout &&
+      ref.read(settingsProvider).autoHideLyricsControls &&
       _currentPage == 1 &&
       ref.read(playbackPlayingProvider) &&
       !MediaQuery.accessibleNavigationOf(context);
@@ -769,7 +923,12 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
     if (_lyricsPointers.remove(pointer) == null || _lyricsPointers.isNotEmpty) {
       return;
     }
-    if (!cancelled && !_lyricsPointerMoved && _lyricsControlsHidden) {
+    final compactTouch = _compactPlayerTouched;
+    _compactPlayerTouched = false;
+    if (!cancelled &&
+        !_lyricsPointerMoved &&
+        !compactTouch &&
+        _lyricsControlsHidden) {
       setState(() => _lyricsControlsHidden = false);
     }
     _scheduleLyricsControlsHide();
@@ -777,6 +936,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
 
   bool _onLyricsScroll(ScrollUpdateNotification notification) {
     if (_currentPage != 1 ||
+        !ref.read(settingsProvider).autoHideLyricsControls ||
         _landscape ||
         notification.dragDetails == null ||
         notification.metrics.axis != Axis.vertical) {
@@ -795,12 +955,15 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
     return false;
   }
 
-  Widget _autoHidingLyricsControls(Widget child) => context.isSpotiFLAC
-      ? PlayerLyricsControlsVisibility(
-          hidden: _currentPage == 1 && _lyricsControlsHidden && !_landscape,
-          child: child,
-        )
-      : child;
+  bool get _lyricsImmersive =>
+      _currentPage == 1 && _lyricsControlsHidden && _lyricsAutoHideLayout;
+
+  /// SpotiFLAC fades the controls in place; Material folds a [collapse] row
+  /// away so the lyrics take its room.
+  Widget _autoHidingLyricsControls(Widget child, {bool collapse = false}) =>
+      !context.isSpotiFLAC && collapse
+      ? PlayerLyricsControlsCollapse(hidden: _lyricsImmersive, child: child)
+      : PlayerLyricsControlsVisibility(hidden: _lyricsImmersive, child: child);
 
   Widget _lyricsSection(
     ColorScheme colorScheme, {
@@ -869,142 +1032,18 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
     );
   }
 
-  Widget _lyricsOptionsButton(ColorScheme colorScheme) => ListenableBuilder(
-    listenable: _trackMetadata,
-    builder: (context, _) =>
-        _buildLyricsOptionsButton(colorScheme) ?? const SizedBox.shrink(),
+  Widget _lyricsOptionsButton(ColorScheme colorScheme) => LyricsOptionsButton(
+    metadata: _trackMetadata,
+    colorScheme: colorScheme,
+    translationOwner: this,
+    onOpenChanged: _onLyricsOptionsOpenChanged,
   );
 
-  Widget? _buildLyricsOptionsButton(ColorScheme colorScheme) {
-    if (_trackMetadata.loading || !_trackMetadata.lyrics.synced) return null;
-    final pronunciation = _trackMetadata.lyrics.lines.any(
-      (line) => line.romanization?.trim().isNotEmpty == true,
-    );
-    final translation = _trackMetadata.lyrics.lines.any(
-      (line) => line.translation?.trim().isNotEmpty == true,
-    );
-    if (!pronunciation && !translation) return null;
-    return Builder(
-      builder: (buttonContext) => AppIconButton.filledTonal(
-        key: const ValueKey('lyrics-language-options'),
-        tooltip: context.l10n.nowPlayingLyricsLanguageOptions,
-        icon: const AppIcon(Icons.translate_rounded),
-        style: IconButton.styleFrom(
-          foregroundColor: _lyricsOptionsOpen
-              ? colorScheme.surface
-              : colorScheme.onSurface,
-          backgroundColor: colorScheme.onSurface.withValues(
-            alpha: _lyricsOptionsOpen ? 0.85 : 0.16,
-          ),
-        ),
-        onPressed: () => _showLyricsOptions(
-          buttonContext,
-          pronunciation: pronunciation,
-          translation: translation,
-        ),
-      ),
-    );
-  }
-
-  Future<void> _showLyricsOptions(
-    BuildContext buttonContext, {
-    required bool pronunciation,
-    required bool translation,
-  }) async {
-    final settings = ref.read(settingsProvider);
-    final l10n = context.l10n;
-    final actions = <(String, String, IconData)>[
-      if (pronunciation)
-        (
-          'pronunciation',
-          settings.playerShowPronunciation
-              ? l10n.nowPlayingHidePronunciation
-              : l10n.nowPlayingShowPronunciation,
-          settings.playerShowPronunciation
-              ? Icons.voice_over_off_outlined
-              : Icons.record_voice_over_outlined,
-        ),
-      if (translation)
-        (
-          'translation',
-          settings.playerShowTranslation
-              ? l10n.nowPlayingHideTranslation
-              : l10n.nowPlayingShowTranslation,
-          Icons.translate_rounded,
-        ),
-    ];
-    _lyricsIdleTimer?.cancel();
-    setState(() => _lyricsOptionsOpen = true);
-    try {
-      final anchor = spotiflacMenuAnchor(buttonContext);
-      var menuWidth = 240.0;
-      for (final (_, label, _) in actions) {
-        final painter = TextPainter(
-          text: TextSpan(
-            text: label,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyLarge?.copyWith(fontSize: 15),
-          ),
-          textDirection: Directionality.of(context),
-          textScaler: MediaQuery.textScalerOf(context),
-        )..layout();
-        if (painter.width + 80 > menuWidth) menuWidth = painter.width + 80;
-        painter.dispose();
-      }
-      final action = context.isSpotiFLAC
-          ? await showSpotiFLACContextMenu<String>(
-              context: buttonContext,
-              anchor: anchor,
-              preferAbove: true,
-              maxWidth: menuWidth,
-              builder: (menuContext) => SpotiFLACContextMenu(
-                dense: true,
-                groups: [
-                  [
-                    for (final (value, label, icon) in actions)
-                      SpotiFLACMenuAction(
-                        icon: icon,
-                        label: label,
-                        onPressed: () => Navigator.of(menuContext).pop(value),
-                      ),
-                  ],
-                ],
-              ),
-            )
-          : await showMenu<String>(
-              context: buttonContext,
-              position: RelativeRect.fromRect(
-                anchor ?? Rect.zero,
-                Offset.zero & MediaQuery.sizeOf(context),
-              ),
-              items: [
-                for (final (value, label, icon) in actions)
-                  PopupMenuItem(
-                    value: value,
-                    child: Row(
-                      children: [
-                        AppIcon(icon),
-                        const SizedBox(width: 12),
-                        Flexible(child: Text(label)),
-                      ],
-                    ),
-                  ),
-              ],
-            );
-      if (!mounted) return;
-      final notifier = ref.read(settingsProvider.notifier);
-      if (action == 'pronunciation') {
-        notifier.setPlayerShowPronunciation(!settings.playerShowPronunciation);
-      } else if (action == 'translation') {
-        notifier.setPlayerShowTranslation(!settings.playerShowTranslation);
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _lyricsOptionsOpen = false);
-        _scheduleLyricsControlsHide();
-      }
-    }
+  void _onLyricsOptionsOpenChanged(bool open) {
+    if (!mounted) return;
+    if (open) _lyricsIdleTimer?.cancel();
+    setState(() => _lyricsOptionsOpen = open);
+    if (!open) _scheduleLyricsControlsHide();
   }
 
   Future<void> _openExternally(String source) async {
@@ -1038,16 +1077,8 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
     }
   }
 
-  Future<void> _goToCurrentArtist(MediaItem mediaItem) async {
-    final track = ref.read(playerCollectionTrackProvider(mediaItem)).value;
-    // A downloaded track's source is the service its audio came from, not a
-    // metadata catalog; the lookup uses the user's search provider instead.
-    await navigateToArtist(
-      context,
-      artistName: mediaItem.artist ?? '',
-      artistId: track?.artistId,
-    );
-  }
+  Future<void> _goToCurrentArtist(MediaItem mediaItem) =>
+      openPlayingArtist(context, ref, mediaItem);
 
   Future<void> _updatePlayerCollection(
     MediaItem item, {
@@ -1091,6 +1122,18 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
               context,
             ).formatTimeOfDay(TimeOfDay.fromDateTime(sleepTimerEndsAt)),
           );
+    final volumeShown = ref.read(settingsProvider).playerShowVolume;
+    final linkClient = ref.read(linkPhoneClientProvider);
+    final transfer = await linkTransferSongsOfPlaying(
+      ref,
+      mediaId: mediaItem.id,
+      source: source,
+    );
+    if (!mounted || !context.mounted) return;
+    final sendToDesktop = transfer.phone.isEmpty || linkClient == null
+        ? null
+        : linkDesktopName(linkClient);
+    final saveToPhone = transfer.desktop.isNotEmpty;
     final action = context.isSpotiFLAC
         ? await showSpotiFLACContextMenu<String>(
             context: context,
@@ -1100,6 +1143,9 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
             builder: (_) => SpotiFLACPlayerActionsSheet(
               mediaItem: mediaItem,
               sleepTimerSubtitle: sleepTimerSubtitle,
+              volumeShown: volumeShown,
+              sendToDesktop: sendToDesktop,
+              saveToPhone: saveToPhone,
             ),
           )
         : await showAppBottomSheet<String>(
@@ -1128,6 +1174,25 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
                     title: sheetContext.l10n.lyricsShareTitle,
                     onTap: () => Navigator.of(sheetContext).pop('shareLyrics'),
                   ),
+                  if (sendToDesktop != null)
+                    SettingsItem(
+                      icon: Icons.computer,
+                      title: sheetContext.l10n.linkSendToDesktop(sendToDesktop),
+                      onTap: () => Navigator.of(sheetContext).pop('linkSend'),
+                    ),
+                  if (saveToPhone)
+                    SettingsItem(
+                      icon: Icons.phone_android,
+                      title: sheetContext.l10n.linkSaveToPhone,
+                      onTap: () => Navigator.of(sheetContext).pop('linkSave'),
+                    ),
+                  if (!saveToPhone && canSaveNetworkOfflineSource(source))
+                    SettingsItem(
+                      icon: Icons.download_for_offline_outlined,
+                      title: sheetContext.l10n.offlineSave,
+                      onTap: () =>
+                          Navigator.of(sheetContext).pop('networkOffline'),
+                    ),
                   SettingsItem(
                     icon: Icons.bedtime_outlined,
                     title: sheetContext.l10n.nowPlayingSleepTimer,
@@ -1138,6 +1203,15 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
                     icon: Icons.equalizer,
                     title: sheetContext.l10n.equalizerTitle,
                     onTap: () => Navigator.of(sheetContext).pop('equalizer'),
+                  ),
+                  SettingsItem(
+                    icon: volumeShown
+                        ? Icons.volume_off_outlined
+                        : Icons.volume_up_outlined,
+                    title: volumeShown
+                        ? sheetContext.l10n.nowPlayingHideVolume
+                        : sheetContext.l10n.nowPlayingShowVolume,
+                    onTap: () => Navigator.of(sheetContext).pop('volume'),
                   ),
                   SettingsItem(
                     icon: Icons.open_in_new,
@@ -1187,6 +1261,15 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
       case 'shareLyrics':
         await _shareLyrics();
         break;
+      case 'linkSend':
+        await linkSendSongsToDesktop(context, ref, transfer.phone);
+        break;
+      case 'linkSave':
+        linkSaveSongsToPhone(context, ref, transfer.desktop);
+        break;
+      case 'networkOffline':
+        await savePlayingNetworkOffline(context, ref, mediaItem);
+        break;
       case 'details':
         unawaited(
           showPlayerDetailsSheet(
@@ -1201,9 +1284,10 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
         await _showSleepTimerSheet(context, controller, colorScheme);
         break;
       case 'equalizer':
-        await Navigator.of(context).push<void>(
-          MaterialPageRoute(builder: (_) => const EqualizerScreen()),
-        );
+        await pushPage<void>(context, (_) => const EqualizerScreen());
+        break;
+      case 'volume':
+        ref.read(settingsProvider.notifier).setPlayerShowVolume(!volumeShown);
         break;
       case 'external':
         await _openExternally(source);
@@ -1272,68 +1356,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
   Future<void> _goToCurrentAlbum({
     required MediaItem mediaItem,
     required String source,
-  }) async {
-    final albumName = (mediaItem.album ?? '').trim();
-    if (albumName.isEmpty) return;
-
-    // Prefer the stored collection so this action remains useful offline and
-    // opens the exact files the user is currently playing.
-    try {
-      final historyItem = source.isEmpty
-          ? null
-          : await ref
-                .read(downloadHistoryProvider.notifier)
-                .getByFilePathAsync(source);
-      if (!mounted) return;
-      if (historyItem != null) {
-        final albumArtist = (historyItem.albumArtist ?? '').trim();
-        pushViaPreferredNavigator(
-          context,
-          (_) => DownloadedAlbumScreen(
-            albumName: historyItem.albumName,
-            artistName: albumArtist.isNotEmpty
-                ? albumArtist
-                : historyItem.artistName,
-            coverUrl: historyItem.coverUrl,
-          ),
-        );
-        return;
-      }
-    } catch (e) {
-      _log.w('Failed to resolve downloaded album: $e');
-    }
-
-    try {
-      final album = await ref
-          .read(musicPlayerControllerProvider)
-          .localAlbumFor(mediaItem.id);
-      if (!mounted) return;
-      if (album != null) {
-        final (:item, :tracks) = album;
-        final albumArtist = (item.albumArtist ?? '').trim();
-        pushViaPreferredNavigator(
-          context,
-          (_) => LocalAlbumScreen(
-            albumName: item.albumName,
-            artistName: albumArtist.isNotEmpty ? albumArtist : item.artistName,
-            coverPath: item.coverPath,
-            tracks: tracks,
-          ),
-        );
-        return;
-      }
-    } catch (e) {
-      _log.w('Failed to resolve local album: $e');
-    }
-
-    if (!mounted) return;
-    await navigateToAlbum(
-      context,
-      albumName: albumName,
-      artistName: mediaItem.artist,
-      coverUrl: mediaItem.artUri?.toString(),
-    );
-  }
+  }) => openPlayingAlbum(context, ref, mediaItem: mediaItem, source: source);
 
   /// Opens Up Next. The Material sheet captures the theme of [context], the
   /// player's artwork scope.

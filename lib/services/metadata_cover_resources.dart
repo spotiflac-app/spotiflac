@@ -1,7 +1,9 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:spotiflac/services/ffmpeg_service.dart';
+import 'package:spotiflac/services/ffmpeg_metadata.dart';
+import 'package:spotiflac/services/ffmpeg_probe.dart';
+import 'package:spotiflac/services/network_metadata_service.dart';
 import 'package:spotiflac/services/platform_bridge.dart';
 import 'package:spotiflac/utils/logger.dart';
 
@@ -70,7 +72,7 @@ class MetadataCoverResources {
 
   Future<MetadataCoverDetails?> readDetails(String path) async {
     try {
-      final dimensions = await FFmpegService.probeImageDimensions(path);
+      final dimensions = await FFmpegProbe.imageDimensions(path);
       if (dimensions == null) return null;
       return (
         width: dimensions.width,
@@ -131,6 +133,12 @@ class MetadataCoverResources {
 
   Future<MetadataCoverPreview?> extract(String filePath) async {
     try {
+      if (filePath.startsWith('network://')) {
+        final metadata = await NetworkMetadataService.instance.read(filePath);
+        final cover = metadata['cover_path'];
+        if (cover is! String || cover.isEmpty) return null;
+        return await copyPicked(extension: 'jpg', sourcePath: cover);
+      }
       return await _create('metadata_embedded_cover_', 'cover.jpg', (
         path,
       ) async {
@@ -164,7 +172,7 @@ class MetadataCoverResources {
 
   Future<MetadataCoverPreview> resize(String source, int maxDimension) {
     return _create('metadata_resized_cover_', 'cover.jpg', (path) async {
-      final resized = await FFmpegService.resizeCoverArt(
+      final resized = await FFmpegMetadata.resizeCoverArt(
         inputPath: source,
         outputPath: path,
         maxDimension: maxDimension,

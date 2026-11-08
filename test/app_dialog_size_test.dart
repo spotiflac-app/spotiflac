@@ -152,10 +152,7 @@ void main() {
           tester.widget<Dialog>(find.byKey(_dialogKey)).shape!
               as RoundedRectangleBorder;
       expect(shape.borderRadius, BorderRadius.circular(28));
-      expect(
-        find.byTooltip('Close'),
-        spotiflac ? findsNothing : findsOneWidget,
-      );
+      expect(find.byTooltip('Close'), spotiflac ? findsNothing : findsOneWidget);
       await tester.pumpWidget(const SizedBox.shrink());
     }
   });

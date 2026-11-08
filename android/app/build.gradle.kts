@@ -8,6 +8,17 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Direct Flutter builds also need the revision displayed in About.
+val buildDartDefines = providers.exec {
+    workingDir(rootProject.projectDir.parentFile)
+    commandLine(
+        "bash",
+        "scripts/flutter_git_commit.sh",
+        project.findProperty("dart-defines")?.toString().orEmpty(),
+    )
+}.standardOutput.asText.get().trim()
+project.extensions.extraProperties["dart-defines"] = buildDartDefines
+
 // Flutter reads this when configuring variant tasks, after this build script.
 // Keep release AOT debug data outside libapp.so; explicit paths and size analysis take precedence.
 if (!project.hasProperty("split-debug-info") && !project.hasProperty("code-size-directory")) {
@@ -205,6 +216,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.11.0")
     implementation("androidx.documentfile:documentfile:1.1.0")
     implementation("androidx.activity:activity-ktx:1.13.0")
+    implementation("com.google.android.gms:play-services-cast-framework:23.0.0")
     // NativeDownloadFinalizer imports FFmpegKit APIs directly. The Flutter
     // plugin owns the runtime AAR; compileOnly avoids packaging it twice here.
     compileOnly("com.antonkarpenko:ffmpeg-kit-audio:2.2.3")

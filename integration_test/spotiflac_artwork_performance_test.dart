@@ -76,9 +76,7 @@ void runArtworkPerformanceTests({required bool spotiflac}) {
       duration: const Duration(minutes: 4),
       artUri: cover.uri,
     );
-    final theme = spotiflac
-        ? SpotiFLACTheme.build(Brightness.dark)
-        : AppTheme.dark();
+    final theme = spotiflac ? SpotiFLACTheme.build(Brightness.dark) : AppTheme.dark();
     final page = ValueNotifier(0);
     final metadata = PlayerMetadataController();
     final seek = PlaybackSeekPreview();

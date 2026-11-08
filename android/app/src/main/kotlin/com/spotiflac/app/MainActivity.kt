@@ -4,11 +4,15 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
-import android.os.ParcelFileDescriptor
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.android.FlutterActivityLaunchConfigs.BackgroundMode
 import io.flutter.embedding.android.FlutterFragment
@@ -54,13 +58,17 @@ class MainActivity: FlutterFragmentActivity() {
     private val CHANNEL = "com.spotiflac.app/backend"
     private val LARGE_JSON_RESULT_FILE_KEY = "__json_file"
     private val LARGE_JSON_RESULT_FILE_THRESHOLD_BYTES = 256 * 1024
+    private var keyboardDismissalPending = false
     internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     internal var backendChannel: MethodChannel? = null
     internal var audioOutputChannel: MethodChannel? = null
     internal var concertCalendarChannel: MethodChannel? = null
     internal val coreBackend: CoreBackend by lazy { createCoreBackend(applicationContext) }
     private val nativeBackendMethods = setOf(
+        "isAndroidTv",
+        "getAndroidSdkVersion",
         "setScreenAwake",
+        "isCharging",
         "getBackendImplementations",
         "ensureInstallMarker",
         "prepareRuntimeState",
@@ -93,6 +101,7 @@ class MainActivity: FlutterFragmentActivity() {
         "processPendingExtensionCallbacks",
         "safExists",
         "safExistsBatch",
+        "listSafAudioFiles",
         "isSafTreeAccessible",
         "probeSafTreeReadAccess",
         "safDelete",
@@ -106,6 +115,7 @@ class MainActivity: FlutterFragmentActivity() {
         "shareContentUri",
         "getSafFileModTimes",
         "safCreateFromPath",
+        "safWriteSidecarFromPath",
         "safCreateIfAbsentFromPath",
         "safCreateUniqueFromPath",
         "safCreateCollisionAwareFromPath",
@@ -126,6 +136,8 @@ class MainActivity: FlutterFragmentActivity() {
         "startBackgroundWork",
         "updateBackgroundWork",
         "stopBackgroundWork",
+        "startLinkConnectionService",
+        "stopLinkConnectionService",
         "startNativeDownloadWorker",
         "appendNativeDownloadWorkerRequests",
         "finishNativeDownloadWorkerPreparation",
@@ -154,8 +166,6 @@ class MainActivity: FlutterFragmentActivity() {
     internal var libraryScanProgressEventSink: EventChannel.EventSink? = null
     internal var lastLibraryScanProgressPayload: String? = null
     internal var flutterBackCallback: OnBackPressedCallback? = null
-    internal val playbackLeaseLock = Any()
-    internal val playbackLeases = LinkedHashMap<String, ParcelFileDescriptor>()
     @Volatile internal var safScanCancel = false
     @Volatile internal var safScanPaused = false
     @Volatile internal var safScanActive = false
@@ -334,9 +344,8 @@ class MainActivity: FlutterFragmentActivity() {
         }
     }
 
-    // Disable Flutter's built-in deep linking so that incoming ACTION_VIEW URLs
-    // (Spotify, Deezer, Tidal, YouTube Music) are NOT forwarded to GoRouter.
-    // We handle these URLs ourselves via receive_sharing_intent + ShareIntentService.
+    // Keep incoming ACTION_VIEW URLs out of GoRouter. The sharing-intent
+    // handler and ShareIntentService resolve them before navigation.
     override fun shouldHandleDeeplinking(): Boolean = false
 
     // Bridge spill files and SAF temp copies are deleted after use on the
@@ -362,6 +371,15 @@ class MainActivity: FlutterFragmentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        AudioOpenBridge.consume(this, intent)
+        // Phones start in portrait and tablets follow the device until
+        // setAppOrientation in app_orientation.dart applies its own rule.
+        requestedOrientation = when {
+            isTelevisionDevice() -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            resources.configuration.smallestScreenWidthDp >= 600 ->
+                ActivityInfo.SCREEN_ORIENTATION_FULL_USER
+            else -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
         // Ensure the shared audio_service engine exists before the activity
         // delegate looks it up by cached id (see getCachedEngineId above).
         AudioServicePlugin.getFlutterEngine(this)
@@ -371,7 +389,34 @@ class MainActivity: FlutterFragmentActivity() {
         PlayerWidgetBridge.handleIntent(intent)
     }
 
+    private fun isTelevisionDevice(): Boolean =
+        resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION ||
+            packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK) ||
+            packageManager.hasSystemFeature(PackageManager.FEATURE_TELEVISION)
+
+    override fun onStop() {
+        keyboardDismissalPending = !isTelevisionDevice()
+        super.onStop()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            if (keyboardDismissalPending) {
+                keyboardDismissalPending = false
+                // An IME hide sent while stopped can be rejected because
+                // the window is no longer served by the input method.
+                WindowCompat.getInsetsController(window, window.decorView)
+                    .hide(WindowInsetsCompat.Type.ime())
+            }
+            // The IME can disappear while the activity is stopped. Refresh
+            // Flutter's viewport from Android's current insets on return.
+            window.decorView.requestApplyInsets()
+        }
+    }
+
     override fun onNewIntent(intent: Intent) {
+        AudioOpenBridge.consume(this, intent)
         super.onNewIntent(intent)
         setIntent(intent)
         handleVerificationNotificationIntent(intent)
@@ -413,13 +458,12 @@ class MainActivity: FlutterFragmentActivity() {
         // active scans/downloads on the UI thread).
         stopDownloadProgressStream()
         stopLibraryScanProgressStream()
-        closeAllSafPlaybackLeases()
         super.onDestroy()
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        PlayerWidgetBridge.attach(this, flutterEngine)
+        AudioOpenBridge.attach(flutterEngine.dartExecutor.binaryMessenger)
         // Select and initialize the runtime before Flutter can dispatch a call.
         val selectedBackend = coreBackend
         sweepStaleCacheFiles()
@@ -437,20 +481,13 @@ class MainActivity: FlutterFragmentActivity() {
         onBackPressedDispatcher.addCallback(this, flutterBackCallback!!)
 
         val messenger = flutterEngine.dartExecutor.binaryMessenger
-        if (!flutterEngine.plugins.has(LocalNetworkPlugin::class.java)) {
-            flutterEngine.plugins.add(LocalNetworkPlugin())
-        }
-        if (!flutterEngine.plugins.has(UsbBitPerfectPlugin::class.java)) {
-            flutterEngine.plugins.add(UsbBitPerfectPlugin())
-        }
-        if (!flutterEngine.plugins.has(MusicHapticsPlugin::class.java)) {
-            flutterEngine.plugins.add(MusicHapticsPlugin())
-        }
         registerConcertCalendarChannel(messenger)
         registerAudioOutputChannel(messenger)
 
         registerProgressStreams(messenger)
 
+        // Replaces the playback subset the engine registered without an
+        // Activity (see SharedEngineChannels) with every backend method.
         val channel = MethodChannel(messenger, CHANNEL)
         backendChannel = channel
         registerLibraryStorageReceiver()
@@ -469,11 +506,14 @@ class MainActivity: FlutterFragmentActivity() {
                         return@launch
                     }
                     when (call.method) {
+                        "isAndroidTv" -> result.success(isTelevisionDevice())
+                        "getAndroidSdkVersion" -> result.success(Build.VERSION.SDK_INT)
                         "processPendingExtensionCallbacks" -> {
                             processPendingExtensionCallbacks()
                             result.success(null)
                         }
                         "setScreenAwake" -> handleSetScreenAwake(call, result)
+                        "isCharging" -> handleIsCharging(call, result)
                         "consumeVerificationNotification" -> handleConsumeVerificationNotification(call, result)
                         "ensureInstallMarker" -> handleEnsureInstallMarker(call, result)
                         "prepareRuntimeState" -> handlePrepareRuntimeState(call, result, selectedBackend)
@@ -492,6 +532,7 @@ class MainActivity: FlutterFragmentActivity() {
                         }
                         "safExists" -> handleSafExists(call, result)
                         "safExistsBatch" -> handleSafExistsBatch(call, result)
+                        "listSafAudioFiles" -> handleListSafAudioFiles(call, result)
                         "probeSafTreeReadAccess" -> handleProbeSafTreeReadAccess(call, result)
                         "isSafTreeAccessible" -> handleIsSafTreeAccessible(call, result)
                         "safDelete" -> handleSafDelete(call, result)
@@ -502,13 +543,14 @@ class MainActivity: FlutterFragmentActivity() {
                         "safOpenPlaybackLease" -> handleSafOpenPlaybackLease(call, result)
                         "safClosePlaybackLease" -> handleSafClosePlaybackLease(call, result)
                         "safCreateFromPath" -> handleSafCreateFromPath(call, result)
+                        "safWriteSidecarFromPath" -> handleSafWriteSidecarFromPath(call, result)
                         "safCreateIfAbsentFromPath" -> handleSafCreateIfAbsentFromPath(call, result)
                         "safCreateUniqueFromPath" -> handleSafCreateUniqueFromPath(call, result)
                         "safCreateCollisionAwareFromPath" -> handleSafCreateCollisionAwareFromPath(call, result)
                         "openContentUri" -> handleOpenContentUri(call, result)
                         "shareContentUri" -> handleShareContentUri(call, result)
                         "rewriteSplitArtistTags" -> handleRewriteSplitArtistTags(call, result)
-                        "readFileMetadata" -> handleReadFileMetadata(call, result)
+                        "readFileMetadata" -> handleReadFileMetadata(call, result, selectedBackend)
                         "checkHiResAuthenticity" -> handleCheckHiResAuthenticity(call, result)
                         "editFileMetadata" -> handleEditFileMetadata(call, result)
                         "writeM4AFreeformTags" -> handleWriteM4AFreeformTags(call, result)
@@ -529,6 +571,18 @@ class MainActivity: FlutterFragmentActivity() {
                             result.success(DownloadService.isServiceRunning())
                         }
                         "startBackgroundWork" -> handleStartBackgroundWork(call, result)
+                        "startLinkConnectionService" -> {
+                            result.success(
+                                LinkConnectionService.start(
+                                    this@MainActivity,
+                                    call.argument<String>("name") ?: "SpotiFLAC",
+                                ),
+                            )
+                        }
+                        "stopLinkConnectionService" -> {
+                            LinkConnectionService.stop(this@MainActivity)
+                            result.success(null)
+                        }
                         "updateBackgroundWork" -> handleUpdateBackgroundWork(call, result)
                         "stopBackgroundWork" -> {
                             BackgroundWorkService.stop(call.argument<String>("kind") ?: "")

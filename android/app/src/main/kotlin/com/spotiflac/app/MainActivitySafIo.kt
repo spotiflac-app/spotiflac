@@ -295,11 +295,18 @@ internal fun Context.readAudioMetadataFromUri(
             }
         }
     }
-    val obj = JSONObject(coreBackend.readAudioMetadata(
-        path, name, coverCacheKey,
-    ))
+    readAudioMetadataForScan(coreBackend, path, name, coverCacheKey)
+}
+
+internal fun readAudioMetadataForScan(
+    coreBackend: CoreBackend,
+    path: String,
+    name: String,
+    coverCacheKey: String,
+): JSONObject {
+    val obj = coreBackend.readAudioMetadataObject(path, name, coverCacheKey)
     if (obj.has("error")) throw IOException(obj.optString("error", "Audio metadata read failed"))
-    obj
+    return obj
 }
 
 /** The Hi-Res check reads only a window from the middle of the file, so a
@@ -411,6 +418,39 @@ internal fun Context.safParentDir(childUri: Uri): DocumentFile? {
             return null
         }
     }
+
+/** Export an already rendered sidecar using the scanned document's grant. */
+internal fun Context.writeSafSidecarFromPath(
+    audioUri: Uri,
+    fileName: String,
+    mimeType: String,
+    srcPath: String,
+): String? {
+    if (fileName.isBlank() || fileName == "." || fileName == ".." ||
+        fileName.any { it == '/' || it == '\\' || it.code < 32 }) return null
+    val source = File(srcPath)
+    if (!source.isFile || source.length() == 0L) return null
+    try {
+        val audio = DocumentFile.fromSingleUri(this, audioUri) ?: return null
+        if (fileName == audio.name) return null
+        val parent = safParentDir(audioUri) ?: return null
+        val existing = findSafChild(this, parent, fileName)
+        val target = SafDownloadHandler.createOrReuseDocumentFile(
+            this, parent, mimeType, fileName,
+        ) ?: return null
+        if (DocumentsContract.getDocumentId(target.uri) == DocumentsContract.getDocumentId(audioUri)) {
+            return null
+        }
+        if (!writeUriFromPath(target.uri, srcPath)) {
+            if (existing == null) target.delete()
+            return null
+        }
+        return target.uri.toString()
+    } catch (error: Exception) {
+        android.util.Log.w("SpotiFLAC", "Sidecar export failed: ${error.message}")
+        return null
+    }
+}
 
     /**
      * Write a ".lrc" sidecar next to a SAF audio document. The sidecar reuses

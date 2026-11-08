@@ -8,22 +8,33 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:spotiflac/controllers/player_metadata_controller.dart';
 import 'package:spotiflac/l10n/l10n.dart';
 import 'package:spotiflac/providers/music_player_provider.dart';
+import 'package:spotiflac/providers/theme_provider.dart';
 import 'package:spotiflac/theme/app_tokens.dart';
+import 'package:spotiflac/theme/material_expressive.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
 import 'package:spotiflac/theme/player_artwork_theme.dart';
+import 'package:spotiflac/services/cast_output.dart';
 import 'package:spotiflac/utils/lyrics_parser.dart';
+import 'package:spotiflac/utils/lyrics_timeline.dart';
 import 'package:spotiflac/utils/string_utils.dart';
 import 'package:spotiflac/widgets/app_icon.dart';
 import 'package:spotiflac/widgets/app_icon_button.dart';
 import 'package:spotiflac/widgets/app_loading_indicator.dart';
 import 'package:spotiflac/widgets/audio_quality_badges.dart';
+import 'package:spotiflac/widgets/cast_device_picker.dart';
 import 'package:spotiflac/widgets/desktop/desktop_commands.dart';
+import 'package:spotiflac/widgets/desktop/desktop_cast_button.dart';
 import 'package:spotiflac/widgets/desktop/desktop_downloads_button.dart';
 import 'package:spotiflac/widgets/desktop/desktop_inspector.dart';
+import 'package:spotiflac/widgets/desktop/desktop_link_devices_button.dart';
 import 'package:spotiflac/widgets/desktop/desktop_window.dart';
+import 'package:spotiflac/widgets/desktop/desktop_volume_scroll.dart';
+import 'package:spotiflac/widgets/expressive_playback_transport.dart';
+import 'package:spotiflac/widgets/link/link_devices_sheet.dart';
 import 'package:spotiflac/widgets/spotiflac_chrome.dart';
 import 'package:spotiflac/widgets/spotiflac_playback_button.dart';
 import 'package:spotiflac/widgets/spotiflac_player_background.dart';
+import 'package:spotiflac/widgets/overflow_marquee.dart';
 import 'package:spotiflac/widgets/player_artwork.dart';
 import 'package:spotiflac/widgets/player_lyrics.dart';
 import 'package:spotiflac/widgets/player_volume_control.dart';
@@ -31,25 +42,29 @@ import 'package:spotiflac/widgets/playback_seek_slider.dart';
 
 part 'desktop_mini_player.dart';
 
-/// The persistent desktop player. It replaces the mobile mini player: no
+/// An explicit dismiss hides the idle bar. Any active track shows it again.
+final desktopPlayerDismissed = ValueNotifier<bool>(false);
+
+/// The desktop player. It replaces the mobile mini player: no
 /// swipe gestures, with transport, seek, volume, lyrics, Up Next and
-/// downloads always in reach. Clicking the artwork or title shows Now
+/// downloads in reach. Paused local playback offers a dismiss button.
+/// Clicking the artwork or title shows Now
 /// Playing in the content pane; lyrics and Up Next toggle the trailing
 /// inspector.
 ///
 /// Material docks an 80dp bar along the bottom of the window, on the
 /// `surfaceContainer` fill of the current artwork's scheme
 /// ([PlayerArtworkTheme]). SpotiFLAC draws a glass capsule that the shell
-/// floats over the bottom of the content pane, laid out like the Music
-/// player: shuffle and the transport, a center "LCD" with the track and its
-/// progress, then lyrics, Up Next, downloads and volume.
+/// floats over the bottom of the content pane: shuffle and transport, a
+/// center display with the track and its progress, then lyrics, Up Next,
+/// downloads and volume.
 class DesktopPlayerBar extends ConsumerWidget {
   const DesktopPlayerBar({super.key});
 
   static const double materialHeight = 80;
 
   /// Height of the SpotiFLAC capsule.
-  static const double spotiflacHeight = 48;
+  static const double spotiflacHeight = 56;
 
   /// Space between the SpotiFLAC capsule and the bottom of the window.
   static const double floatingMargin = 10;
@@ -59,7 +74,7 @@ class DesktopPlayerBar extends ConsumerWidget {
   static const double floatingInset = spotiflacHeight + floatingMargin + 12;
 
   /// Width of the SpotiFLAC capsule in a content pane [paneWidth] wide: about
-  /// 70% of it, as in Music, from 520 to 900 and never closer than 12 to
+  /// 70% of it, from 520 to 900 and never closer than 12 to
   /// the pane's sides.
   static double floatingWidth(double paneWidth) => math.min(
     (paneWidth * 0.7).clamp(520.0, 900.0),
@@ -68,6 +83,7 @@ class DesktopPlayerBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (!ref.watch(playerUiEnabledProvider)) return const SizedBox.shrink();
     final mediaItem = ref.watch(currentMediaItemProvider).value;
     return context.isSpotiFLAC
         ? _SpotiFLACPlayerBar(mediaItem: mediaItem)
@@ -91,6 +107,10 @@ void _toggleNowPlaying() =>
 class _MaterialPlayerBar extends StatelessWidget {
   const _MaterialPlayerBar({required this.mediaItem, required this.appTheme});
 
+  // Lyrics, queue, mini player, Link, downloads and dismiss each keep their
+  // 48dp target. Reserve both sides equally so transport stays centered.
+  static const double _sideControlsMinWidth = 6 * 48;
+
   final MediaItem? mediaItem;
 
   /// The theme outside the bar's artwork scope.
@@ -108,35 +128,45 @@ class _MaterialPlayerBar extends StatelessWidget {
           height: DesktopPlayerBar.materialHeight,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: _TrackSummary(mediaItem: mediaItem),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  flex: 4,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _Transport(enabled: loaded),
-                      SizedBox(
-                        height: 24,
-                        child: _SeekRow(mediaItem: mediaItem),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final sideWidth = math.max(
+                  _sideControlsMinWidth,
+                  (constraints.maxWidth - 32) * 0.3,
+                );
+                return Row(
+                  children: [
+                    SizedBox(
+                      width: sideWidth,
+                      child: Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: _TrackSummary(mediaItem: mediaItem),
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  flex: 3,
-                  child: _TrailingControls(enabled: loaded, appTheme: appTheme),
-                ),
-              ],
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _Transport(enabled: loaded),
+                          SizedBox(
+                            height: 24,
+                            child: _SeekRow(mediaItem: mediaItem),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    SizedBox(
+                      width: sideWidth,
+                      child: _TrailingControls(
+                        enabled: loaded,
+                        appTheme: appTheme,
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ),
@@ -145,9 +175,9 @@ class _MaterialPlayerBar extends StatelessWidget {
   }
 }
 
-/// The SpotiFLAC capsule, laid out like the Music player: shuffle, the
-/// transport and repeat, the LCD, then downloads, lyrics, Up Next and a
-/// volume button whose slider opens in a popover. Its buttons take macOS
+/// The SpotiFLAC capsule: shuffle, transport and repeat, the center display,
+/// then downloads, lyrics, Up Next and a volume button whose slider opens in
+/// a popover. Its buttons take macOS
 /// toolbar sizes rather than touch sizes.
 class _SpotiFLACPlayerBar extends StatelessWidget {
   const _SpotiFLACPlayerBar({required this.mediaItem});
@@ -168,7 +198,7 @@ class _SpotiFLACPlayerBar extends StatelessWidget {
               minimumSize: const Size.square(32),
               fixedSize: const Size.square(32),
               padding: EdgeInsets.zero,
-              iconSize: 17,
+              iconSize: 19,
               visualDensity: VisualDensity.compact,
             ),
           ),
@@ -176,15 +206,9 @@ class _SpotiFLACPlayerBar extends StatelessWidget {
             padding: const EdgeInsetsDirectional.fromSTEB(8, 4, 8, 4),
             child: Row(
               children: [
-                _SpotiFLACModeButton(
-                  mode: _SpotiFLACMode.shuffle,
-                  enabled: loaded,
-                ),
+                _SpotiFLACModeButton(mode: _SpotiFLACMode.shuffle, enabled: loaded),
                 _Transport(enabled: loaded),
-                _SpotiFLACModeButton(
-                  mode: _SpotiFLACMode.repeat,
-                  enabled: loaded,
-                ),
+                _SpotiFLACModeButton(mode: _SpotiFLACMode.repeat, enabled: loaded),
                 const SizedBox(width: 8),
                 Expanded(child: _SpotiFLACLcd(mediaItem: mediaItem)),
                 const SizedBox(width: 8),
@@ -201,7 +225,7 @@ class _SpotiFLACPlayerBar extends StatelessWidget {
 enum _SpotiFLACMode { shuffle, repeat }
 
 /// Shuffle or repeat in the capsule: small secondary glyphs, accent while
-/// on, as in Music, and dimmed while nothing is loaded.
+/// on, and dimmed while nothing is loaded.
 class _SpotiFLACModeButton extends ConsumerWidget {
   const _SpotiFLACModeButton({required this.mode, required this.enabled});
 
@@ -340,6 +364,12 @@ class _TitleAndArtist extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
+        // While the desktop follows a phone, the bar shows and drives it.
+        LinkPlayingOnText(
+          color: colorScheme.primary,
+          style: textTheme.labelSmall,
+          glyphSize: 14,
+        ),
       ],
     );
   }
@@ -424,6 +454,7 @@ class _Transport extends ConsumerWidget {
             color: colorScheme.onSurface,
             iconSize: 18,
             padding: const EdgeInsets.all(7),
+            pointerPress: true,
             onPressed: enabled ? controller.previous : null,
           ),
           SpotiFLACPlaybackButton(
@@ -435,6 +466,7 @@ class _Transport extends ConsumerWidget {
             iconSize: 22,
             padding: const EdgeInsets.all(5),
             loading: isLoading,
+            pointerPress: true,
             onPressed: onPlayPause,
           ),
           SpotiFLACPlaybackButton(
@@ -443,9 +475,27 @@ class _Transport extends ConsumerWidget {
             color: colorScheme.onSurface,
             iconSize: 18,
             padding: const EdgeInsets.all(7),
+            pointerPress: true,
             onPressed: enabled ? controller.next : null,
           ),
         ],
+      );
+    }
+    if (materialExpressiveEnabled(context)) {
+      return SizedBox(
+        width: 192,
+        child: ExpressivePlaybackTransport(
+          colorScheme: colorScheme,
+          playing: isPlaying,
+          loading: isLoading,
+          dense: true,
+          playTooltip: playTooltip,
+          previousTooltip: previousTooltip,
+          nextTooltip: nextTooltip,
+          onPlayPause: onPlayPause,
+          onPrevious: enabled ? controller.previous : null,
+          onNext: enabled ? controller.next : null,
+        ),
       );
     }
     return Row(
@@ -520,10 +570,10 @@ class _SeekRow extends ConsumerWidget {
       data: SliderTheme.of(context).copyWith(
         trackHeight: dense ? 3 : 4,
         activeTrackColor: spotiflac
-            ? colorScheme.onSurface.withValues(alpha: 0.6)
+            ? colorScheme.onSurface.withValues(alpha: 0.85)
             : colorScheme.primary,
         inactiveTrackColor: spotiflac
-            ? colorScheme.onSurface.withValues(alpha: 0.12)
+            ? colorScheme.onSurface.withValues(alpha: 0.16)
             : colorScheme.secondaryContainer,
         thumbColor: dense ? colorScheme.onSurface : colorScheme.primary,
         thumbShape: RoundSliderThumbShape(enabledThumbRadius: dense ? 4 : 6),
@@ -557,14 +607,13 @@ class _SeekRow extends ConsumerWidget {
   }
 }
 
-/// The SpotiFLAC center display: artwork, then the title and artist centered
+/// The SpotiFLAC center display: artwork, then the title and artist aligned
 /// over a thin progress bar. Clicking the artwork or text opens Now
-/// Playing. With nothing loaded it shows a music glyph, like Music's idle
-/// display.
+/// Playing. With nothing loaded it shows a music glyph.
 class _SpotiFLACLcd extends StatelessWidget {
   const _SpotiFLACLcd({required this.mediaItem});
 
-  static const double _artworkSize = 32;
+  static const double _artworkSize = 34;
 
   final MediaItem? mediaItem;
 
@@ -585,7 +634,7 @@ class _SpotiFLACLcd extends StatelessWidget {
         ),
       );
     }
-    // As in Music: artwork and left-aligned lines, with a hairline progress
+    // Artwork and left-aligned lines, with a hairline progress
     // track along the bottom from the artwork's edge.
     return Column(
       children: [
@@ -597,10 +646,12 @@ class _SpotiFLACLcd extends StatelessWidget {
               onTap: _toggleNowPlaying,
               child: Row(
                 children: [
-                  _Artwork(
-                    mediaItem: item,
-                    size: _artworkSize,
-                    radius: context.tokens.radiusThumb - 4,
+                  _SpotiFLACLcdArtwork(
+                    child: _Artwork(
+                      mediaItem: item,
+                      size: _artworkSize,
+                      radius: 5,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -634,14 +685,74 @@ class _SpotiFLACLcd extends StatelessWidget {
   }
 }
 
-/// The LCD's title and "artist · album" line, left-aligned like Music's.
-class _SpotiFLACLcdLines extends StatelessWidget {
+/// The LCD's artwork, which grows by a tenth under the pointer and shows
+/// that a click opens Now Playing.
+class _SpotiFLACLcdArtwork extends StatefulWidget {
+  const _SpotiFLACLcdArtwork({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_SpotiFLACLcdArtwork> createState() => _SpotiFLACLcdArtworkState();
+}
+
+class _SpotiFLACLcdArtworkState extends State<_SpotiFLACLcdArtwork> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final motion = reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 150);
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedScale(
+        scale: _hovered && !reduceMotion ? 1.1 : 1,
+        duration: motion,
+        curve: Curves.easeOut,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            widget.child,
+            Positioned.fill(
+              child: AnimatedOpacity(
+                key: const ValueKey('desktop-player-artwork-overlay'),
+                opacity: _hovered ? 1 : 0,
+                duration: motion,
+                curve: Curves.easeOut,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.45),
+                    borderRadius: BorderRadius.circular(
+                      context.tokens.radiusThumb - 4,
+                    ),
+                  ),
+                  child: const Icon(
+                    CupertinoIcons.arrow_up_left_arrow_down_right,
+                    size: 14,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The display's title and "artist · album" line, both left-aligned.
+/// A line too long for the capsule scrolls twice, then rests at its start.
+class _SpotiFLACLcdLines extends ConsumerWidget {
   const _SpotiFLACLcdLines({required this.mediaItem});
 
   final MediaItem mediaItem;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
     final subtitle = [
@@ -653,19 +764,43 @@ class _SpotiFLACLcdLines extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ExplicitTrackTitle(
-          title: mediaItem.title,
-          explicit: parseExplicitFlag(mediaItem.extras?['explicit']) == true,
-          style: style?.copyWith(fontWeight: FontWeight.w600),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        if (subtitle.isNotEmpty)
-          Text(
-            subtitle,
-            style: style?.copyWith(color: colorScheme.onSurfaceVariant),
+        OverflowMarquee(
+          resetKey: (mediaItem.id, mediaItem.title),
+          maxCycles: 2,
+          child: ExplicitTrackTitle(
+            title: mediaItem.title,
+            explicit: parseExplicitFlag(mediaItem.extras?['explicit']) == true,
+            style: style?.copyWith(
+              color: colorScheme.onSurface,
+              fontWeight: FontWeight.w600,
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        // The capsule has two lines: while the desktop follows a phone,
+        // the second names it instead.
+        if (ref.watch(
+          activeRemotePlaybackProvider.select((remote) => remote != null),
+        ))
+          LinkPlayingOnText(
+            color: colorScheme.primary,
+            style: style?.copyWith(fontWeight: FontWeight.w600),
+            glyphSize: 12,
+          )
+        else if (subtitle.isNotEmpty)
+          OverflowMarquee(
+            resetKey: (mediaItem.id, subtitle),
+            maxCycles: 2,
+            child: Text(
+              subtitle,
+              // Keep the subtitle legible over the capsule's glass.
+              style: style?.copyWith(
+                color: colorScheme.onSurface.withValues(alpha: 0.78),
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
       ],
     );
@@ -673,15 +808,20 @@ class _SpotiFLACLcdLines extends StatelessWidget {
 }
 
 /// Lyrics and Up Next, which toggle the trailing inspector, downloads, and
-/// volume. Material fills its third of the bar, with downloads after Up
-/// Next and the volume slider last. The SpotiFLAC capsule leads with downloads
-/// and ends with a volume button whose slider opens in a popover, as Music
-/// does.
-class _TrailingControls extends StatelessWidget {
+/// volume. Material fills its third of the bar, with phones and downloads
+/// after Up Next and then the volume slider. The SpotiFLAC capsule leads with
+/// phones and downloads and ends with a volume button whose slider opens in
+/// a popover. The phones button shows only while a phone is
+/// connected over SpotiFLAC Link. Paused local playback adds a dismiss button
+/// at the end in both styles.
+class _TrailingControls extends ConsumerWidget {
   const _TrailingControls({required this.enabled, this.appTheme});
 
   /// Narrowest room in which the Material bar keeps its volume slider.
   static const double _materialVolumeMinWidth = 140;
+
+  /// The Material bar's Cast button, a standard 48 dp icon button.
+  static const double _castWidth = 48;
 
   final bool enabled;
 
@@ -689,15 +829,23 @@ class _TrailingControls extends StatelessWidget {
   final ThemeData? appTheme;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final spotiflac = context.isSpotiFLAC;
     final colorScheme = Theme.of(context).colorScheme;
     final l10n = context.l10n;
+    final canDismiss =
+        enabled &&
+        !ref.watch(playbackPlayingProvider) &&
+        !ref.watch(playbackLoadingProvider) &&
+        ref.watch(activeRemotePlaybackProvider) == null;
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       mainAxisSize: spotiflac ? MainAxisSize.min : MainAxisSize.max,
       children: [
-        if (spotiflac) const DesktopDownloadsButton(),
+        if (spotiflac) ...[
+          const DesktopLinkDevicesButton(),
+          const DesktopDownloadsButton(),
+        ],
         ValueListenableBuilder<DesktopInspectorPanel?>(
           valueListenable: desktopInspectorPanel,
           builder: (context, panel, _) => Row(
@@ -727,9 +875,7 @@ class _TrailingControls extends StatelessWidget {
                   l10n.nowPlayingUpNext,
                   DesktopCommand.upNext,
                 ),
-                icon: spotiflac
-                    ? CupertinoIcons.list_bullet
-                    : Icons.queue_music,
+                icon: spotiflac ? CupertinoIcons.list_bullet : Icons.queue_music,
               ),
             ],
           ),
@@ -755,24 +901,56 @@ class _TrailingControls extends StatelessWidget {
         else ...[
           Theme(
             data: appTheme ?? Theme.of(context),
-            child: const DesktopDownloadsButton(),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [DesktopLinkDevicesButton(), DesktopDownloadsButton()],
+            ),
           ),
-          // A narrow window leaves too little room for a usable slider;
-          // the volume shortcuts still work there.
+          // A narrow window leaves too little room for a usable slider, then
+          // for Cast; the volume shortcuts still work there.
           Flexible(
             child: LayoutBuilder(
-              builder: (context, constraints) =>
-                  constraints.maxWidth < _materialVolumeMinWidth
-                  ? const SizedBox.shrink()
-                  : ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 220),
-                      child: PlayerVolumeControl(
-                        foreground: colorScheme.onSurface,
+              builder: (context, constraints) {
+                final cast = constraints.maxWidth >= _castWidth;
+                final slider =
+                    constraints.maxWidth - (cast ? _castWidth : 0) >=
+                    _materialVolumeMinWidth;
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (cast)
+                      Theme(
+                        data: appTheme ?? Theme.of(context),
+                        child: const DesktopCastButton(),
                       ),
-                    ),
+                    if (slider)
+                      Flexible(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 220),
+                          child: PlayerVolumeControl(
+                            foreground: colorScheme.onSurface,
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
             ),
           ),
         ],
+        if (canDismiss)
+          AppIconButton(
+            key: const ValueKey('desktop-player-dismiss'),
+            tooltip: l10n.actionDismiss,
+            color: spotiflac ? colorScheme.onSurface : null,
+            icon: const AppIcon.adaptive(Icons.close),
+            onPressed: () async {
+              await ref.read(musicPlayerControllerProvider).dismiss();
+              desktopPlayerDismissed.value = true;
+              desktopInspectorPanel.value = null;
+              closeDesktopNowPlaying();
+            },
+          ),
       ],
     );
   }
@@ -788,14 +966,31 @@ class _SpotiFLACVolumeButton extends ConsumerStatefulWidget {
       _SpotiFLACVolumeButtonState();
 }
 
-class _SpotiFLACVolumeButtonState
-    extends ConsumerState<_SpotiFLACVolumeButton> {
+class _SpotiFLACVolumeButtonState extends ConsumerState<_SpotiFLACVolumeButton> {
   final _menu = MenuController();
+  final _cast = CastOutput.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _cast.addListener(_castChanged);
+  }
+
+  @override
+  void dispose() {
+    _cast.removeListener(_castChanged);
+    super.dispose();
+  }
+
+  void _castChanged() {
+    if (mounted) setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final volume = ref.watch(systemVolumeProvider).value;
+    final cast = _cast;
     final icon = switch (volume) {
       null => CupertinoIcons.speaker_2_fill,
       <= 0 => CupertinoIcons.speaker_slash_fill,
@@ -807,30 +1002,90 @@ class _SpotiFLACVolumeButtonState
       controller: _menu,
       consumeOutsideTap: true,
       alignmentOffset: const Offset(-96, 8),
-      style: MenuStyle(
-        padding: const WidgetStatePropertyAll(EdgeInsets.zero),
-        backgroundColor: WidgetStatePropertyAll(
-          colorScheme.surfaceContainerHigh,
-        ),
-        shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        ),
+      style: const MenuStyle(
+        padding: WidgetStatePropertyAll(EdgeInsets.zero),
+        // The glass panel below is the popover's surface, so it can fade in.
+        backgroundColor: WidgetStatePropertyAll(Colors.transparent),
+        surfaceTintColor: WidgetStatePropertyAll(Colors.transparent),
+        shadowColor: WidgetStatePropertyAll(Colors.transparent),
+        elevation: WidgetStatePropertyAll(0),
       ),
       menuChildren: [
-        SizedBox(
-          key: const ValueKey('desktop-player-volume-popover'),
-          width: 240,
-          height: 48,
-          child: PlayerVolumeControl(foreground: colorScheme.onSurface),
+        _SpotiFLACPopoverEntrance(
+          child: SpotiFLACGlassPanel.overlay(
+            radius: 14,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  key: const ValueKey('desktop-player-volume-popover'),
+                  width: 240,
+                  height: 48,
+                  child: PlayerVolumeControl(foreground: colorScheme.onSurface),
+                ),
+                // The capsule has no room for its own Cast button; output
+                // sits with volume.
+                SizedBox(
+                  width: 240,
+                  child: MenuItemButton(
+                    key: const ValueKey('desktop-player-cast'),
+                    leadingIcon: AppIcon(
+                      cast.connected ? Icons.cast_connected : Icons.cast,
+                      size: 18,
+                    ),
+                    onPressed: () {
+                      _menu.close();
+                      showCastDevicePicker(context, output: cast);
+                    },
+                    child: Text(
+                      cast.connected
+                          ? cast.deviceName ?? context.l10n.audioOutputCast
+                          : context.l10n.audioOutputCast,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ],
-      child: AppIconButton(
-        key: const ValueKey('desktop-player-volume'),
-        tooltip: context.l10n.nowPlayingVolume,
-        color: colorScheme.onSurface,
-        icon: AppIcon(icon),
-        onPressed: () => _menu.isOpen ? _menu.close() : _menu.open(),
+      child: DesktopVolumeScroll(
+        child: AppIconButton(
+          key: const ValueKey('desktop-player-volume'),
+          tooltip: context.l10n.nowPlayingVolume,
+          color: cast.connected ? colorScheme.primary : colorScheme.onSurface,
+          icon: AppIcon(cast.connected ? Icons.cast_connected : icon),
+          onPressed: () => _menu.isOpen ? _menu.close() : _menu.open(),
+        ),
       ),
+    );
+  }
+}
+
+/// The popover entrance: 250ms of fade with a short rise.
+class _SpotiFLACPopoverEntrance extends StatelessWidget {
+  const _SpotiFLACPopoverEntrance({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+      builder: (context, progress, child) => Opacity(
+        opacity: progress,
+        child: Transform.translate(
+          offset: Offset(0, 6 * (1 - progress)),
+          child: child,
+        ),
+      ),
+      child: child,
     );
   }
 }

@@ -28,8 +28,7 @@ class SpotiFLACPlayerArtwork extends ConsumerStatefulWidget {
       _SpotiFLACPlayerArtworkState();
 }
 
-class _SpotiFLACPlayerArtworkState
-    extends ConsumerState<SpotiFLACPlayerArtwork> {
+class _SpotiFLACPlayerArtworkState extends ConsumerState<SpotiFLACPlayerArtwork> {
   String? _displayedSource;
   VideoPlayerController? _displayedController;
 

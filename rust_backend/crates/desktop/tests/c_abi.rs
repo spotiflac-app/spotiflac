@@ -2,11 +2,11 @@
 //! The library keeps process-wide state, so every test shares one
 //! initialization and uses its own call IDs.
 
-use serde_json::{Value, json};
 use spotiflac_desktop::{
     implemented_methods, kind, spotiflac_call, spotiflac_cancel, spotiflac_free, spotiflac_init,
     spotiflac_subscribe, spotiflac_unsubscribe,
 };
+use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
 use std::ffi::CString;
 use std::path::PathBuf;
@@ -361,6 +361,39 @@ fn library_watcher_reports_changed_roots() {
         Value::Null
     );
     assert!(call("watchLibraryFolders", json!({"paths": "x"})).is_err());
+}
+
+#[test]
+fn link_methods_answer_while_stopped() {
+    let received = fixture().root.join("support").join("link").join("received");
+    assert_eq!(
+        call("linkStatus", Value::Null).unwrap(),
+        json!({"running": false, "receivedDir": received})
+    );
+    assert_eq!(call("linkDevices", Value::Null).unwrap(), json!([]));
+    assert_eq!(
+        call("linkReply", json!({"requestId": "gone", "result": {}})).unwrap(),
+        Value::Null
+    );
+    assert_eq!(
+        call("linkReply", json!({})).unwrap_err()["code"],
+        "invalid_arguments"
+    );
+    assert_eq!(
+        call("linkSend", json!({"message": {"type": "x"}})).unwrap(),
+        json!({"delivered": 0})
+    );
+    assert_eq!(
+        call(
+            "linkEmbeddedPictures",
+            json!({"paths": ["/no/such/song.flac"]})
+        )
+        .unwrap(),
+        json!({"pictures": [null]})
+    );
+    assert_eq!(call("linkEndPairing", Value::Null).unwrap(), Value::Null);
+    assert_eq!(call("linkStop", Value::Null).unwrap(), Value::Null);
+    assert!(call("linkBeginPairing", Value::Null).is_err());
 }
 
 #[test]

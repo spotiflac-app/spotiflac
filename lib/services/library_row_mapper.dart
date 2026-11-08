@@ -1,4 +1,4 @@
-import 'package:spotiflac/services/library_database_models.dart';
+import 'package:spotiflac/models/library_database_models.dart';
 import 'package:spotiflac/services/sqlite_helpers.dart' as sqlite;
 import 'package:spotiflac/utils/audio_format_utils.dart';
 

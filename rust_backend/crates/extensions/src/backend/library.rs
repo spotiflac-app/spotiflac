@@ -3,12 +3,12 @@
 use super::Backend;
 use cap_std::fs::OpenOptions;
 use chrono::{SecondsFormat, Utc};
-use serde_json::{Value, json};
 use spotiflac_core::cue::{self, CueSheet};
 use spotiflac_core::tags::{
     extract_cover, library_extension, library_id, library_metadata, read_library_metadata,
     read_library_metadata_with_cover,
 };
+use serde_json::{Value, json};
 use std::cell::RefCell;
 use std::path::Path;
 use std::time::UNIX_EPOCH;
@@ -51,7 +51,7 @@ impl Backend {
         };
         check()?;
         let files = self.environment().native_files()?;
-        self.scan_audio_file(&files, path, hint, cache_key, &scan_time(), 0, &check)
+        self.scan_audio_file(&files, path, hint, cache_key, &scan_time(), 0, None, &check)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -63,6 +63,7 @@ impl Backend {
         cache_key: &str,
         scan_time: &str,
         mod_time: i64,
+        covers: Option<&crate::files::SyncBatch>,
         check: &dyn Fn() -> Result<(), String>,
     ) -> Result<Value, String> {
         check()?;
@@ -106,6 +107,7 @@ impl Backend {
                         extract_cover(file, if aac { "aac" } else { format }, check)
                     }
                 },
+                covers,
                 check,
             )
             .ok()
@@ -128,8 +130,7 @@ impl Backend {
                 input.open_native_read().map_err(|error| error.to_string())
             };
             if let Ok(lyrics) = spotiflac_core::lyrics::file::sidecar(path, &open, check) {
-                result["hasLyrics"] =
-                    spotiflac_core::lyrics::lrc::has_usable_content(&lyrics).into();
+                result["hasLyrics"] = spotiflac_core::lyrics::lrc::has_usable_content(&lyrics).into();
             }
         }
         check()?;

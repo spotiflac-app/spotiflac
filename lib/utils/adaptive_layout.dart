@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
 import 'package:spotiflac/utils/desktop_platform.dart';
+import 'package:spotiflac/utils/android_tv.dart';
 
 /// Keeps touch-first tablets on the bottom navigation used by phones. A rail
 /// is reserved for genuinely desktop-width windows; the old 600dp threshold
@@ -63,7 +64,7 @@ class AdaptiveUiScaler extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
-    final scale = adaptiveUiScaleForSize(mediaQuery.size);
+    final scale = isAndroidTv ? 1.15 : adaptiveUiScaleForSize(mediaQuery.size);
     if (scale == 1) return child;
 
     final scaledSize = Size(
@@ -113,7 +114,7 @@ double wideInsetForWidth(
 
 /// Horizontal inset that centers full-width list content on tablets/landscape;
 /// zero on phones, so rows stop stretching across the whole screen. SpotiFLAC
-/// desktop pages run across the whole content pane, as Music's do, and center
+/// desktop pages run across the whole content pane and center
 /// only past [desktopContentMaxWidth]. Material desktop pages center past
 /// [desktopMaterialContentMaxWidth], so long lists keep a reading width
 /// instead of stretching across a wide window.
@@ -128,6 +129,13 @@ double wideListInset(BuildContext context, {double? contentMaxWidth}) =>
                     : desktopMaterialContentMaxWidth)
               : defaultWideContentMaxWidth),
     );
+
+/// The Home tab's extra side inset. Material desktop runs Home across the
+/// whole pane, as M3 panes do, with the 24dp margin of expanded and larger
+/// windows (the 16dp phone edge plus 8), so its cover shelves reach the
+/// edge; elsewhere Home centers with [wideListInset].
+double homeContentInset(BuildContext context) =>
+    isDesktopPlatform && !context.isSpotiFLAC ? 8 : wideListInset(context);
 
 const double desktopContentMaxWidth = 1600;
 
@@ -146,6 +154,76 @@ double artistAlbumSectionHeight(BuildContext context) =>
     artistAlbumTileSize(context) +
     64 +
     ((effectiveTextScale(context) - 1) * 14);
+
+/// Search results trade phone rows for cover grids and shelves once their
+/// content is this wide (Material's expanded window class).
+const double searchCoverLayoutMinWidth = 840;
+
+/// The smallest cover of a search result grid: a wider pane adds columns
+/// rather than growing covers far past it.
+const double searchCoverMinExtent = 160;
+
+/// The cover side of a search result shelf.
+const double searchCoverShelfExtent = 176;
+
+/// The space between search result covers.
+const double searchCoverGap = 16;
+
+/// The height of a SpotiFLAC Top Results card.
+const double searchTopResultHeight = 80;
+
+/// SpotiFLAC Top Results cards across a pane [width] wide.
+int searchTopResultColumns(double width) => width >= 840 ? 3 : 2;
+
+/// The cover side of a search shelf in a pane [paneWidth] wide. SpotiFLAC sizes
+/// covers to the pane with the next one peeking: a little over
+/// four albums or five artists.
+double searchShelfExtentFor(
+  BuildContext context,
+  double paneWidth, {
+  required bool round,
+}) {
+  if (!context.isSpotiFLAC) return searchCoverShelfExtent;
+  final content = paneWidth - 2 * searchCoverEdge(context);
+  final perPane = round ? 5.2 : 4.17;
+  return ((content + searchCoverGap) / perPane - searchCoverGap).clamp(
+    searchCoverMinExtent - 20,
+    280.0,
+  );
+}
+
+/// Columns of a search result grid [width] wide.
+int searchCoverGridColumns(double width) =>
+    ((width + searchCoverGap) / (searchCoverMinExtent + searchCoverGap))
+        .floor()
+        .clamp(2, 12);
+
+/// The cover side of a search result grid [width] wide.
+double searchCoverGridExtent(double width) {
+  final columns = searchCoverGridColumns(width);
+  return (width - searchCoverGap * (columns - 1)) / columns;
+}
+
+/// The title and subtitle under a search result cover, grown with the text
+/// size so neither line clips.
+double searchCoverTextHeight(BuildContext context) {
+  final textTheme = Theme.of(context).textTheme;
+  final scaler = MediaQuery.textScalerOf(context);
+  double line(TextStyle? style, double fallback) =>
+      scaler.scale(style?.fontSize ?? fallback) * (style?.height ?? 1.3);
+  // The cover gap, both lines with the gap between them, and slack for
+  // fonts whose line box runs past their nominal height.
+  return 8 +
+      line(textTheme.bodyMedium, 14) +
+      2 +
+      line(textTheme.bodySmall, 12) +
+      4;
+}
+
+/// The side margin of search result grids and shelves: the section titles'
+/// inset, so covers line up under them.
+double searchCoverEdge(BuildContext context) =>
+    (context.isSpotiFLAC ? 20 : 16) + homeContentInset(context);
 
 /// Scales fixed sizes with the shortest screen side, clamped to [min]..[max].
 double responsiveScale({

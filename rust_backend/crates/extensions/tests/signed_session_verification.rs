@@ -1,6 +1,6 @@
-use serde_json::{Value, json};
 use spotiflac_extensions::RuntimeLimits;
 use spotiflac_extensions::environment::ExtensionEnvironment;
+use serde_json::{Value, json};
 
 #[test]
 fn bootstrap_failure_reaches_the_extension_as_a_retryable_verification_result() {

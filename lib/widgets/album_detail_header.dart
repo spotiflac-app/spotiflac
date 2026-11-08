@@ -1,7 +1,7 @@
 import 'dart:math' as math;
-import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderProxySliver;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,6 +14,7 @@ import 'package:spotiflac/theme/material_expressive.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
 import 'package:spotiflac/theme/spotiflac_icons.dart';
 import 'package:spotiflac/widgets/spotiflac_chrome.dart';
+import 'package:spotiflac/widgets/spotiflac_glass_press.dart';
 import 'package:spotiflac/widgets/app_icon.dart';
 import 'package:spotiflac/widgets/app_icon_button.dart';
 import 'package:spotiflac/widgets/expressive_button.dart';
@@ -23,6 +24,8 @@ import 'package:spotiflac/utils/adaptive_layout.dart';
 import 'package:spotiflac/utils/desktop_platform.dart';
 import 'package:spotiflac/widgets/desktop/context_menu.dart';
 import 'package:spotiflac/widgets/desktop/detail_header.dart';
+import 'package:spotiflac/widgets/settled_blur.dart';
+import 'package:spotiflac/widgets/sliver_layout_info_builder.dart';
 
 /// Collapsing album-detail header shared by the album, local-album, and
 /// downloaded-album screens: full-bleed [background] (optionally blurred and
@@ -41,6 +44,7 @@ class AlbumDetailHeader extends StatelessWidget {
     required this.title,
     required this.expandedHeight,
     required this.showTitleInAppBar,
+    this.showTitleListenable,
     required this.background,
     this.paletteSource,
     this.blurAndScrimBackground = true,
@@ -63,6 +67,9 @@ class AlbumDetailHeader extends StatelessWidget {
   final String title;
   final double expandedHeight;
   final bool showTitleInAppBar;
+
+  /// Replaces [showTitleInAppBar] when set; see [headerToolbarTitle].
+  final ValueListenable<bool>? showTitleListenable;
 
   /// Full-bleed background content (cover image, motion banner, placeholder).
   final Widget background;
@@ -148,35 +155,40 @@ class AlbumDetailHeader extends StatelessWidget {
       math.max(240.0, screenSize.height * 0.55),
     );
     final details = _buildSpotiFLACDetails(context);
+    // Built once, so toolbar rebuilds keep the same glass button element.
+    final back = Padding(
+      padding: EdgeInsetsDirectional.only(start: edgeInset),
+      child:
+          leading ??
+          HeaderCircleButton(
+            icon: CupertinoIcons.back,
+            tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+            onPressed: () => Navigator.pop(context),
+          ),
+    );
     Widget toolbar({bool collapsed = true}) => SliverAppBar(
       pinned: true,
       backgroundColor: collapsed ? scheme.surface : Colors.transparent,
       surfaceTintColor: Colors.transparent,
       scrolledUnderElevation: 0,
-      title: AnimatedOpacity(
-        opacity:
-            showTitleInAppBar || appBarTitle != null || (immersive && collapsed)
-            ? 1
-            : 0,
-        duration: const Duration(milliseconds: 180),
-        child: Text(
-          appBarTitle ?? title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+      title: headerToolbarTitle(
+        showTitleListenable,
+        showTitleInAppBar,
+        (showTitle) => AnimatedOpacity(
+          opacity: showTitle || appBarTitle != null || (immersive && collapsed)
+              ? 1
+              : 0,
+          duration: const Duration(milliseconds: 180),
+          child: Text(
+            appBarTitle ?? title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+          ),
         ),
       ),
       leadingWidth: kToolbarHeight + edgeInset,
-      leading: Padding(
-        padding: EdgeInsetsDirectional.only(start: edgeInset),
-        child:
-            leading ??
-            HeaderCircleButton(
-              icon: CupertinoIcons.back,
-              tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-              onPressed: () => Navigator.pop(context),
-            ),
-      ),
+      leading: back,
       actionsPadding: EdgeInsetsDirectional.only(end: edgeInset),
       actions: appBarActions,
     );
@@ -205,15 +217,16 @@ class AlbumDetailHeader extends StatelessWidget {
       return [
         // The toolbar paints above the header without reserving a second
         // status-bar inset. Metadata still has its natural, scrollable height.
-        SliverLayoutBuilder(
-          builder: (context, constraints) {
+        Builder(
+          builder: (context) {
             final toolbarHeight =
                 kToolbarHeight + MediaQuery.paddingOf(context).top;
-            return _AlbumOverlayToolbar(
-              child: toolbar(
-                collapsed:
-                    constraints.scrollOffset >= detailsTop - toolbarHeight,
-              ),
+            final collapseOffset = detailsTop - toolbarHeight;
+            return SliverLayoutInfoBuilder(
+              select: (constraints) =>
+                  constraints.scrollOffset >= collapseOffset,
+              builder: (context, collapsed) =>
+                  _AlbumOverlayToolbar(child: toolbar(collapsed: collapsed)),
             );
           },
         ),
@@ -335,27 +348,28 @@ class AlbumDetailHeader extends StatelessWidget {
     final fallbackMotion = AppMotionSpec(tokens.motionFast, Curves.linear);
     final titleSlide = AppMotion.spatial(context, fallbackMotion);
     final titleFade = AppMotion.effects(context, fallbackMotion);
-    Widget toolbarTitle = AnimatedOpacity(
-      duration: titleFade.duration,
-      curve: titleFade.curve,
-      opacity: showTitleInAppBar ? 1.0 : 0.0,
-      child: Text(
-        appBarTitle ?? title,
-        style: TextStyle(
-          color: onHeader,
-          fontWeight: FontWeight.w600,
-          fontSize: 16,
+    Widget toolbarTitle(bool showTitle) {
+      final fading = AnimatedOpacity(
+        duration: titleFade.duration,
+        curve: titleFade.curve,
+        opacity: showTitle ? 1.0 : 0.0,
+        child: Text(
+          appBarTitle ?? title,
+          style: TextStyle(
+            color: onHeader,
+            fontWeight: FontWeight.w600,
+            fontSize: 16,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-    );
-    if (expressive) {
-      toolbarTitle = AnimatedSlide(
+      );
+      if (!expressive) return fading;
+      return AnimatedSlide(
         duration: titleSlide.duration,
         curve: titleSlide.curve,
-        offset: showTitleInAppBar ? Offset.zero : const Offset(0, 0.6),
-        child: toolbarTitle,
+        offset: showTitle ? Offset.zero : const Offset(0, 0.6),
+        child: fading,
       );
     }
 
@@ -365,7 +379,11 @@ class AlbumDetailHeader extends StatelessWidget {
       stretch: true,
       backgroundColor: backgroundColor ?? headerScheme.surface,
       surfaceTintColor: Colors.transparent,
-      title: toolbarTitle,
+      title: headerToolbarTitle(
+        showTitleListenable,
+        showTitleInAppBar,
+        toolbarTitle,
+      ),
       flexibleSpace: LayoutBuilder(
         builder: (context, constraints) {
           final collapseRatio =
@@ -458,10 +476,7 @@ class AlbumDetailHeader extends StatelessWidget {
                 if (plainArtworkHeader)
                   ColoredBox(color: headerScheme.surface)
                 else if (blurAndScrimBackground)
-                  ImageFiltered(
-                    imageFilter: ImageFilter.blur(sigmaX: 32, sigmaY: 32),
-                    child: background,
-                  )
+                  SettledBlur(sigma: 32, child: background)
                 else
                   background,
                 if (!plainArtworkHeader && blurAndScrimBackground)
@@ -542,7 +557,7 @@ class AlbumDetailHeader extends StatelessWidget {
   }
 }
 
-/// Marks header buttons grouped in one desktop capsule, where they drop their
+/// Marks header buttons grouped in one glass capsule, where they drop their
 /// own glass circle.
 class HeaderActionGroup extends InheritedWidget {
   const HeaderActionGroup({super.key, required super.child});
@@ -552,6 +567,38 @@ class HeaderActionGroup extends InheritedWidget {
 
   @override
   bool updateShouldNotify(HeaderActionGroup oldWidget) => false;
+}
+
+/// SpotiFLAC page actions grouped in one glass capsule.
+class SpotiFLACActionCapsule extends ConsumerWidget {
+  const SpotiFLACActionCapsule({super.key, required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    // Level with the round back button beside it.
+    const radius = 22.0;
+    return Center(
+      widthFactor: 1,
+      child: SpotiFLACGlassPress(
+        radius: radius,
+        child: SpotiFLACGlass.navigation(
+          radius: radius,
+          tintColor: dark ? Colors.black : Colors.white,
+          tintOpacity: dark ? 0.45 : 0.55,
+          blurEnabled: ref.watch(spotiflacBlurEnabledProvider),
+          child: HeaderActionGroup(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: Row(mainAxisSize: MainAxisSize.min, children: children),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _AlbumStretchArtwork extends StatelessWidget {
@@ -592,6 +639,19 @@ class _AlbumStretchArtwork extends StatelessWidget {
   }
 }
 
+/// Builds a collapsing toolbar title with [showTitle], or with [listenable]'s
+/// value when one is given, so crossing the threshold rebuilds only the title.
+Widget headerToolbarTitle(
+  ValueListenable<bool>? listenable,
+  bool showTitle,
+  Widget Function(bool showTitle) builder,
+) => listenable == null
+    ? builder(showTitle)
+    : ValueListenableBuilder<bool>(
+        valueListenable: listenable,
+        builder: (_, showTitle, _) => builder(showTitle),
+      );
+
 /// Keeps the pinned toolbar above the artwork without shifting the artwork or
 /// metadata down by the toolbar's safe-area height.
 class _AlbumOverlayToolbar extends SingleChildRenderObjectWidget {
@@ -627,6 +687,7 @@ class AlbumPlayActions extends StatelessWidget {
     required this.onShuffle,
     this.isPlaying = false,
     this.onAddToPlaylist,
+    this.onDownload,
   });
 
   final String playLabel;
@@ -637,6 +698,7 @@ class AlbumPlayActions extends StatelessWidget {
 
   /// Desktop only: a round "+" after Play that adds the songs to a playlist.
   final VoidCallback? onAddToPlaylist;
+  final VoidCallback? onDownload;
 
   @override
   Widget build(BuildContext context) {
@@ -646,6 +708,14 @@ class AlbumPlayActions extends StatelessWidget {
     if (context.isSpotiFLAC) {
       return Row(
         children: [
+          if (onDownload != null) ...[
+            HeaderCircleButton(
+              icon: Icons.download_for_offline_outlined,
+              tooltip: context.l10n.offlineSave,
+              onPressed: onDownload,
+            ),
+            const SizedBox(width: 12),
+          ],
           Expanded(
             child: HeaderFilledButton(
               icon: isPlaying
@@ -667,10 +737,16 @@ class AlbumPlayActions extends StatelessWidget {
       );
     }
     return ExpressiveButtonGroup(
-      flexible: const {0},
+      flexible: {onDownload == null ? 0 : 1},
       spacing: tokens.gapMd,
       slotWidth: tokens.minTouchTarget,
       children: [
+        if (onDownload != null)
+          HeaderCircleButton(
+            icon: Icons.download_for_offline_outlined,
+            tooltip: context.l10n.offlineSave,
+            onPressed: onDownload,
+          ),
         ExpressiveButton(
           onPressed: onPlay,
           icon: AppIcon(isPlaying ? Icons.pause : Icons.play_arrow, size: 20),
@@ -704,6 +780,12 @@ class AlbumPlayActions extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         spacing: 10,
         children: [
+          if (onDownload != null)
+            HeaderCircleButton(
+              icon: Icons.download_for_offline_outlined,
+              tooltip: context.l10n.offlineSave,
+              onPressed: onDownload,
+            ),
           HeaderCircleButton(
             icon: CupertinoIcons.shuffle,
             tooltip: shuffleTooltip,
@@ -731,6 +813,12 @@ class AlbumPlayActions extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       spacing: 8,
       children: [
+        if (onDownload != null)
+          HeaderCircleButton(
+            icon: Icons.download_for_offline_outlined,
+            tooltip: context.l10n.offlineSave,
+            onPressed: onDownload,
+          ),
         FilledButton.icon(
           onPressed: onPlay,
           icon: AppIcon(isPlaying ? Icons.pause : Icons.play_arrow, size: 20),
@@ -835,17 +923,25 @@ class HeaderCircleButton extends ConsumerWidget {
     final scheme = HeaderPalette.of(context);
     // Desktop headers use pointer-sized controls.
     final desktop = isDesktopPlatform;
+    // Tonal circles stay level with the action pills beside them.
+    final toolbarGlass = context.isSpotiFLAC && !tonal;
     final buttonSize =
         this.buttonSize ??
-        (desktop ? (context.isSpotiFLAC ? 36.0 : 40.0) : null);
-    final iconSize = desktop && this.iconSize == 22 ? 18.0 : this.iconSize;
+        (desktop ? (context.isSpotiFLAC ? (tonal ? 36.0 : 44.0) : 40.0) : null);
+    final iconSize = desktop && this.iconSize == 22 && !toolbarGlass
+        ? 18.0
+        : this.iconSize;
     if (context.isSpotiFLAC && HeaderActionGroup.of(context)) {
       return IconButton(
         onPressed: onPressed,
         tooltip: tooltip,
         icon: AppIcon(spotiflacIconFor(icon), size: iconSize),
         style: IconButton.styleFrom(
-          minimumSize: Size.square(buttonSize ?? 36),
+          // Pointer controls use a compact width within the shared capsule.
+          minimumSize: desktop
+              ? Size(42, buttonSize ?? 44)
+              : Size.square(buttonSize ?? 44),
+          padding: desktop ? EdgeInsets.zero : null,
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           foregroundColor: iconColor ?? scheme.onSurface,
         ),
@@ -857,20 +953,24 @@ class HeaderCircleButton extends ConsumerWidget {
           message: tooltip,
           child: SizedBox.square(
             dimension: buttonSize ?? 44,
-            child: CupertinoButton(
-              padding: EdgeInsets.zero,
-              minimumSize: Size.square(buttonSize ?? 44),
-              borderRadius: BorderRadius.circular((buttonSize ?? 48) / 2),
-              color: scheme.onSurface.withValues(
-                alpha: scheme.brightness == Brightness.dark ? 0.10 : 0.06,
-              ),
-              onPressed: onPressed,
-              child: AppIcon(
-                spotiflacIconFor(icon),
-                size: iconSize,
-                color: onPressed == null
-                    ? scheme.onSurfaceVariant
-                    : iconColor ?? scheme.primary,
+            child: SpotiFLACGlassPress(
+              radius: (buttonSize ?? 44) / 2,
+              enabled: onPressed != null,
+              child: CupertinoButton(
+                padding: EdgeInsets.zero,
+                minimumSize: Size.square(buttonSize ?? 44),
+                borderRadius: BorderRadius.circular((buttonSize ?? 48) / 2),
+                color: scheme.onSurface.withValues(
+                  alpha: scheme.brightness == Brightness.dark ? 0.10 : 0.06,
+                ),
+                onPressed: onPressed,
+                child: AppIcon(
+                  spotiflacIconFor(icon),
+                  size: iconSize,
+                  color: onPressed == null
+                      ? scheme.onSurfaceVariant
+                      : iconColor ?? scheme.primary,
+                ),
               ),
             ),
           ),
@@ -890,18 +990,22 @@ class HeaderCircleButton extends ConsumerWidget {
       );
       return Center(
         widthFactor: 1,
-        child: SpotiFLACGlass.navigation(
+        child: SpotiFLACGlassPress(
           radius: (buttonSize ?? 48) / 2,
-          tintColor:
-              glassTintColor ??
-              (scheme.brightness == Brightness.dark
-                  ? Colors.black
-                  : Colors.white),
-          tintOpacity:
-              glassTintOpacity ??
-              (scheme.brightness == Brightness.dark ? 0.45 : 0.55),
-          blurEnabled: blurEnabled,
-          child: button,
+          enabled: onPressed != null,
+          child: SpotiFLACGlass.navigation(
+            radius: (buttonSize ?? 48) / 2,
+            tintColor:
+                glassTintColor ??
+                (scheme.brightness == Brightness.dark
+                    ? Colors.black
+                    : Colors.white),
+            tintOpacity:
+                glassTintOpacity ??
+                (scheme.brightness == Brightness.dark ? 0.45 : 0.55),
+            blurEnabled: blurEnabled,
+            child: button,
+          ),
         ),
       );
     }
@@ -914,6 +1018,27 @@ class HeaderCircleButton extends ConsumerWidget {
       foregroundColor: iconColor ?? scheme.onSurfaceVariant,
     );
   }
+}
+
+/// The page's More button, opening [groups] below itself.
+class HeaderMoreButton extends StatelessWidget {
+  const HeaderMoreButton({super.key, required this.groups});
+
+  final List<List<ContextMenuAction>> Function() groups;
+
+  @override
+  Widget build(BuildContext context) => HeaderCircleButton(
+    icon: context.isSpotiFLAC ? CupertinoIcons.ellipsis : Icons.more_horiz,
+    tooltip: MaterialLocalizations.of(context).showMenuTooltip,
+    onPressed: () => showContextMenu(
+      context,
+      position:
+          contextMenuPositionBelow(context) ??
+          contextMenuOriginOf(context) ??
+          Offset.zero,
+      groups: groups(),
+    ),
+  );
 }
 
 class _SpotiFLACHeaderButton extends StatelessWidget {
@@ -932,7 +1057,7 @@ class _SpotiFLACHeaderButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = HeaderPalette.of(context);
-    // Desktop pills are the compact gray capsules of Apple Music.
+    // Desktop action pills use a compact, neutral fill.
     final desktop = isDesktopPlatform;
     final filled = prominent && !desktop;
     final foreground = onPressed == null
@@ -944,37 +1069,41 @@ class _SpotiFLACHeaderButton extends StatelessWidget {
       constraints: desktop
           ? const BoxConstraints(minHeight: 36, maxHeight: 36, minWidth: 130)
           : const BoxConstraints(minHeight: 50),
-      child: CupertinoButton(
-        padding: desktop
-            ? const EdgeInsets.symmetric(horizontal: 18)
-            : const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        minimumSize: desktop ? const Size(130, 36) : null,
-        borderRadius: BorderRadius.circular(desktop ? 18 : 28),
-        color: filled
-            ? scheme.primary
-            : scheme.onSurface.withValues(
-                alpha: scheme.brightness == Brightness.dark ? 0.10 : 0.06,
-              ),
-        onPressed: onPressed,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppIcon(icon, size: desktop ? 16 : 20, color: foreground),
-            SizedBox(width: desktop ? 6 : 8),
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: desktop ? 15 : 17,
-                  fontWeight: FontWeight.w600,
-                  color: foreground,
+      child: SpotiFLACGlassPress(
+        radius: desktop ? 18 : 28,
+        enabled: onPressed != null,
+        child: CupertinoButton(
+          padding: desktop
+              ? const EdgeInsets.symmetric(horizontal: 18)
+              : const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          minimumSize: desktop ? const Size(130, 36) : null,
+          borderRadius: BorderRadius.circular(desktop ? 18 : 28),
+          color: filled
+              ? scheme.primary
+              : scheme.onSurface.withValues(
+                  alpha: scheme.brightness == Brightness.dark ? 0.10 : 0.06,
+                ),
+          onPressed: onPressed,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AppIcon(icon, size: desktop ? 16 : 20, color: foreground),
+              SizedBox(width: desktop ? 6 : 8),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: desktop ? 15 : 17,
+                    fontWeight: FontWeight.w600,
+                    color: foreground,
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

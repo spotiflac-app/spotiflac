@@ -9,6 +9,7 @@ import 'package:spotiflac/providers/theme_provider.dart';
 import 'package:spotiflac/screens/settings/appearance_settings_page.dart';
 import 'package:spotiflac/theme/dynamic_color_wrapper.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
+import 'package:spotiflac/widgets/spotiflac_chrome.dart';
 
 void main() {
   test(
@@ -36,9 +37,7 @@ void main() {
       (2, 1.0),
       (double.nan, kDefaultSpotiFLACGlassClarity),
     ]) {
-      final settings = ThemeSettings.fromJson({
-        kSpotiFLACGlassClarityKey: saved,
-      });
+      final settings = ThemeSettings.fromJson({kSpotiFLACGlassClarityKey: saved});
       expect(settings.spotiflacGlassClarity, expected);
       expect(ThemeSettings.fromJson(settings.toJson()), settings);
     }
@@ -135,9 +134,7 @@ void main() {
     );
     final before = tester.state(find.byKey(const ValueKey('app-state')));
 
-    await container
-        .read(themeProvider.notifier)
-        .setStyle(AppThemeStyle.spotiflac);
+    await container.read(themeProvider.notifier).setStyle(AppThemeStyle.spotiflac);
     await tester.pumpAndSettle();
     expect(tester.state(find.byKey(const ValueKey('app-state'))), before);
 
@@ -183,6 +180,17 @@ void main() {
         await tester.tap(find.text('Glass outlines'));
         await tester.pumpAndSettle();
         expect(prefs.getBool(kSpotiFLACGlassOutlinesKey), isTrue);
+        final picker = find.byType(SpotiFLACSegmentedControl);
+        await tester.scrollUntilVisible(
+          picker,
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+        // The theme picker sits on an opaque group card.
+        expect(
+          find.descendant(of: picker, matching: find.byType(BackdropFilter)),
+          findsNothing,
+        );
         expect(tester.takeException(), isNull);
       },
     );
@@ -259,10 +267,7 @@ void main() {
       );
       await tester.drag(slider, const Offset(160, 0));
       await tester.pumpAndSettle();
-      expect(
-        tester.widget<Slider>(slider).value,
-        kDefaultSpotiFLACGlassClarity,
-      );
+      expect(tester.widget<Slider>(slider).value, kDefaultSpotiFLACGlassClarity);
       expect(prefs.getDouble(kSpotiFLACGlassClarityKey), isNull);
 
       final forceBlur = find.text('Always use blur effects');
@@ -359,6 +364,8 @@ void main() {
         kThemeStyleKey: 'spotiflac',
         kThemeModeKey: mode.name,
         kSeedColorKey: 0xff123456,
+        kSpotiFLACAccentKey: 'red',
+        kSpotiFLACAccentMovedToBlueKey: true,
       });
       final prefs = await SharedPreferences.getInstance();
       await openSettings(tester, prefs);
@@ -442,10 +449,7 @@ void main() {
             brightness: Brightness.dark,
           );
           expect(overlay.extension<SpotiFLACTheme>()!.useSystemFont, isTrue);
-          expect(
-            overlay.extension<SpotiFLACTheme>()!.accent,
-            SpotiFLACAccent.blue,
-          );
+          expect(overlay.extension<SpotiFLACTheme>()!.accent, SpotiFLACAccent.blue);
           expect(overlay.textTheme.bodyLarge!.fontFamily, systemFamily);
         }
         await tester.pumpWidget(const SizedBox());

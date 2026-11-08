@@ -142,9 +142,7 @@ void main() {
         Finder rowButton(int number) =>
             find.descendant(of: row(number), matching: find.byType(IconButton));
         final pauseIcon = spotiflac ? CupertinoIcons.pause_fill : Icons.pause;
-        final playIcon = spotiflac
-            ? CupertinoIcons.play_fill
-            : Icons.play_arrow;
+        final playIcon = spotiflac ? CupertinoIcons.play_fill : Icons.play_arrow;
 
         await tester.tap(
           find.descendant(of: header, matching: find.text('Play')),

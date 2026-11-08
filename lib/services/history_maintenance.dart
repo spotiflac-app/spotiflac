@@ -6,7 +6,8 @@ import 'package:spotiflac/utils/ios_container_paths.dart';
 
 /// Restored history can contain an older container even after this install's
 /// startup migration ran. Update stored paths and their match keys together.
-/// The version marker also repairs restores performed before this fix.
+/// The version marker reruns the repair for installations without that marker,
+/// even if their recorded container path already matches.
 Future<int?> migrateIosHistoryPaths(
   Database db,
   SharedPreferences prefs, {
@@ -108,31 +109,6 @@ class HistoryMaintenanceUpdate {
     return DownloadHistoryItem.fromJson(next);
   }
 }
-
-/// Streaming restore is atomic, including failures after a flushed batch.
-Future<void> replaceHistoryRows(
-  Database db,
-  Stream<Map<String, dynamic>> rows,
-) => db.transaction((txn) async {
-  await txn.delete('history_path_keys');
-  await txn.delete('history');
-  var batch = txn.batch();
-  var pending = 0;
-  await for (final row in rows) {
-    batch.insert('history', row, conflictAlgorithm: ConflictAlgorithm.replace);
-    sqlite.putPathKeysInBatch(
-      batch,
-      'history_path_keys',
-      row['id'] as String,
-      row['file_path'] as String?,
-    );
-    if (++pending < 500) continue;
-    await batch.commit(noResult: true);
-    batch = txn.batch();
-    pending = 0;
-  }
-  if (pending > 0) await batch.commit(noResult: true);
-});
 
 /// Called inside a transaction. Delayed metadata/SAF probes must never insert
 /// rows deleted by orphan cleanup while the probe was running.

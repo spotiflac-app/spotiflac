@@ -3,9 +3,9 @@
 mod cache;
 use super::{Check, Metadata, PlatformResolverService, ResolverError};
 pub use cache::AvailabilityService;
-use serde::{Deserialize, Serialize};
 use spotiflac_core::metadata::TrackMetadata;
 use spotiflac_network::{query, url::UrlParts};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

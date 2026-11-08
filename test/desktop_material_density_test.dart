@@ -7,6 +7,8 @@ import 'package:spotiflac/theme/spotiflac_theme.dart';
 import 'package:spotiflac/utils/adaptive_layout.dart';
 import 'package:spotiflac/utils/desktop_platform.dart';
 import 'package:spotiflac/widgets/app_bottom_sheet.dart';
+import 'package:spotiflac/widgets/app_icon_button.dart';
+import 'package:spotiflac/widgets/app_sliver_header.dart';
 import 'package:spotiflac/widgets/desktop/track_table.dart';
 import 'package:spotiflac/widgets/selection_action_button.dart';
 import 'package:spotiflac/widgets/selection_bottom_bar.dart';
@@ -17,9 +19,7 @@ void main() {
   tearDown(() => debugDesktopPlatformOverride = null);
 
   Widget app({required bool spotiflac, required Widget child}) => MaterialApp(
-    theme: spotiflac
-        ? SpotiFLACTheme.build(Brightness.light)
-        : AppTheme.light(),
+    theme: spotiflac ? SpotiFLACTheme.build(Brightness.light) : AppTheme.light(),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     home: Scaffold(body: child),
@@ -174,4 +174,41 @@ void main() {
       }
     }
   });
+
+  for (final height in [1000.0, 700.0]) {
+    testWidgets('a pushed page title clears its back button at $height', (
+      tester,
+    ) async {
+      tester.view.physicalSize = Size(1280, height);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        app(
+          spotiflac: false,
+          child: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const Scaffold(
+                    body: CustomScrollView(
+                      slivers: [AppSliverHeader.page(title: 'Playlists')],
+                    ),
+                  ),
+                ),
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      // The tab root keeps the compact desktop header; a back button gets
+      // the full one, with room between the button and the large title.
+      final back = tester.getRect(find.byType(AppIconButton));
+      final title = tester.getRect(find.text('Playlists'));
+      expect(title.top - back.bottom, greaterThanOrEqualTo(12));
+    });
+  }
 }

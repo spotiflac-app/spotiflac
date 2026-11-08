@@ -17,11 +17,14 @@ enum NetworkStorageError {
   invalidAddress,
   certificate,
   serverApi,
+  listing,
+  storage,
   unknown,
 }
 
 /// Classify transport failures without exposing URLs, usernames or passwords.
 NetworkStorageError classifyNetworkStorageError(Object error) {
+  if (error is NetworkListingException) return NetworkStorageError.listing;
   if (error is SubsonicException) {
     return switch (error.code) {
       40 || 44 => NetworkStorageError.authentication,
@@ -80,7 +83,7 @@ NetworkStorageError classifyNetworkStorageError(Object error) {
       Smb2ErrorType.timeout => NetworkStorageError.timeout,
       Smb2ErrorType.auth => NetworkStorageError.authentication,
       Smb2ErrorType.accessDenied => NetworkStorageError.permission,
-      Smb2ErrorType.fileNotFound ||
+      Smb2ErrorType.notFound ||
       Smb2ErrorType.notADirectory => NetworkStorageError.missingShare,
       Smb2ErrorType.invalidParam => NetworkStorageError.invalidAddress,
       _ => NetworkStorageError.unknown,

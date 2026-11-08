@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:spotiflac/providers/runtime_profile_provider.dart';
@@ -10,6 +11,7 @@ import 'package:spotiflac/services/shell_navigation_service.dart';
 import 'package:spotiflac/utils/desktop_platform.dart';
 import 'package:spotiflac/widgets/album_detail_header.dart';
 import 'package:spotiflac/widgets/cached_cover_image.dart';
+import 'package:spotiflac/widgets/sliver_layout_info_builder.dart';
 
 /// Share the same artwork-derived dark surface while loading and after the
 /// artist metadata arrives, including when the app itself uses light mode.
@@ -34,33 +36,67 @@ class SpotiFLACArtistSurface extends StatefulWidget {
 }
 
 class _SpotiFLACArtistSurfaceState extends State<SpotiFLACArtistSurface> {
+  // Page rebuilds reuse the derived themes while their inputs are unchanged.
+  ThemeData? _baseTheme;
+  TargetPlatform? _basePlatform;
+  late ThemeData _darkTheme;
+  late ThemeData _outerTheme;
+  (Color, Color, Color, bool)? _innerKey;
+  late ThemeData _innerTheme;
+
   @override
   void dispose() {
     ShellNavigationService.clearChromeBrightness(this);
     super.dispose();
   }
 
+  /// The sidebar's artwork scrolls with the hero it continues.
+  bool _onPageScroll(ScrollNotification notification) {
+    final metrics = notification.metrics;
+    if (notification.depth == 0 && metrics.axis == Axis.vertical) {
+      ShellNavigationService.setChromeBackdropOffset(
+        this,
+        math.max(metrics.pixels, 0),
+      );
+    }
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     // Desktop album and playlist pages keep the plain pane background and
-    // app accent; artist pages keep their artwork tint, as in Apple Music.
+    // app accent; artist pages keep their artwork tint.
     if (isDesktopPlatform && widget.neutralActions) return widget.child;
-    final darkTheme = SpotiFLACTheme.fromContext(
-      context,
-      brightness: Brightness.dark,
-    );
+    final baseTheme = Theme.of(context);
+    if (!identical(baseTheme, _baseTheme) ||
+        defaultTargetPlatform != _basePlatform) {
+      _baseTheme = baseTheme;
+      _basePlatform = defaultTargetPlatform;
+      _innerKey = null;
+      _darkTheme = SpotiFLACTheme.fromContext(
+        context,
+        brightness: Brightness.dark,
+      );
+      _outerTheme = _darkTheme.copyWith(
+        colorScheme: _darkTheme.colorScheme.copyWith(primary: Colors.grey),
+      );
+    }
+    final darkTheme = _darkTheme;
     return Theme(
-      data: darkTheme.copyWith(
-        colorScheme: darkTheme.colorScheme.copyWith(primary: Colors.grey),
-      ),
+      data: _outerTheme,
       child: CoverPaletteBuilder(
         imageSource: widget.imageSource,
         builder: (context, palette) {
           final source = widget.imageSource;
+          // Album surfaces use only the source colour, which the player may
+          // already have resolved without a scheme.
           final dominant = HSLColor.fromColor(
             source == null
                 ? Colors.grey
-                : CoverPalette.sourceColor(source, Brightness.dark) ??
+                : (widget.neutralActions
+                          ? CoverPalette.peekSourceColor(source)
+                          : null) ??
+                      CoverPalette.sourceColor(source, Brightness.dark) ??
                       Colors.grey,
           );
           // Averaging a portrait mixes its highlights and foliage into gray.
@@ -69,16 +105,22 @@ class _SpotiFLACArtistSurfaceState extends State<SpotiFLACArtistSurface> {
           final useAccent =
               !widget.neutralActions && dominant.saturation >= 0.08;
           final accent = HSLColor.fromColor(palette.primary);
+          // Keep a faint artwork tint on artist pages; album pages use the
+          // lighter neutral surface.
           final surface = useAccent
               ? accent
-                    .withSaturation((accent.saturation * 0.9).clamp(0.0, 0.88))
-                    .withLightness(0.14 + dominant.lightness * 0.05)
+                    .withSaturation((accent.saturation * 0.6).clamp(0.0, 0.6))
+                    .withLightness(0.08 + dominant.lightness * 0.03)
                     .toColor()
               : dominant
                     .withSaturation(
                       (dominant.saturation * 0.45).clamp(0.0, 0.22),
                     )
-                    .withLightness(0.24 + dominant.lightness * 0.20)
+                    .withLightness(
+                      widget.neutralActions
+                          ? 0.24 + dominant.lightness * 0.20
+                          : 0.05,
+                    )
                     .toColor();
           final route = ModalRoute.of(context);
           if (route != null) {
@@ -87,6 +129,9 @@ class _SpotiFLACArtistSurfaceState extends State<SpotiFLACArtistSurface> {
               route: route,
               brightness: Brightness.dark,
               surface: surface,
+              backdrop: isDesktopPlatform && !widget.neutralActions
+                  ? source
+                  : null,
             );
           }
           return CoverPaletteBuilder(
@@ -117,26 +162,46 @@ class _SpotiFLACArtistSurfaceState extends State<SpotiFLACArtistSurface> {
                   : primaryLuminance > 0.179
                   ? Colors.black
                   : Colors.white;
-              final scheme = darkTheme.colorScheme.copyWith(
-                primary: primary,
-                onPrimary: onPrimary,
-                onSurfaceVariant: widget.neutralActions ? Colors.white70 : null,
-                surface: surface,
-                surfaceContainer: Color.alphaBlend(
-                  Colors.white.withValues(alpha: 0.08),
-                  surface,
-                ),
-                surfaceContainerHigh: Color.alphaBlend(
-                  Colors.white.withValues(alpha: 0.12),
-                  surface,
-                ),
+              final innerKey = (
+                surface,
+                primary,
+                onPrimary,
+                widget.neutralActions,
+              );
+              if (innerKey != _innerKey) {
+                _innerKey = innerKey;
+                _innerTheme = darkTheme.copyWith(
+                  scaffoldBackgroundColor: surface,
+                  colorScheme: darkTheme.colorScheme.copyWith(
+                    primary: primary,
+                    onPrimary: onPrimary,
+                    onSurfaceVariant: widget.neutralActions
+                        ? Colors.white70
+                        : null,
+                    surface: surface,
+                    surfaceContainer: Color.alphaBlend(
+                      Colors.white.withValues(alpha: 0.08),
+                      surface,
+                    ),
+                    surfaceContainerHigh: Color.alphaBlend(
+                      Colors.white.withValues(alpha: 0.12),
+                      surface,
+                    ),
+                  ),
+                );
+              }
+              final page = HeaderPalette(
+                scheme: _innerTheme.colorScheme,
+                child: widget.child,
               );
               return Theme(
-                data: darkTheme.copyWith(
-                  scaffoldBackgroundColor: surface,
-                  colorScheme: scheme,
-                ),
-                child: HeaderPalette(scheme: scheme, child: widget.child),
+                data: _innerTheme,
+                child: isDesktopPlatform && !widget.neutralActions
+                    ? NotificationListener<ScrollNotification>(
+                        onNotification: _onPageScroll,
+                        child: page,
+                      )
+                    : page,
               );
             },
           );
@@ -155,6 +220,8 @@ class SpotiFLACArtistHeader extends StatelessWidget {
     required this.artwork,
     required this.actions,
     required this.showTitle,
+    this.toolbarActions = const [],
+    this.showTitleListenable,
     this.listeners,
     this.logoUrl,
     this.badge,
@@ -163,7 +230,13 @@ class SpotiFLACArtistHeader extends StatelessWidget {
   final String name;
   final Widget artwork;
   final List<Widget> actions;
+
+  /// Grouped in the glass capsule at the toolbar's trailing end.
+  final List<Widget> toolbarActions;
   final bool showTitle;
+
+  /// Replaces [showTitle] when set; see [headerToolbarTitle].
+  final ValueListenable<bool>? showTitleListenable;
   final String? listeners;
   final String? logoUrl;
   final Widget? badge;
@@ -175,12 +248,28 @@ class SpotiFLACArtistHeader extends StatelessWidget {
 
   List<Widget> buildSlivers(BuildContext context) {
     final surface = Theme.of(context).colorScheme.surface;
+    final back = Padding(
+      padding: EdgeInsetsDirectional.only(start: isDesktopPlatform ? 8 : 12),
+      child: Align(
+        alignment: AlignmentDirectional.centerStart,
+        widthFactor: 1,
+        child: HeaderCircleButton(
+          icon: Icons.arrow_back,
+          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+    );
     return [
       // Keep safe-area dependencies inside this sliver: folding the shell
       // navigation must not rebuild the artist's entire discography.
-      SliverLayoutBuilder(
-        builder: (context, constraints) {
-          final width = constraints.crossAxisExtent;
+      SliverLayoutInfoBuilder(
+        select: (constraints) => (
+          constraints.crossAxisExtent,
+          isDesktopPlatform ? constraints.viewportMainAxisExtent : 0.0,
+        ),
+        builder: (context, extents) {
+          final (width, viewportHeight) = extents;
           final textWidth = (width - 48).clamp(0.0, double.infinity);
           final textScaler = MediaQuery.textScalerOf(context);
           double textHeight(String text, TextStyle style) {
@@ -215,15 +304,11 @@ class SpotiFLACArtistHeader extends StatelessWidget {
               listenersHeight +
               (actions.isEmpty ? 0 : 94) +
               32;
-          // Desktop: the portrait fills most of the pane, as in Apple Music
-          // on the Mac.
+          // The desktop portrait fills most of the content pane.
           final expandedHeight = isDesktopPlatform
               ? math.max(
                   contentHeight + 160,
-                  (constraints.viewportMainAxisExtent * 0.82).clamp(
-                    420.0,
-                    820.0,
-                  ),
+                  (viewportHeight * 0.82).clamp(420.0, 820.0),
                 )
               : photoHeight + contentHeight;
           return SliverAppBar(
@@ -233,33 +318,33 @@ class SpotiFLACArtistHeader extends StatelessWidget {
             backgroundColor: surface,
             surfaceTintColor: Colors.transparent,
             leadingWidth: 64,
-            leading: Padding(
-              padding: EdgeInsetsDirectional.only(
-                start: isDesktopPlatform ? 16 : 12,
-              ),
-              child: Align(
-                alignment: AlignmentDirectional.centerStart,
-                widthFactor: 1,
-                child: HeaderCircleButton(
-                  icon: Icons.arrow_back,
-                  tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ),
+            leading: back,
+            actions: toolbarActions.isEmpty
+                ? null
+                : [SpotiFLACActionCapsule(children: toolbarActions)],
+            actionsPadding: EdgeInsetsDirectional.only(
+              end: isDesktopPlatform ? 8 : 12,
             ),
-            title: AnimatedOpacity(
-              opacity: showTitle ? 1 : 0,
-              duration: const Duration(milliseconds: 180),
-              child: Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
+            // The desktop hero already displays the artist's name.
+            title: isDesktopPlatform
+                ? null
+                : headerToolbarTitle(
+                    showTitleListenable,
+                    showTitle,
+                    (showTitle) => AnimatedOpacity(
+                      opacity: showTitle ? 1 : 0,
+                      duration: const Duration(milliseconds: 180),
+                      child: Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
             flexibleSpace: FlexibleSpaceBar(
               collapseMode: CollapseMode.pin,
               stretchModes: const [StretchMode.zoomBackground],

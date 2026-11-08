@@ -4,11 +4,13 @@
 //! argument shapes, a worker pool per call, pushed event streams, and an
 //! FFmpeg command pump that runs the bundled `ffmpeg` executable. Desktop OS
 //! services live here too: keep-awake during downloads, Discord Rich
-//! Presence over local IPC, library folder watching, and a panic log.
+//! Presence over local IPC, library folder watching, a panic log, the
+//! SpotiFLAC Link server for the phone app, and Google Cast output.
 
 mod backend;
 mod call;
 mod callback_url;
+mod cast;
 mod crash_log;
 mod discord;
 mod dispatch;
@@ -16,6 +18,7 @@ mod events;
 mod ffi;
 mod ffmpeg;
 mod keep_awake;
+mod link;
 mod paths;
 mod pool;
 mod runtime;
@@ -23,8 +26,7 @@ mod watcher;
 
 pub use call::{Args, BYTES_KEY, CallError, Reply};
 pub use ffi::{
-    spotiflac_call, spotiflac_cancel, spotiflac_free, spotiflac_init, spotiflac_subscribe,
-    spotiflac_unsubscribe,
+    spotiflac_call, spotiflac_cancel, spotiflac_free, spotiflac_init, spotiflac_subscribe, spotiflac_unsubscribe,
 };
 pub use runtime::{Config, SpotiFLACCallback};
 

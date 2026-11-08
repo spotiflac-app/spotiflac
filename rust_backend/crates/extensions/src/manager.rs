@@ -21,9 +21,9 @@ use crate::manifest::ExtensionManifest;
 use crate::package::{ExtensionPackage, is_package_path};
 use crate::runtime::{LoadMode, lifecycle_result};
 use crate::{ExtensionError, ExtensionRuntime, RuntimeLimits};
-use serde_json::{Map, Value, json};
 use spotiflac_core::cancellation::RequestLease;
 use spotiflac_core::fs::{DirBuilderPortableExt, OpenOptionsPortableExt};
+use serde_json::{Map, Value, json};
 use std::cmp::Ordering as Comparison;
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
@@ -228,10 +228,21 @@ impl ExtensionManager {
     ) -> Result<(), ManagerError> {
         let _metadata = MetadataChange(&self.metadata_revision);
         let _mutation = self.mutation.lock().expect("extension mutation lock");
-        self.get(id)?;
+        let entry = self.get(id)?;
         self.environment
             .replace_settings(id, settings.clone())
             .map_err(error_from_environment)?;
+        // A runtime that is already loaded keeps its session; refresh its grants.
+        if let Some(network) = entry
+            .engine
+            .lock()
+            .expect("extension engine lock")
+            .runtime
+            .as_ref()
+            .and_then(|runtime| runtime.network_session())
+        {
+            network.set_grants(entry.manifest.network_grants(&settings));
+        }
         self.initialize(id, settings)
     }
 

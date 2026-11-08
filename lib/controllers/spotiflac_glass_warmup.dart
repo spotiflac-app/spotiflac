@@ -76,9 +76,7 @@ Future<void> _rasterize(ui.FlutterView view) async {
       container: boundary,
       child: ProviderScope(
         overrides: [
-          spotiflacGlassLevelProvider.overrideWithValue(
-            SpotiFLACGlassLevel.liquid,
-          ),
+          spotiflacGlassLevelProvider.overrideWithValue(SpotiFLACGlassLevel.liquid),
         ],
         child: Directionality(
           textDirection: TextDirection.ltr,

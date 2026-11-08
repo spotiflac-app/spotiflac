@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
-
+import 'package:flutter/cupertino.dart' show CupertinoButton, CupertinoIcons;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:spotiflac/widgets/app_snack_bar.dart';
-import 'package:spotiflac/screens/track_history_snapshot.dart';
+import 'package:spotiflac/widgets/tv_navigation.dart';
 import 'package:spotiflac/theme/app_tokens.dart';
 import 'package:spotiflac/theme/cover_palette.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
@@ -21,17 +21,21 @@ import 'package:spotiflac/widgets/app_shape.dart';
 import 'package:spotiflac/widgets/expressive_button.dart';
 import 'package:spotiflac/widgets/app_icon_button.dart';
 import 'package:spotiflac/widgets/app_menu_button.dart';
+import 'package:spotiflac/widgets/tool_button_group.dart';
 import 'package:spotiflac/theme/spotiflac_icons.dart';
 import 'package:spotiflac/widgets/spotiflac_chrome.dart';
 import 'package:spotiflac/widgets/spotiflac_context_menu.dart';
+import 'package:spotiflac/widgets/spotiflac_mix_banner.dart';
 import 'package:spotiflac/widgets/app_icon.dart';
 import 'package:spotiflac/widgets/library_search_results.dart';
 import 'package:spotiflac/screens/spotiflac_library_screen.dart';
 import 'package:spotiflac/widgets/app_bottom_sheet.dart';
 import 'package:spotiflac/widgets/app_alert_dialog.dart';
 import 'package:spotiflac/widgets/app_sliver_header.dart';
+import 'package:spotiflac/widgets/sliver_layout_info_builder.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:liquid_glass_easy/liquid_glass_easy.dart' show LiquidGlassBatch;
 import 'package:spotiflac/l10n/l10n.dart';
 import 'package:spotiflac/models/settings.dart';
 import 'package:spotiflac/models/track.dart';
@@ -41,25 +45,31 @@ import 'package:spotiflac/providers/settings_provider.dart';
 import 'package:spotiflac/providers/extension_provider.dart';
 import 'package:spotiflac/providers/recent_access_provider.dart';
 import 'package:spotiflac/providers/explore_provider.dart';
+import 'package:spotiflac/providers/home_top_picks_provider.dart';
 import 'package:spotiflac/providers/user_profile_provider.dart';
 import 'package:spotiflac/widgets/desktop/desktop_scroll_arrows.dart';
 import 'package:spotiflac/widgets/explore_featured_section.dart';
+import 'package:spotiflac/providers/library_counts_provider.dart';
+import 'package:spotiflac/providers/library_mixes_provider.dart';
 import 'package:spotiflac/providers/local_library_provider.dart';
 import 'package:spotiflac/providers/music_player_provider.dart';
 import 'package:spotiflac/models/unified_library_item.dart';
 import 'package:spotiflac/screens/equalizer_screen.dart';
+import 'package:spotiflac/screens/library_mix_screen.dart';
 import 'package:spotiflac/screens/listening_statistics_screen.dart';
+import 'package:spotiflac/screens/music_recognition_screen.dart';
 import 'package:spotiflac/screens/network_storage_screen.dart';
 import 'package:spotiflac/screens/now_playing_screen.dart';
 import 'package:spotiflac/services/library_database.dart';
 import 'package:spotiflac/services/listening_statistics.dart';
-import 'package:spotiflac/services/music_player_service.dart'
-    show PlayableMedia;
+import 'package:spotiflac/services/music_player_service.dart' show PlayableMedia;
 import 'package:spotiflac/screens/track_metadata_screen.dart';
 import 'package:spotiflac/screens/album_screen.dart';
 import 'package:spotiflac/screens/artist_screen.dart';
 import 'package:spotiflac/screens/extension_collection_screens.dart';
+import 'package:spotiflac/controllers/clickable_metadata.dart';
 import 'package:spotiflac/controllers/home_search_logic.dart';
+import 'package:spotiflac/controllers/track_history_snapshot.dart';
 import 'package:spotiflac/services/csv_import_service.dart';
 import 'package:spotiflac/services/cover_download_service.dart';
 import 'package:spotiflac/services/downloaded_embedded_cover_resolver.dart';
@@ -77,9 +87,10 @@ import 'package:spotiflac/widgets/download_service_picker.dart';
 import 'package:spotiflac/widgets/track_collection_quick_actions.dart';
 import 'package:spotiflac/widgets/desktop/context_menu.dart';
 import 'package:spotiflac/widgets/animation_utils.dart';
-import 'package:spotiflac/utils/clickable_metadata.dart';
 import 'package:spotiflac/widgets/audio_quality_badges.dart';
 import 'package:spotiflac/widgets/cached_cover_image.dart';
+import 'package:spotiflac/widgets/extension_icon_image.dart';
+import 'package:spotiflac/widgets/library_mix_cover.dart';
 import 'package:spotiflac/widgets/player_artwork.dart';
 import 'package:spotiflac/widgets/error_card.dart';
 import 'package:spotiflac/widgets/in_library_badge.dart';
@@ -99,6 +110,7 @@ part 'home_tab_recent.dart';
 part 'home_tab_import.dart';
 part 'home_tab_intro.dart';
 part 'home_tab_search_results.dart';
+part 'home_tab_search_wide.dart';
 part 'home_tab_widgets.dart';
 
 enum HomeTabMode { combined, browse, search }
@@ -133,8 +145,8 @@ class _HomeTabState extends ConsumerState<HomeTab>
   static const int _minLiveSearchChars = 3;
   static const Duration _liveSearchDelay = Duration(milliseconds: 800);
 
-  /// The SpotiFLAC desktop Search page can search the library instead of the
-  /// online provider, as the scope control in Music does.
+  /// The SpotiFLAC desktop Search page can switch between the library and the
+  /// selected online provider.
   bool get _offersLibraryScope =>
       widget.mode == HomeTabMode.search &&
       context.isSpotiFLAC &&
@@ -143,6 +155,9 @@ class _HomeTabState extends ConsumerState<HomeTab>
   String _libraryQuery = '';
   Timer? _libraryQueryDebounce;
   bool get _searchingLibrary => _searchesLibrary && _offersLibraryScope;
+
+  /// SpotiFLAC's desktop field uses the compact toolbar size.
+  bool get _compactSearchField => context.isSpotiFLAC && isDesktopPlatform;
 
   bool _embeddedCoverRefreshScheduled = false;
   List<Extension>? _thumbnailSizesExtensionsCache;
@@ -666,17 +681,15 @@ class _HomeTabState extends ConsumerState<HomeTab>
         trackState.albumName != null &&
         trackState.tracks.isNotEmpty) {
       final extensionId = trackState.searchExtensionId;
-      Navigator.push(
+      pushPage<void>(
         context,
-        MaterialPageRoute<void>(
-          builder: (context) => AlbumScreen(
-            albumId: trackState.albumId!,
-            albumName: trackState.albumName!,
-            description: trackState.albumDescription,
-            coverUrl: trackState.coverUrl,
-            tracks: trackState.tracks,
-            extensionId: extensionId,
-          ),
+        (context) => AlbumScreen(
+          albumId: trackState.albumId!,
+          albumName: trackState.albumName!,
+          description: trackState.albumDescription,
+          coverUrl: trackState.coverUrl,
+          tracks: trackState.tracks,
+          extensionId: extensionId,
         ),
       );
       ref.read(trackProvider.notifier).clear();
@@ -695,18 +708,16 @@ class _HomeTabState extends ConsumerState<HomeTab>
             providerId: playlistProviderId,
           );
 
-      Navigator.push(
+      pushPage<void>(
         context,
-        MaterialPageRoute<void>(
-          builder: (context) => PlaylistScreen(
-            playlistName: trackState.playlistName!,
-            coverUrl: trackState.coverUrl,
-            tracks: trackState.tracks,
-            playlistId: trackState.playlistId,
-            metadataProviderId: playlistProviderId,
-            recommendedService:
-                trackState.searchExtensionId ?? trackState.searchSource,
-          ),
+        (context) => PlaylistScreen(
+          playlistName: trackState.playlistName!,
+          coverUrl: trackState.coverUrl,
+          tracks: trackState.tracks,
+          playlistId: trackState.playlistId,
+          metadataProviderId: playlistProviderId,
+          recommendedService:
+              trackState.searchExtensionId ?? trackState.searchSource,
         ),
       );
       ref.read(trackProvider.notifier).clear();
@@ -718,22 +729,20 @@ class _HomeTabState extends ConsumerState<HomeTab>
         trackState.artistName != null &&
         trackState.artistAlbums != null) {
       final extensionId = trackState.searchExtensionId;
-      Navigator.push(
+      pushPage<void>(
         context,
-        MaterialPageRoute<void>(
-          builder: (context) => ArtistScreen(
-            artistId: trackState.artistId!,
-            artistName: trackState.artistName!,
-            coverUrl: trackState.coverUrl,
-            headerImageUrl: trackState.headerImageUrl,
-            headerVideoUrl: trackState.headerVideoUrl,
-            headerLogoUrl: trackState.headerLogoUrl,
-            concerts: trackState.artistConcerts,
-            albumsNext: trackState.artistAlbumsNext,
-            albums: trackState.artistAlbums!,
-            topTracks: trackState.artistTopTracks,
-            extensionId: extensionId,
-          ),
+        (context) => ArtistScreen(
+          artistId: trackState.artistId!,
+          artistName: trackState.artistName!,
+          coverUrl: trackState.coverUrl,
+          headerImageUrl: trackState.headerImageUrl,
+          headerVideoUrl: trackState.headerVideoUrl,
+          headerLogoUrl: trackState.headerLogoUrl,
+          concerts: trackState.artistConcerts,
+          albumsNext: trackState.artistAlbumsNext,
+          albums: trackState.artistAlbums!,
+          topTracks: trackState.artistTopTracks,
+          extensionId: extensionId,
         ),
       );
       ref.read(trackProvider.notifier).clear();
@@ -887,8 +896,7 @@ class _HomeTabState extends ConsumerState<HomeTab>
         !hasResults;
     final searchToolbar = _offersLibraryScope;
     final showLibraryResults = _searchingLibrary && hasSearchInput;
-    // As in Music, the library scope waits for words without recents or
-    // Browse.
+    // The library scope waits for input before showing local matches.
     final showLibraryPrompt = _searchingLibrary && !hasSearchInput;
     final sectionMotion = AppMotion.spatial(
       context,
@@ -979,7 +987,6 @@ class _HomeTabState extends ConsumerState<HomeTab>
                 ),
               if (hasActiveSearchSurface &&
                   !showRecentAccess &&
-                  !showEmptySearchResult &&
                   !showLibraryResults)
                 _buildSearchFilterSliver(
                   colorScheme: colorScheme,
@@ -1039,8 +1046,7 @@ class _HomeTabState extends ConsumerState<HomeTab>
     }
   }
 
-  /// Music on the Mac keeps its search field centered in the toolbar, with
-  /// the scope control at the trailing edge.
+  /// Centers the search field with the scope control at the trailing edge.
   Widget _buildDesktopSearchToolbarSliver() {
     final extensions = ref.watch(extensionProvider.select((s) => s.extensions));
     final providerId = HomeSearchProviderPolicy.resolveProvider(
@@ -1053,12 +1059,36 @@ class _HomeTabState extends ConsumerState<HomeTab>
             .firstOrNull
             ?.displayName ??
         context.l10n.librarySourceOnline;
-    const scopeWidth = 260.0;
+    // Equal segments, each hugging the longer label.
+    final labelStyle = Theme.of(
+      context,
+    ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600);
+    double labelWidth(String label) {
+      final painter = TextPainter(
+        text: TextSpan(text: label, style: labelStyle),
+        textDirection: Directionality.of(context),
+        textScaler: MediaQuery.textScalerOf(context),
+      )..layout();
+      final width = painter.width;
+      painter.dispose();
+      return width;
+    }
+
+    final scopeWidth =
+        (2 *
+                    (math.max(
+                          labelWidth(online),
+                          labelWidth(context.l10n.navLibrary),
+                        ) +
+                        24) +
+                6)
+            .clamp(150.0, 260.0);
     const gap = 16.0;
     final scope = SizedBox(
       width: scopeWidth,
       child: SpotiFLACSegmentedControl(
         key: const ValueKey('search-scope'),
+        compact: true,
         labels: [online, context.l10n.navLibrary],
         selectedIndex: _searchesLibrary ? 1 : 0,
         onChanged: (index) => _setSearchScope(library: index == 1),
@@ -1067,7 +1097,7 @@ class _HomeTabState extends ConsumerState<HomeTab>
     return SliverAppBar(
       pinned: true,
       automaticallyImplyLeading: false,
-      toolbarHeight: 88,
+      toolbarHeight: 60,
       backgroundColor: Theme.of(context).colorScheme.surface,
       surfaceTintColor: Colors.transparent,
       titleSpacing: 0,
@@ -1137,14 +1167,13 @@ class _HomeTabState extends ConsumerState<HomeTab>
     return LibrarySearchResults(
       query: _libraryQuery,
       shelves: true,
-      onOpenArtist: (artist) => Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => Scaffold(
-            body: SpotiFLACLibraryScreen(
-              page: SpotiFLACLibraryPage.albums,
-              artist: artist,
-              onOpenSection: (_) {},
-            ),
+      onOpenArtist: (artist) => pushPage<void>(
+        context,
+        (_) => Scaffold(
+          body: SpotiFLACLibraryScreen(
+            page: SpotiFLACLibraryPage.albums,
+            artist: artist,
+            onOpenSection: (_) {},
           ),
         ),
       ),
@@ -1154,6 +1183,7 @@ class _HomeTabState extends ConsumerState<HomeTab>
   Widget _buildHeaderSliver({required String? greeting}) {
     return AppSliverHeader.tabRoot(
       alignToContent: true,
+      contentInset: homeContentInset(context),
       title: widget.mode == HomeTabMode.search
           ? context.l10n.spotiflacSearch
           : greeting ?? context.l10n.homeTitle,
@@ -1200,13 +1230,13 @@ class _HomeTabState extends ConsumerState<HomeTab>
       child: Padding(
         // Centered with the search results on tablets.
         padding: EdgeInsets.fromLTRB(
-          16 + wideListInset(context),
+          16 + homeContentInset(context),
           (hasResults || showExplore)
               ? 8
               : greetsInHeader
               ? 20
               : 32,
-          16 + wideListInset(context),
+          16 + homeContentInset(context),
           (hasResults || showExplore) ? 8 : 16,
         ),
         child: _buildSearchBar(),
@@ -1218,38 +1248,72 @@ class _HomeTabState extends ConsumerState<HomeTab>
     required ColorScheme colorScheme,
     required String defaultSearchTab,
   }) {
-    return Consumer(
-      builder: (context, ref, _) {
-        final currentSearchProvider = ref.watch(
-          settingsProvider.select((s) => s.searchProvider),
-        );
-        final extensions = ref.watch(
-          extensionProvider.select((s) => s.extensions),
-        );
-        final selectedSearchFilter = ref.watch(
-          trackProvider.select((s) => s.selectedSearchFilter),
-        );
-        final searchFilters = _resolveSearchFilters(
-          context,
-          currentSearchProvider,
-          extensions,
-        );
-        if (searchFilters.isEmpty) {
-          return const SliverToBoxAdapter(child: SizedBox.shrink());
-        }
-        return SliverToBoxAdapter(
-          child: _buildSearchFilterBar(
-            searchFilters,
-            HomeSearchProviderPolicy.displayFilterSelection(
-              selectedSearchFilter,
-              defaultSearchTab,
-              currentSearchProvider,
-              extensions,
-            ),
-            colorScheme,
-          ),
-        );
-      },
+    return _buildSearchWidthSliver(
+      (context, wide) => Consumer(
+        builder: (context, ref, _) {
+          final currentSearchProvider = ref.watch(
+            settingsProvider.select((s) => s.searchProvider),
+          );
+          final extensions = ref.watch(
+            extensionProvider.select((s) => s.extensions),
+          );
+          final selectedSearchFilter = ref.watch(
+            trackProvider.select((s) => s.selectedSearchFilter),
+          );
+          // Wide results keep Sort and the view button here, clear of each
+          // section's Show all.
+          final showTools =
+              wide &&
+              ref.watch(trackProvider.select((s) => s.tracks.isNotEmpty));
+          final grid =
+              ref.watch(settingsProvider.select((s) => s.searchViewMode)) ==
+              'grid';
+          final searchFilters = _resolveSearchFilters(
+            context,
+            currentSearchProvider,
+            extensions,
+          );
+          final displayFilter = HomeSearchProviderPolicy.displayFilterSelection(
+            selectedSearchFilter,
+            defaultSearchTab,
+            currentSearchProvider,
+            extensions,
+          );
+          // Section headers are shortcuts; the compact filter menu keeps
+          // every extension-declared filter reachable, even without results.
+          final noChips = wide && isDesktopPlatform && context.isSpotiFLAC;
+          final showBack = noChips && displayFilter != 'all';
+          if (!showTools && !showBack && searchFilters.isEmpty) {
+            return const SliverToBoxAdapter(child: SizedBox.shrink());
+          }
+          final tools = showTools
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: _buildSearchResultTools(
+                    colorScheme,
+                    showSortButton: true,
+                    viewToggle: _buildSearchViewToggle(grid: grid),
+                  ),
+                )
+              : null;
+          return SliverToBoxAdapter(
+            child: noChips
+                ? _buildSearchBackBar(
+                    colorScheme,
+                    showBack: showBack,
+                    filters: searchFilters,
+                    selectedFilter: displayFilter,
+                    tools: tools,
+                  )
+                : _buildSearchFilterBar(
+                    searchFilters,
+                    displayFilter,
+                    colorScheme,
+                    tools: tools,
+                  ),
+          );
+        },
+      ),
     );
   }
 
@@ -1271,6 +1335,10 @@ class _HomeTabState extends ConsumerState<HomeTab>
   }) {
     return SliverToBoxAdapter(
       child: AnimatedSize(
+        // Sections stay where they are while the space below them opens or
+        // closes; centered, they would sink and rise as a section comes or
+        // goes (such as Continue listening when the player hides).
+        alignment: AlignmentDirectional.topStart,
         duration: sectionMotion.duration,
         curve: sectionMotion.curve,
         child:
@@ -1280,7 +1348,7 @@ class _HomeTabState extends ConsumerState<HomeTab>
                 showExplore ||
                 showEmptyHomeState)
             ? const SizedBox.shrink()
-            : _HomeSections(inset: 16 + wideListInset(context)),
+            : _HomeSections(inset: 16 + homeContentInset(context)),
       ),
     );
   }
@@ -1299,11 +1367,25 @@ class _HomeTabState extends ConsumerState<HomeTab>
           userProfileProvider.select((p) => p.value?.name ?? ''),
         );
         return SliverMainAxisGroup(
-          slivers: _buildExploreSections(
-            exploreSections,
-            showGreeting ? homeGreeting(context.l10n, name: profileName) : null,
-            colorScheme,
-          ),
+          slivers: [
+            // SpotiFLAC opens with Top Picks whether or not the feed follows.
+            if (context.isSpotiFLAC && _HomeTopPicksSection.hasPicks(ref))
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 8, bottom: 12),
+                  child: _HomeTopPicksSection(
+                    inset: 16 + homeContentInset(context),
+                  ),
+                ),
+              ),
+            ..._buildExploreSections(
+              exploreSections,
+              showGreeting
+                  ? homeGreeting(context.l10n, name: profileName)
+                  : null,
+              colorScheme,
+            ),
+          ],
         );
       },
     );
@@ -1328,8 +1410,49 @@ class _HomeTabState extends ConsumerState<HomeTab>
     required bool hasActiveSearchSurface,
     required bool showEmptySearchResult,
   }) {
+    return _buildSearchWidthSliver(
+      (context, wide) => _buildSearchResultsConsumer(
+        colorScheme: colorScheme,
+        hasActiveSearchSurface: hasActiveSearchSurface,
+        showEmptySearchResult: showEmptySearchResult,
+        wide: wide,
+      ),
+    );
+  }
+
+  /// Builds a search sliver with whether the results are wide enough for
+  /// covers, where Sort and the view button sit beside the filters.
+  Widget _buildSearchWidthSliver(
+    Widget Function(BuildContext context, bool wide) builder,
+  ) {
+    // Phones keep their rows in landscape too. Read here, since the select
+    // below runs during layout.
+    final coverLayoutAllowed =
+        isDesktopPlatform || MediaQuery.sizeOf(context).shortestSide >= 600;
+    final inset = homeContentInset(context);
+    // Rebuilds only when the layout crosses the breakpoint, not on every
+    // scroll frame.
+    return SliverLayoutInfoBuilder<bool>(
+      select: (constraints) =>
+          coverLayoutAllowed &&
+          constraints.crossAxisExtent - 2 * inset >= searchCoverLayoutMinWidth,
+      builder: builder,
+    );
+  }
+
+  /// [wide] offers the cover layout; the user's view mode picks it.
+  Widget _buildSearchResultsConsumer({
+    required ColorScheme colorScheme,
+    required bool hasActiveSearchSurface,
+    required bool showEmptySearchResult,
+    required bool wide,
+  }) {
     return Consumer(
       builder: (context, ref, _) {
+        final coverLayout =
+            wide &&
+            ref.watch(settingsProvider.select((s) => s.searchViewMode)) ==
+                'grid';
         final tracks = ref.watch(trackProvider.select((s) => s.tracks));
         final isLoading = ref.watch(trackProvider.select((s) => s.isLoading));
         final error = ref.watch(trackProvider.select((s) => s.error));
@@ -1356,18 +1479,31 @@ class _HomeTabState extends ConsumerState<HomeTab>
             hasActiveSearchSurface;
 
         return SliverMainAxisGroup(
-          slivers: _buildSearchResults(
-            resultsRef: ref,
-            tracks: tracks,
-            isLoading: isLoading,
-            error: error,
-            colorScheme: colorScheme,
-            hasResults: hasResults,
-            showEmptySearchResult: showEmptySearchResult,
-            searchExtensionId: searchExtensionId,
-            showLocalLibraryIndicator: showLocalLibraryIndicator,
-            thumbnailSizesByExtensionId: thumbnailSizesByExtensionId,
-          ),
+          slivers: coverLayout
+              ? _buildWideSearchResults(
+                  resultsRef: ref,
+                  tracks: tracks,
+                  isLoading: isLoading,
+                  error: error,
+                  colorScheme: colorScheme,
+                  hasResults: hasResults,
+                  showEmptySearchResult: showEmptySearchResult,
+                  showLocalLibraryIndicator: showLocalLibraryIndicator,
+                  extensions: extensions,
+                )
+              : _buildSearchResults(
+                  resultsRef: ref,
+                  tracks: tracks,
+                  isLoading: isLoading,
+                  error: error,
+                  colorScheme: colorScheme,
+                  hasResults: hasResults,
+                  showEmptySearchResult: showEmptySearchResult,
+                  searchExtensionId: searchExtensionId,
+                  showLocalLibraryIndicator: showLocalLibraryIndicator,
+                  thumbnailSizesByExtensionId: thumbnailSizesByExtensionId,
+                  toolsBesideFilters: wide,
+                ),
         );
       },
     );
@@ -1424,7 +1560,7 @@ class _HomeTabState extends ConsumerState<HomeTab>
 
     // The header carries the greeting; prompts take turns beneath it.
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 24 + wideListInset(context)),
+      padding: EdgeInsets.symmetric(horizontal: 24 + homeContentInset(context)),
       child: const Align(
         alignment: AlignmentDirectional.centerStart,
         child: _HomeTagline(),

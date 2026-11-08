@@ -45,9 +45,6 @@ class DesktopDiagnostics {
   /// The running app's diagnostics; null on mobile and before [initialize].
   static DesktopDiagnostics? get instance => _instance;
 
-  @visibleForTesting
-  static set debugInstance(DesktopDiagnostics? value) => _instance = value;
-
   static const logFileName = 'spotiflac.log';
   static const panicLogFileName = 'rust-panic.log';
   static const _markerFileName = 'session.running';
@@ -312,10 +309,8 @@ class DesktopDiagnostics {
   void _rotate() {
     _log?.closeSync();
     _log = null;
-    String rotated(int index) => p.join(
-      directory.path,
-      index == 0 ? logFileName : 'spotiflac.$index.log',
-    );
+    String rotated(int index) =>
+        p.join(directory.path, index == 0 ? logFileName : 'spotiflac.$index.log');
     final oldest = File(rotated(keptLogFiles - 1));
     if (oldest.existsSync()) oldest.deleteSync();
     for (var index = keptLogFiles - 2; index >= 0; index--) {

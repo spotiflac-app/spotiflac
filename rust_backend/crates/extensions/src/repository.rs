@@ -8,9 +8,9 @@ pub use model::{Registry, RepoExtension, normalize_sha256};
 pub use package::{destination_path, write_verified_package};
 pub use urls::{RegistryLocation, registry_location, require_https};
 
-use serde::{Deserialize, Serialize};
 use spotiflac_core::fs::{DEFAULT_TEMP_PREFIX, OpenOptionsPortableExt, write_atomic};
 use spotiflac_network::{HttpRequest, NetworkService, NetworkSession};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
@@ -423,6 +423,12 @@ impl ExtensionRepository {
             .iter()
             .find(|entry| entry.id == id)
             .ok_or_else(|| error(format!("extension {id} not found in repo")))?;
+        if !extension.is_supported_runtime() {
+            return Err(error(format!(
+                "extension {id} targets the {} runtime and cannot be installed in this app",
+                extension.runtime.trim()
+            )));
+        }
         require_https(extension.download_url(), "extension download")?;
         let destination = destination_path(directory, id, extension.download_url())?;
         let check = || self.check_generation(generation).map_err(|e| e.to_string());

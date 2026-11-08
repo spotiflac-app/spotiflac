@@ -16,10 +16,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 /// The SpotiFLAC application registered with Discord (same as mobile).
-pub(crate) const CLIENT_ID: &str = match option_env!("SPOTIFLAC_DISCORD_CLIENT_ID") {
-    Some(value) => value,
-    None => "0",
-};
+pub(crate) const CLIENT_ID: &str = match option_env!("SPOTIFLAC_DISCORD_CLIENT_ID") { Some(value) => value, None => "0" };
 
 const OP_HANDSHAKE: u32 = 0;
 const OP_FRAME: u32 = 1;

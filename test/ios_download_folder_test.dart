@@ -65,9 +65,7 @@ void main() {
       UncontrolledProviderScope(
         container: container,
         child: MaterialApp(
-          theme: spotiflac
-              ? SpotiFLACTheme.build(Brightness.light)
-              : ThemeData(),
+          theme: spotiflac ? SpotiFLACTheme.build(Brightness.light) : ThemeData(),
           locale: const Locale('en'),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,

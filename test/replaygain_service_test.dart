@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:spotiflac/services/ffmpeg_service.dart';
+import 'package:spotiflac/services/ffmpeg_models.dart';
 import 'package:spotiflac/services/replaygain_service.dart';
 
 void main() {

@@ -1,12 +1,11 @@
 import 'dart:convert';
 import 'dart:ffi' show Abi;
 import 'dart:io';
-
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:http/http.dart' as http;
-import 'package:pub_semver/pub_semver.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:spotiflac/constants/app_info.dart';
+import 'package:spotiflac/services/preference_blob_store.dart';
 import 'package:spotiflac/utils/desktop_platform.dart';
 import 'package:spotiflac/utils/logger.dart';
 
@@ -164,8 +163,6 @@ class UpdateInfo {
   final String downloadUrl;
   final String? apkDownloadUrl;
   final String? apkSha256;
-  final DateTime publishedAt;
-  final bool isPrerelease;
 
   /// How many stable (non-prerelease) releases are newer than the installed
   /// version. Drives the forced-update flow.
@@ -191,8 +188,6 @@ class UpdateInfo {
     required this.downloadUrl,
     this.apkDownloadUrl,
     this.apkSha256,
-    required this.publishedAt,
-    this.isPrerelease = false,
     this.releasesBehind = 0,
     UpdateInstallKind? installKind,
     this.assetName,
@@ -256,15 +251,22 @@ class UpdateChecker {
   static const String _cachedAtKey = 'update_checker_releases_fetched_at';
   static const String _cachedEtagKey = 'update_checker_releases_etag';
   static const String _cachedRepoKey = 'update_checker_releases_repo';
+  static const _cache = PreferenceBlobStore('update_releases', {
+    _cachedBodyKey: String,
+    _cachedAtKey: int,
+    _cachedEtagKey: String,
+    _cachedRepoKey: String,
+  });
 
   Future<({String body, bool verified})?> _fetchReleasesBody() async {
     final prefs = await SharedPreferences.getInstance();
+    final cached = (await _cache.read(prefs)).values;
     final repo = _releaseRepo;
     // A list saved before the desktop repository split (no repo recorded) is
     // the main repository's.
-    final cachedRepo = prefs.getString(_cachedRepoKey) ?? AppInfo.githubRepo;
+    final cachedRepo = cached[_cachedRepoKey] as String? ?? AppInfo.githubRepo;
     var cachedBody = cachedRepo == repo
-        ? prefs.getString(_cachedBodyKey)
+        ? cached[_cachedBodyKey] as String?
         : null;
     if (cachedBody != null) {
       try {
@@ -275,7 +277,7 @@ class UpdateChecker {
       }
     }
 
-    final cachedEtag = prefs.getString(_cachedEtagKey);
+    final cachedEtag = cached[_cachedEtagKey] as String?;
     try {
       final response = await (_client?.get ?? http.get)(
         Uri.parse('https://api.github.com/repos/$repo/releases?per_page=30'),
@@ -289,7 +291,13 @@ class UpdateChecker {
 
       if (response.statusCode == 304 && cachedBody != null) {
         _log.i('Release list revalidated by GitHub (304)');
-        await prefs.setInt(_cachedAtKey, DateTime.now().millisecondsSinceEpoch);
+        await _cache.update(
+          prefs,
+          (current) => {
+            ...current,
+            _cachedAtKey: DateTime.now().millisecondsSinceEpoch,
+          },
+        );
         return (body: cachedBody, verified: true);
       }
       if (response.statusCode != 200) {
@@ -300,15 +308,13 @@ class UpdateChecker {
 
       // Invalid responses must not overwrite a usable offline snapshot.
       _parseReleases(response.body);
-      await prefs.setString(_cachedBodyKey, response.body);
-      await prefs.setString(_cachedRepoKey, repo);
       final etag = response.headers['etag'];
-      if (etag != null) {
-        await prefs.setString(_cachedEtagKey, etag);
-      } else {
-        await prefs.remove(_cachedEtagKey);
-      }
-      await prefs.setInt(_cachedAtKey, DateTime.now().millisecondsSinceEpoch);
+      await _cache.write(prefs, {
+        _cachedBodyKey: response.body,
+        _cachedRepoKey: repo,
+        _cachedEtagKey: ?etag,
+        _cachedAtKey: DateTime.now().millisecondsSinceEpoch,
+      });
       _log.i('Fetched current release list from GitHub (200)');
       return (body: response.body, verified: true);
     } catch (error) {
@@ -393,9 +399,6 @@ class UpdateChecker {
       final htmlUrl =
           releaseData['html_url'] as String? ??
           'https://github.com/$_releaseRepo/releases';
-      final publishedAt =
-          DateTime.tryParse(releaseData['published_at'] as String? ?? '') ??
-          DateTime.now();
 
       final releaseAssets = _collectReleaseAssets(
         releaseData['assets'] as List<dynamic>? ?? const [],
@@ -415,8 +418,6 @@ class UpdateChecker {
           version: latestVersion,
           changelog: body,
           downloadUrl: htmlUrl,
-          publishedAt: publishedAt,
-          isPrerelease: isPrerelease,
           releasesBehind: releasesBehind,
           installKind: installKind,
           assetName: asset?.name,
@@ -445,8 +446,6 @@ class UpdateChecker {
         downloadUrl: htmlUrl,
         apkDownloadUrl: apkUrl,
         apkSha256: selectedAsset?.sha256,
-        publishedAt: publishedAt,
-        isPrerelease: isPrerelease,
         releasesBehind: releasesBehind,
       );
     } catch (e) {
@@ -457,16 +456,35 @@ class UpdateChecker {
 
   static bool _isNewerVersion(String latest, String current) {
     try {
-      // Build metadata does not affect SemVer update precedence.
-      return Version.parse(latest.split('+').first) >
-          Version.parse(current.split('+').first);
+      final latestBase = latest.split('-').first;
+      final currentBase = current.split('-').first;
+
+      final latestParts = latestBase.split('.').map(int.parse).toList();
+      final currentParts = currentBase.split('.').map(int.parse).toList();
+
+      while (latestParts.length < 3) {
+        latestParts.add(0);
+      }
+      while (currentParts.length < 3) {
+        currentParts.add(0);
+      }
+
+      for (int i = 0; i < 3; i++) {
+        if (latestParts[i] > currentParts[i]) return true;
+        if (latestParts[i] < currentParts[i]) return false;
+      }
+
+      final latestHasSuffix = latest.contains('-');
+      final currentHasSuffix = current.contains('-');
+
+      if (!latestHasSuffix && currentHasSuffix) return true;
+
+      return false;
     } catch (e) {
       _log.e('Error comparing versions: $e');
       return false;
     }
   }
-
-  static String get currentVersion => AppInfo.version;
 
   static List<ReleaseAsset> _collectReleaseAssets(List<dynamic> assets) {
     final releaseAssets = <ReleaseAsset>[];

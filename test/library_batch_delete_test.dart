@@ -2,9 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:spotiflac/controllers/confirm_and_delete_tracks.dart';
 import 'package:spotiflac/l10n/app_localizations.dart';
 import 'package:spotiflac/services/library_cleanup.dart';
-import 'package:spotiflac/utils/confirm_and_delete_tracks.dart';
 import 'package:spotiflac/widgets/app_alert_dialog.dart';
 import 'package:sqflite/sqflite.dart';
 

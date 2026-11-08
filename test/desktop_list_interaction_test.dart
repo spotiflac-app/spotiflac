@@ -6,8 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:spotiflac/controllers/selection_mode_mixin.dart';
 import 'package:spotiflac/l10n/app_localizations.dart';
-import 'package:spotiflac/screens/selection_mode_mixin.dart';
 import 'package:spotiflac/theme/app_theme.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
 import 'package:spotiflac/utils/desktop_platform.dart';
@@ -21,9 +21,7 @@ import 'package:spotiflac/widgets/track_card.dart';
 
 Widget _app(Widget child, {bool spotiflac = false}) => ProviderScope(
   child: MaterialApp(
-    theme: spotiflac
-        ? SpotiFLACTheme.build(Brightness.light)
-        : AppTheme.light(),
+    theme: spotiflac ? SpotiFLACTheme.build(Brightness.light) : AppTheme.light(),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     home: Scaffold(body: child),
@@ -427,6 +425,47 @@ void main() {
         ),
       ),
     );
+
+    testWidgets('SpotiFLAC dims the artwork under a small corner button', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _app(
+          Center(
+            child: SizedBox.square(
+              dimension: 160,
+              child: Stack(
+                children: [
+                  const Positioned.fill(child: ColoredBox(color: Colors.grey)),
+                  DesktopHoverPlayButton(tooltip: 'Play', onPlay: () {}),
+                ],
+              ),
+            ),
+          ),
+          spotiflac: true,
+        ),
+      );
+      final scrim = find.byKey(const ValueKey('desktop-hover-scrim'));
+      expect(tester.widget<AnimatedOpacity>(scrim).opacity, 0);
+
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      final tile = tester.getRect(find.byType(ColoredBox).last);
+      await mouse.addPointer(location: tile.center);
+      await tester.pumpAndSettle();
+      expect(tester.widget<AnimatedOpacity>(scrim).opacity, 1);
+      expect(tester.getSize(scrim), tile.size);
+
+      final disc = tester.getRect(
+        find.descendant(
+          of: find.byType(IconButton),
+          matching: find.byType(Container),
+        ),
+      );
+      expect(disc.size, const Size.square(30));
+      expect(disc.left - tile.left, 10);
+      expect(tile.bottom - disc.bottom, 10);
+      await mouse.removePointer();
+    }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 
     testWidgets('appears while the pointer is on the artwork', (tester) async {
       var played = 0;

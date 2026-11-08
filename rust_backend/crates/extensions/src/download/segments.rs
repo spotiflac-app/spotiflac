@@ -3,9 +3,9 @@
 use super::segment_store::{SegmentFile, SegmentOutput};
 use super::{DownloadOptions, Failure, header, next_delay, retryable, status_failure};
 use crate::files::{ExtensionFiles, FilePath};
+use spotiflac_network::{HttpRequest, NetworkSession};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
-use spotiflac_network::{HttpRequest, NetworkSession};
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};

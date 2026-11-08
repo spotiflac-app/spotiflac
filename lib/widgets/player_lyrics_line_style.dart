@@ -25,7 +25,7 @@ Iterable<(String, TextStyle, List<LyricWord>, bool)> _lyricSupplements(
             ? (translation ? FontWeight.w600 : FontWeight.bold)
             : FontWeight.w500,
       ),
-      translation ? const <LyricWord>[] : line.romanizationWords,
+      translation ? line.translationWords : line.romanizationWords,
       translation,
     );
   }
@@ -46,9 +46,7 @@ TextStyle _primaryLyricStyle(BuildContext context, {bool background = false}) =>
 
 TextAlign _lyricTextAlign(BuildContext context, LyricLine line) {
   final voice = line.voice;
-  if (voice == null) {
-    return context.isSpotiFLAC ? TextAlign.start : TextAlign.center;
-  }
+  if (voice == null) return TextAlign.start;
   // The lead voice keeps the reading start, so duets mirror in right-to-left
   // layouts.
   if (voice.isGroup) return TextAlign.start;

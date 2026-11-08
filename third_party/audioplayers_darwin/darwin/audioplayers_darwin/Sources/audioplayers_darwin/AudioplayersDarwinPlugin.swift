@@ -132,6 +132,7 @@ public class AudioplayersDarwinPlugin: NSObject, FlutterPlugin {
             FlutterError(
               code: "DarwinAudioError", message: "Error configuring global audio session: \(error)",
               details: nil))
+          return
         }
       #else
         globalEvents.onLog(message: "Setting AudioContext is not supported on this platform")
@@ -221,6 +222,9 @@ public class AudioplayersDarwinPlugin: NSObject, FlutterPlugin {
         result(FlutterError(code: "DarwinAudioError", message: "Equalizer is unavailable for this source", details: error.localizedDescription))
         return
       }
+    } else if method == "setNextPlayer" {
+      let nextId = args["nextPlayerId"] as? String
+      player.next = nextId.flatMap { self.getPlayer(playerId: $0) }
     } else if method == "pause" {
       player.pause()
     } else if method == "resume" {
@@ -255,6 +259,8 @@ public class AudioplayersDarwinPlugin: NSObject, FlutterPlugin {
           url: url!, isLocal: isLocal,
           mimeType: mimeType
         )
+      } catch is CancellationError {
+        // Replacing or disposing a loading source completes its method call.
       } catch let error {
         player.eventHandler.onError(
           code: "DarwinAudioError",
@@ -272,6 +278,7 @@ public class AudioplayersDarwinPlugin: NSObject, FlutterPlugin {
     } else if method == "getDuration" {
       let duration = player.getDuration()
       result(duration)
+      return
     } else if method == "setVolume" {
       guard let volume = args["volume"] as? Double else {
         result(
@@ -333,6 +340,7 @@ public class AudioplayersDarwinPlugin: NSObject, FlutterPlugin {
             FlutterError(
               code: "DarwinAudioError", message: "Error configuring audio session: \(error)",
               details: nil))
+          return
         }
       #else
         player.eventHandler.onLog(message: "Setting AudioContext is not supported on this platform")

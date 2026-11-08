@@ -5,9 +5,7 @@ import 'package:spotiflac/theme/spotiflac_theme.dart';
 import 'package:spotiflac/widgets/app_action_button.dart';
 import 'package:spotiflac/widgets/app_checkbox.dart';
 import 'package:spotiflac/widgets/app_text_field.dart';
-
 import '../l10n/app_localizations.dart';
-
 import 'package:spotiflac/services/batch_metadata_re_enrich.dart';
 import 'package:spotiflac/widgets/app_bottom_sheet.dart';
 import 'package:spotiflac/widgets/settings_group.dart';

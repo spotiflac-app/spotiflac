@@ -8,11 +8,24 @@ import 'package:spotiflac/models/settings.dart';
 import 'package:spotiflac/services/playback_notification.dart';
 import 'package:spotiflac/models/automix_options.dart';
 import 'package:spotiflac/services/automix_status.dart';
+import 'package:spotiflac/services/playback_deck.dart';
 
 import 'support/music_player_automix_harness.dart';
 
 const _tracks = testTracks;
 const _until = waitUntil;
+
+/// Enough songs that a reshuffled pass repeats the previous order only about
+/// once in 360,000 draws.
+final _passTracks = [
+  for (var i = 0; i < 10; i++)
+    PlayableMedia(
+      id: 'song-$i',
+      source: '/song-$i.flac',
+      title: 'Song $i',
+      artist: 'Artist',
+    ),
+];
 
 void main() {
   setUpMusicPlayerHarness();
@@ -312,6 +325,20 @@ void main() {
     expect(native.resumedSources, ['/two.flac']);
   });
 
+  test('a song still preparing does not hold up the next one', () async {
+    // A server that never answers keeps the first song preparing.
+    final gate = Completer<void>();
+    native.sourceGates['/one.flac'] = gate;
+    final first = handler.setQueueAndPlay(_tracks);
+    await _until(() => native.calls.any((c) => c.$2 == 'setSourceUrl'));
+    await handler.skipToNext();
+    await first;
+    expect(handler.mediaItem.value?.id, 'two');
+    expect(native.sources['music-player'], '/two.flac');
+    expect(native.resumedSources, ['/two.flac']);
+    gate.complete();
+  });
+
   for (final stop in [false, true]) {
     test(
       'a pending prepare cannot resume after ${stop ? 'stop' : 'pause'}',
@@ -329,6 +356,29 @@ void main() {
         if (stop) expect(handler.mediaItem.value, isNull);
       },
     );
+  }
+
+  for (final action in ['pause', 'stop', 'dispose']) {
+    test('$action cancels a source that never finishes preparing', () async {
+      final gate = Completer<void>();
+      native.sourceGates['/one.flac'] = gate;
+      final first = handler.setQueueAndPlay(_tracks);
+      await _until(() => native.calls.any((c) => c.$2 == 'setSourceUrl'));
+      final cancel = switch (action) {
+        'pause' => handler.pause(),
+        'stop' => handler.stop(),
+        _ => handler.dispose(),
+      };
+      try {
+        await cancel.timeout(const Duration(seconds: 1));
+        await first;
+        expect(native.resumedSources, isEmpty);
+        expect(native.playing, isEmpty);
+      } finally {
+        gate.complete();
+        await Future.wait([first, cancel]);
+      }
+    });
   }
 
   test('notification actions survive theme changes', () async {
@@ -524,6 +574,37 @@ void main() {
       expect(handler.queue.value.map((item) => item.id), planned);
     },
   );
+
+  test('repeat all plays each shuffled pass in a new order', () async {
+    await handler.setQueueAndPlay(_passTracks);
+    await handler.setShuffleMode(AudioServiceShuffleMode.all);
+    await handler.setRepeatMode(AudioServiceRepeatMode.all);
+    final planned = handler.queue.value.map((item) => item.id).toList();
+    bool ready() =>
+        handler.playbackState.value.processingState ==
+        AudioProcessingState.ready;
+    for (var i = 1; i < planned.length; i++) {
+      await native.event('music-player', 'audio.onComplete');
+      await _until(() => handler.mediaItem.value?.id == planned[i] && ready());
+    }
+    await native.event('music-player', 'audio.onComplete');
+    await _until(
+      () =>
+          handler.playbackState.value.queueIndex == 0 &&
+          handler.mediaItem.value?.id != planned.last &&
+          ready(),
+    );
+    final pass = handler.queue.value.map((item) => item.id).toList();
+    expect(handler.mediaItem.value?.id, pass.first);
+    expect(pass.toSet(), planned.toSet());
+    expect(pass, isNot(orderedEquals(planned)));
+    await handler.skipToPrevious();
+    expect(handler.mediaItem.value?.id, planned.last);
+    await handler.setShuffleMode(AudioServiceShuffleMode.none);
+    expect(handler.queue.value.map((item) => item.id), [
+      for (final track in _passTracks) track.id,
+    ]);
+  });
 
   test(
     'shuffle restoration retains duplicate entries and explicit queue edits',
@@ -776,6 +857,32 @@ void main() {
       await _until(() => handler.mediaItem.value?.id == planned[1]);
       expect(handler.queue.value.map((item) => item.id), planned);
       expect(handler.playbackState.value.queueIndex, 1);
+    },
+  );
+
+  test(
+    'AutoMix into a repeat-all wrap opens the newly shuffled pass',
+    () async {
+      await handler.setShuffleMode(AudioServiceShuffleMode.all);
+      await handler.setRepeatMode(AudioServiceRepeatMode.all);
+      await handler.setQueueAndPlay(_passTracks);
+      final planned = handler.queue.value.map((item) => item.id).toList();
+      await handler.skipToQueueItem(planned.length - 1);
+      setAutoMixEnabled(true);
+      await _until(
+        () => native.calls.any(
+          (call) => call.$1 != 'music-player' && call.$2 == 'setPlaybackRate',
+        ),
+      );
+      final opener = native.sources[native.prepared];
+      expect(opener, isNot('/${planned.last}.flac'));
+      native.positions['music-player'] = 55000;
+      await _until(() => handler.playbackState.value.queueIndex == 0);
+      final pass = handler.queue.value.map((item) => item.id).toList();
+      expect('/${pass.first}.flac', opener);
+      expect(handler.mediaItem.value?.id, pass.first);
+      expect(pass.toSet(), planned.toSet());
+      expect(pass, isNot(orderedEquals(planned)));
     },
   );
 
@@ -1220,6 +1327,23 @@ void main() {
     },
   );
 
+  fakeTimeTest('a next song still arriving is not mixed in', () async {
+    // A paired phone still sends it, or sends it again after the received
+    // folder pruned it.
+    final arrived = Completer<void>();
+    addTearDown(arrived.complete);
+    musicPlayerRuntime.streamWhileArriving(
+      '/two.flac',
+      url: 'http://127.0.0.1:1/two.flac',
+      done: arrived.future,
+    );
+    setAutoMixEnabled(true);
+    await handler.setQueueAndPlay(_tracks);
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    expect(native.live, {'music-player'});
+    expect(analyzer.calls, isEmpty);
+  });
+
   fakeTimeTest('repeat one never prepares another deck', () async {
     setAutoMixEnabled(true);
     await handler.setRepeatMode(AudioServiceRepeatMode.one);
@@ -1228,4 +1352,421 @@ void main() {
     expect(native.live, {'music-player'});
     expect(analyzer.calls, isEmpty);
   });
+
+  const four = PlayableMedia(
+    id: 'four',
+    source: '/four.flac',
+    title: 'Four',
+    artist: 'Artist',
+  );
+
+  void setLengths(Duration length) {
+    for (final track in [..._tracks, four]) {
+      native.durations[track.source] = length.inMilliseconds;
+    }
+  }
+
+  /// Plays deck [id] on from [milliseconds], its position following the
+  /// clock as a song does.
+  void playFrom(int milliseconds, [String id = 'music-player']) {
+    native.positions[id] = milliseconds;
+    native.clocks[id] = time.stopwatch()..start();
+  }
+
+  /// Waits for [ready] while the songs play, up to [limit] of their time.
+  Future<void> playUntil(bool Function() ready, Duration limit) async {
+    final clock = time.stopwatch()..start();
+    while (!ready()) {
+      if (clock.elapsed > limit) {
+        fail('Playback did not reach the expected state');
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+  }
+
+  List<String> mixDecks() => [
+    for (final call in native.calls)
+      if (call.$2 == 'create' && call.$1.startsWith('music-mix-')) call.$1,
+  ];
+
+  /// Where [outgoing] was when [incoming] began to play, and how [incoming]
+  /// was cued: the start, cue and rate of the plan.
+  ({int at, int cue, double rate}) mixStart(
+    String incoming, [
+    String outgoing = 'music-player',
+  ]) {
+    Map<Object?, Object?> first(String method) => native.calls
+        .firstWhere((call) => call.$1 == incoming && call.$2 == method)
+        .$3;
+    return (
+      at: native.positionsAtResume[incoming]![outgoing]!,
+      cue: first('seek')['position']! as int,
+      rate: (first('setPlaybackRate')['playbackRate']! as num).toDouble(),
+    );
+  }
+
+  fakeTimeTest('a long song prepares its mix only in its last 150 s', () async {
+    setLengths(const Duration(minutes: 4));
+    setAutoMixEnabled(true);
+    await handler.setQueueAndPlay(_tracks);
+    native.positions['music-player'] = 89000;
+    await Future<void>.delayed(const Duration(seconds: 2));
+    expect(analyzer.calls, isEmpty);
+    expect(native.live, {'music-player'});
+    expect(autoMixPreparing.value, isFalse);
+
+    native.positions['music-player'] = 90500;
+    await _until(() => native.calls.any((c) => c.$2 == 'setPlaybackRate'));
+    expect(analyzer.calls, ['/one.flac', '/two.flac']);
+    expect(mixDecks(), hasLength(1));
+    native.positions['music-player'] = 235000;
+    await _until(() => handler.mediaItem.value?.id == 'two');
+  });
+
+  fakeTimeTest(
+    'songs skipped before their last 150 s decode and open nothing',
+    () async {
+      setLengths(const Duration(minutes: 4));
+      setAutoMixEnabled(true);
+      await handler.setQueueAndPlay([..._tracks, four]);
+      native.positions['music-player'] = 10000;
+      await Future<void>.delayed(const Duration(seconds: 1));
+      await handler.skipToNext();
+      native.positions['music-player'] = 60000;
+      await Future<void>.delayed(const Duration(seconds: 1));
+      await handler.skipToNext();
+      native.positions['music-player'] = 85000;
+      await Future<void>.delayed(const Duration(seconds: 1));
+      expect(handler.mediaItem.value?.id, 'three');
+      expect(analyzer.calls, isEmpty);
+      expect(mixDecks(), isEmpty);
+
+      native.positions['music-player'] = 200000;
+      await _until(() => native.calls.any((c) => c.$2 == 'setPlaybackRate'));
+      expect(analyzer.calls, ['/three.flac', '/four.flac']);
+      expect(mixDecks(), hasLength(1));
+      native.positions['music-player'] = 235000;
+      await _until(() => handler.mediaItem.value?.id == 'four');
+      expect(analyzer.calls, hasLength(2));
+      expect(mixDecks(), hasLength(1));
+    },
+  );
+
+  fakeTimeTest('a short song still prepares in its first seconds', () async {
+    setLengths(const Duration(seconds: 150));
+    setAutoMixEnabled(true);
+    await handler.setQueueAndPlay(_tracks);
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    expect(analyzer.calls, ['/one.flac', '/two.flac']);
+    expect(mixDecks(), hasLength(1));
+  });
+
+  fakeTimeTest(
+    'a shorter duration brings the preparation lead forward',
+    () async {
+      setLengths(const Duration(minutes: 4));
+      setAutoMixEnabled(true);
+      await handler.setQueueAndPlay(_tracks);
+      playFrom(60000);
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      expect(analyzer.calls, isEmpty);
+
+      await native.event('music-player', 'audio.onDuration', 200000);
+      await _until(() => mixDecks().isNotEmpty);
+      expect(analyzer.calls, ['/one.flac', '/two.flac']);
+      await playUntil(
+        () => handler.mediaItem.value?.id == 'two',
+        const Duration(seconds: 140),
+      );
+      expect(mixStart(mixDecks().single).at, inInclusiveRange(195000, 195100));
+    },
+  );
+
+  fakeTimeTest('a longer duration postpones the preparation lead', () async {
+    setLengths(const Duration(minutes: 4));
+    setAutoMixEnabled(true);
+    await handler.setQueueAndPlay(_tracks);
+    playFrom(89000);
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    expect(analyzer.calls, isEmpty);
+
+    await native.event('music-player', 'audio.onDuration', 300000);
+    playFrom(100000);
+    await Future<void>.delayed(const Duration(seconds: 1));
+    expect(analyzer.calls, isEmpty);
+    playFrom(149000);
+    await Future<void>.delayed(const Duration(milliseconds: 600));
+    expect(analyzer.calls, isEmpty);
+    await playUntil(() => mixDecks().isNotEmpty, const Duration(seconds: 2));
+    expect(analyzer.calls, ['/one.flac', '/two.flac']);
+    await playUntil(
+      () => handler.mediaItem.value?.id == 'two',
+      const Duration(seconds: 150),
+    );
+    expect(mixStart(mixDecks().single).at, inInclusiveRange(295000, 295100));
+  });
+
+  fakeTimeTest('preparation is reported until it ends or is dropped', () async {
+    analyzer.pending = Completer<AutoMixBeatGrid?>();
+    setAutoMixEnabled(true);
+    await handler.setQueueAndPlay(_tracks);
+    await _until(() => analyzer.calls.isNotEmpty);
+    expect(autoMixPreparing.value, isTrue);
+    analyzer.pending!.complete(null);
+    analyzer.pending = null;
+    await _until(() => native.calls.any((c) => c.$2 == 'setPlaybackRate'));
+    await _until(() => !autoMixPreparing.value);
+
+    analyzer.pending = Completer<AutoMixBeatGrid?>();
+    await handler.skipToNext();
+    await _until(() => analyzer.calls.length == 3);
+    expect(autoMixPreparing.value, isTrue);
+    await handler.skipToNext();
+    expect(autoMixPreparing.value, isFalse);
+    await handler.skipToPrevious();
+    await _until(() => analyzer.calls.length == 4);
+    expect(autoMixPreparing.value, isTrue);
+    await handler.dispose();
+    expect(autoMixPreparing.value, isFalse);
+  });
+
+  fakeTimeTest('a pending mix sets its start timer once per song', () async {
+    var arms = 0;
+    time.onTimer = (_) {
+      if (StackTrace.current.toString().contains('_MusicAutoMix.onPosition')) {
+        arms++;
+      }
+    };
+    addTearDown(() => time.onTimer = null);
+    setAutoMixEnabled(true);
+    await handler.setQueueAndPlay(_tracks);
+    playFrom(0);
+    await playUntil(
+      () => handler.mediaItem.value?.id == 'two',
+      const Duration(seconds: 60),
+    );
+    expect(mixStart(mixDecks().single).at, inInclusiveRange(55000, 55100));
+    // One timer from the end of preparation; the 270 ticks since then
+    // followed the clock. A loaded machine may move a few by over 20 ms.
+    expect(arms, inInclusiveRange(1, 6));
+  });
+
+  for (final action in ['pause', 'stop', 'queue replacement']) {
+    fakeTimeTest('$action cancels a pending mix start', () async {
+      setAutoMixEnabled(true);
+      await handler.setQueueAndPlay(_tracks);
+      playFrom(0);
+      await _until(() => native.calls.any((c) => c.$2 == 'setPlaybackRate'));
+      final incoming = mixDecks().single;
+      await Future<void>.delayed(const Duration(seconds: 1));
+
+      switch (action) {
+        case 'pause':
+          await handler.pause();
+        case 'stop':
+          await handler.stop();
+        default:
+          native.durations[four.source] = 240000;
+          await handler.setQueueAndPlay([four, _tracks[2]]);
+          playFrom(0);
+      }
+      await Future<void>.delayed(const Duration(seconds: 60));
+      expect(native.live, {'music-player'});
+      expect(
+        native.calls.where((c) => c.$1 == incoming && c.$2 == 'resume'),
+        isEmpty,
+      );
+      expect(mixDecks(), hasLength(1));
+      expect(autoMixPreparing.value, isFalse);
+      expect(autoMixStatus.value, AutoMixStatus.idle);
+    });
+  }
+
+  fakeTimeTest('a long song mixes at its planned moment', () async {
+    setLengths(const Duration(seconds: 200));
+    setAutoMixEnabled(true);
+    await handler.setQueueAndPlay(_tracks);
+    playFrom(0);
+    await playUntil(
+      () => handler.mediaItem.value?.id == 'two',
+      const Duration(seconds: 200),
+    );
+    final start = mixStart(mixDecks().single);
+    expect(start.at, inInclusiveRange(195000, 195100));
+    expect(start.cue, 0);
+    expect(start.rate, 1);
+  });
+
+  fakeTimeTest('a long beat-matched song mixes on its planned beat', () async {
+    analyzer.matchBeats = true;
+    setLengths(const Duration(seconds: 200));
+    setAutoMixEnabled(true);
+    await handler.setQueueAndPlay(_tracks);
+    playFrom(0);
+    await playUntil(
+      () => handler.mediaItem.value?.id == 'two',
+      const Duration(seconds: 200),
+    );
+    final start = mixStart(mixDecks().single);
+    // 176.17 s (outro window plus phase) and 39 beats of 0.5 s, 4 s from
+    // the end.
+    expect(start.at, inInclusiveRange(195670, 195770));
+    expect(start.cue, 170);
+    expect(start.rate, closeTo(120 / 124, 1e-9));
+    expect(autoMixStatus.value, AutoMixStatus.mixing);
+  });
+
+  fakeTimeTest(
+    'a seek into the last 150 s prepares and mixes on time',
+    () async {
+      setLengths(const Duration(minutes: 4));
+      setAutoMixEnabled(true);
+      await handler.setQueueAndPlay(_tracks);
+      playFrom(0);
+      await Future<void>.delayed(const Duration(seconds: 1));
+      await handler.seek(const Duration(seconds: 200));
+      await playUntil(
+        () => handler.mediaItem.value?.id == 'two',
+        const Duration(seconds: 40),
+      );
+      final start = mixStart(mixDecks().last);
+      expect(start.at, inInclusiveRange(235000, 235100));
+      expect(start.cue, 0);
+      expect(start.rate, 1);
+    },
+  );
+
+  fakeTimeTest(
+    'a seek back out of the last 150 s drops the mix until it returns',
+    () async {
+      setLengths(const Duration(minutes: 4));
+      setAutoMixEnabled(true);
+      await handler.setQueueAndPlay(_tracks);
+      playFrom(100000);
+      await _until(() => native.calls.any((c) => c.$2 == 'setPlaybackRate'));
+      final dropped = native.prepared;
+      expect(analyzer.calls, hasLength(2));
+
+      await handler.seek(const Duration(seconds: 30));
+      await Future<void>.delayed(const Duration(seconds: 2));
+      expect(native.live, {'music-player'});
+      expect(native.live, isNot(contains(dropped)));
+      expect(analyzer.calls, hasLength(2));
+
+      await handler.seek(const Duration(seconds: 89));
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+      expect(analyzer.calls, hasLength(2));
+      await Future<void>.delayed(const Duration(seconds: 2));
+      expect(analyzer.calls, hasLength(4));
+      await playUntil(
+        () => handler.mediaItem.value?.id == 'two',
+        const Duration(seconds: 150),
+      );
+      expect(mixStart(mixDecks().last).at, inInclusiveRange(235000, 235100));
+    },
+  );
+
+  fakeTimeTest('a mix after a beat-matched one starts on time', () async {
+    analyzer.matchBeats = true;
+    setAutoMixEnabled(true);
+    await handler.setQueueAndPlay(_tracks);
+    playFrom(0);
+    await playUntil(
+      () => handler.mediaItem.value?.id == 'two',
+      const Duration(seconds: 60),
+    );
+    final second = mixDecks().single;
+    expect(mixStart(second).at, inInclusiveRange(55670, 55770));
+    expect(handler.playbackState.value.speed, closeTo(120 / 124, 1e-9));
+    // The second song plays slowed while the first fades, then recovers
+    // before its own mix is prepared.
+    await playUntil(() => mixDecks().length == 2, const Duration(seconds: 20));
+    expect(handler.playbackState.value.speed, 1);
+    await playUntil(
+      () => handler.mediaItem.value?.id == 'three',
+      const Duration(seconds: 60),
+    );
+    expect(
+      mixStart(mixDecks().last, second).at,
+      inInclusiveRange(55670, 55770),
+    );
+    expect(analyzer.calls, hasLength(4));
+  });
+
+  fakeTimeTest(
+    'a queue edit before the last 150 s costs no preparation',
+    () async {
+      setLengths(const Duration(minutes: 4));
+      setAutoMixEnabled(true);
+      await handler.setQueueAndPlay(_tracks);
+      playFrom(0);
+      await Future<void>.delayed(const Duration(seconds: 10));
+      await handler.enqueue(four, playNext: true);
+      await Future<void>.delayed(const Duration(seconds: 5));
+      expect(analyzer.calls, isEmpty);
+      await handler.seek(const Duration(seconds: 100));
+      await _until(() => native.calls.any((c) => c.$2 == 'setPlaybackRate'));
+      expect(analyzer.calls, ['/one.flac', '/four.flac']);
+      final incoming = native.prepared;
+      expect(native.sources[incoming], '/four.flac');
+      await playUntil(
+        () => handler.mediaItem.value?.id == 'four',
+        const Duration(seconds: 140),
+      );
+      expect(mixStart(incoming).at, inInclusiveRange(235000, 235100));
+    },
+  );
+
+  fakeTimeTest('repeat all prepares the wrap in the last 150 s', () async {
+    setLengths(const Duration(minutes: 4));
+    setAutoMixEnabled(true);
+    await handler.setRepeatMode(AudioServiceRepeatMode.all);
+    await handler.setQueueAndPlay(_tracks.take(2).toList());
+    await handler.skipToNext();
+    native.positions['music-player'] = 60000;
+    await Future<void>.delayed(const Duration(seconds: 1));
+    expect(analyzer.calls, isEmpty);
+    native.positions['music-player'] = 200000;
+    await _until(() => native.calls.any((c) => c.$2 == 'setPlaybackRate'));
+    expect(analyzer.calls, ['/two.flac', '/one.flac']);
+    native.positions['music-player'] = 235000;
+    await _until(() => handler.mediaItem.value?.id == 'one');
+  });
+
+  fakeTimeTest('exclusive output keeps the last 150 s unmixed', () async {
+    setLengths(const Duration(minutes: 4));
+    setAutoMixEnabled(true);
+    // Settings changes set it from the exclusive output setting.
+    playbackExclusiveOutput.value = true;
+    addTearDown(() => playbackExclusiveOutput.value = false);
+    await handler.setQueueAndPlay(_tracks);
+    native.positions['music-player'] = 200000;
+    await Future<void>.delayed(const Duration(seconds: 1));
+    expect(analyzer.calls, isEmpty);
+    expect(native.live, {'music-player'});
+    playbackExclusiveOutput.value = false;
+    await _until(() => native.calls.any((c) => c.$2 == 'setPlaybackRate'));
+    expect(analyzer.calls, ['/one.flac', '/two.flac']);
+  });
+
+  fakeTimeTest(
+    'a next song that arrives before the last 150 s is mixed in',
+    () async {
+      setLengths(const Duration(minutes: 4));
+      final arrived = Completer<void>();
+      musicPlayerRuntime.streamWhileArriving(
+        '/two.flac',
+        url: 'http://127.0.0.1:1/two.flac',
+        done: arrived.future,
+      );
+      setAutoMixEnabled(true);
+      await handler.setQueueAndPlay(_tracks);
+      native.positions['music-player'] = 10000;
+      await Future<void>.delayed(const Duration(seconds: 1));
+      arrived.complete();
+      native.positions['music-player'] = 200000;
+      await _until(() => native.calls.any((c) => c.$2 == 'setPlaybackRate'));
+      expect(native.sources[native.prepared], '/two.flac');
+    },
+  );
 }

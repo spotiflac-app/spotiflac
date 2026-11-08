@@ -2,8 +2,8 @@
 
 use super::*;
 use crate::lyrics::http;
-use regex::Regex;
 use spotiflac_core::lyrics::payloads;
+use regex::Regex;
 use std::sync::{LazyLock, MutexGuard, TryLockError};
 use std::time::Duration;
 
@@ -187,10 +187,7 @@ impl BuiltinLyricsClient {
                 get
             }
             AppleLyricsSource::ZarzLrc => {
-                let endpoint = option_env!("SPOTIFLAC_APPLE_LYRICS_URL")
-                    .filter(|value| value.starts_with("https://"))
-                    .unwrap_or("https://api.zarz.moe/apple-music/lyrics");
-                let mut get = Request::new(endpoint);
+                let mut get = Request::new("https://api.zarz.moe/apple-music/lyrics");
                 get.timeout = Duration::from_secs(65);
                 // Let the backup use its account's storefront, since lyric
                 // availability differs between catalog regions.

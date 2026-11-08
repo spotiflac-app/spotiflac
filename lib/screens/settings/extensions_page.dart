@@ -1,5 +1,4 @@
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:spotiflac/widgets/app_snack_bar.dart';
 import 'package:spotiflac/widgets/app_switch.dart';
@@ -7,6 +6,7 @@ import 'package:spotiflac/widgets/extension_row.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
+import 'package:spotiflac/controllers/clickable_metadata.dart';
 import 'package:spotiflac/l10n/l10n.dart';
 import 'package:spotiflac/models/settings.dart';
 import 'package:spotiflac/providers/extension_provider.dart';
@@ -17,6 +17,7 @@ import 'package:spotiflac/screens/settings/extension_detail_page.dart';
 import 'package:spotiflac/screens/settings/metadata_provider_priority_page.dart';
 import 'package:spotiflac/screens/settings/provider_priority_page.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
+import 'package:spotiflac/utils/adaptive_layout.dart';
 import 'package:spotiflac/widgets/app_action_button.dart';
 import 'package:spotiflac/widgets/app_bottom_sheet.dart';
 import 'package:spotiflac/widgets/app_icon.dart';
@@ -24,6 +25,7 @@ import 'package:spotiflac/widgets/app_loading_indicator.dart';
 import 'package:spotiflac/widgets/spotiflac_chrome.dart';
 import 'package:spotiflac/widgets/settings_group.dart';
 import 'package:spotiflac/widgets/home_feed_region_setting.dart';
+import 'package:spotiflac/widgets/extension_storage_setting.dart';
 import 'package:spotiflac/widgets/app_sliver_header.dart';
 import 'package:spotiflac/widgets/extension_health.dart';
 
@@ -79,6 +81,8 @@ class _ExtensionsPageState extends ConsumerState<ExtensionsPage> {
           slivers: [
             AppSliverHeader.page(title: context.l10n.extensionsTitle),
 
+            const SliverToBoxAdapter(child: ExtensionStorageSetting()),
+
             if (extState.isLoading)
               const SliverToBoxAdapter(
                 child: Padding(
@@ -127,9 +131,9 @@ class _ExtensionsPageState extends ConsumerState<ExtensionsPage> {
               child: SettingsGroup(
                 connected: true,
                 children: [
-                  _DownloadPriorityItem(),
-                  _DownloadFallbackItem(),
-                  _MetadataPriorityItem(),
+                  _ExtensionPriorityLink(_PriorityLink.download),
+                  _ExtensionPriorityLink(_PriorityLink.fallback),
+                  _ExtensionPriorityLink(_PriorityLink.metadata),
                   _SearchProviderSelector(),
                   _HomeFeedProviderSelector(),
                   HomeFeedRegionSetting(),
@@ -146,7 +150,9 @@ class _ExtensionsPageState extends ConsumerState<ExtensionsPage> {
             if (extState.extensions.isEmpty && !extState.isLoading)
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 16 + wideListInset(context),
+                  ),
                   child: Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
@@ -192,12 +198,9 @@ class _ExtensionsPageState extends ConsumerState<ExtensionsPage> {
                       extension: ext,
                       healthStatus: extState.healthStatuses[ext.id],
                       showDivider: index < extState.extensions.length - 1,
-                      onTap: () => Navigator.push(
+                      onTap: () => pushPage<void>(
                         context,
-                        MaterialPageRoute<void>(
-                          builder: (_) =>
-                              ExtensionDetailPage(extensionId: ext.id),
-                        ),
+                        (_) => ExtensionDetailPage(extensionId: ext.id),
                       ),
                       onToggle: (enabled) => ref
                           .read(extensionProvider.notifier)
@@ -213,12 +216,16 @@ class _ExtensionsPageState extends ConsumerState<ExtensionsPage> {
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     // Same edges as the extension group above.
-                    final inset = settingsHorizontalInset(constraints.maxWidth);
+                    final inset = settingsHorizontalInset(
+                      context,
+                      constraints.maxWidth,
+                    );
                     return Padding(
                       padding: EdgeInsets.fromLTRB(inset, 16, inset, 16),
                       child: context.isSpotiFLAC
                           ? SpotiFLACGlassPanel.overlay(
                               radius: 28,
+                              samplesBackdrop: false,
                               child: installButton,
                             )
                           : installButton,
@@ -250,6 +257,7 @@ class _ExtensionsPageState extends ConsumerState<ExtensionsPage> {
     final hasInvalidFile = selectedFiles.any((file) {
       final lowerName = file.name.toLowerCase();
       return !lowerName.endsWith('.spotiflac-ext') &&
+          !lowerName.endsWith('.spotiflac-ext') &&
           !lowerName.endsWith('.sflx');
     });
     if (hasInvalidFile) {

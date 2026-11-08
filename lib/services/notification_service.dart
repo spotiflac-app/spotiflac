@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -44,6 +43,7 @@ class NotificationService {
 
   static const String libraryScanWorkKind = 'library_scan';
   static const String updateDownloadWorkKind = 'app_update';
+  int _linkTransferSequence = 0;
 
   // Kinds whose progress the Android foreground-service notification shows,
   // replacing the plugin's progress notification so only one is visible.
@@ -78,6 +78,25 @@ class NotificationService {
     libraryScanWorkKind,
     title: _l10n?.notifScanningLibrary ?? 'Scanning local library',
   );
+
+  /// Each upload owns its lease, so finishing one cannot stop another.
+  Future<Future<void> Function()> acquireLinkTransferWork(
+    String desktopName,
+  ) async {
+    final kind = 'link_transfer_${_linkTransferSequence++}';
+    await beginBackgroundWork(
+      kind,
+      title:
+          _l10n?.linkHandoffSending(desktopName) ??
+          'Sending this song to $desktopName...',
+    );
+    var released = false;
+    return () async {
+      if (released) return;
+      released = true;
+      await endBackgroundWork(kind);
+    };
+  }
 
   Future<void> beginUpdateDownloadWork({required String version}) =>
       beginBackgroundWork(
@@ -143,10 +162,9 @@ class NotificationService {
   }
 
   Future<void> _initialize() async {
-    // System UI draws only the small icon's alpha, so use the brand mark
-    // rather than the opaque launcher icon.
+    // Use the notification mark without the adaptive launcher's padding.
     const androidSettings = AndroidInitializationSettings(
-      '@drawable/ic_launcher_monochrome',
+      '@drawable/ic_notification_spotiflac',
     );
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: false,
@@ -334,7 +352,7 @@ class NotificationService {
         playSound: playSound,
         enableVibration: !inProgress,
         onlyAlertOnce: inProgress,
-        icon: '@drawable/ic_launcher_monochrome',
+        icon: '@drawable/ic_notification_spotiflac',
       ),
       iOS: DarwinNotificationDetails(
         presentAlert: !inProgress,

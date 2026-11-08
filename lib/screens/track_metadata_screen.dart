@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
-
 import 'package:flutter/material.dart';
 import 'package:spotiflac/theme/app_tokens.dart';
 import 'package:spotiflac/widgets/app_alert_dialog.dart';
@@ -15,26 +14,42 @@ import 'package:spotiflac/widgets/expressive_button.dart';
 import 'package:spotiflac/widgets/re_enrich_review_sheet.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:spotiflac/services/deleted_library_files.dart';
 import 'package:spotiflac/services/file_access_check.dart';
 import 'package:spotiflac/services/network_storage_service.dart';
+import 'package:spotiflac/services/network_library_scanner.dart';
+import 'package:spotiflac/services/metadata_cover_resources.dart';
+import 'package:spotiflac/services/metadata_persistence_service.dart';
 import 'package:spotiflac/services/library_database.dart';
+import 'package:spotiflac/services/cue_split_library_service.dart';
+import 'package:spotiflac/services/link/features/link_save_offline.dart';
+import 'package:spotiflac/widgets/network_offline_actions.dart';
+import 'package:spotiflac/widgets/network_upload_actions.dart';
+import 'package:spotiflac/providers/network_upload_provider.dart';
+import 'package:spotiflac/models/unified_library_item.dart';
 import 'package:spotiflac/utils/file_access.dart';
 import 'package:spotiflac/utils/re_enrich_result.dart';
+import 'package:spotiflac/utils/service_track_link.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:spotiflac/providers/deleted_library_files.dart';
 import 'package:spotiflac/providers/download_queue_provider.dart';
 import 'package:spotiflac/providers/local_library_provider.dart';
 import 'package:spotiflac/providers/playback_provider.dart';
 import 'package:spotiflac/providers/music_player_provider.dart';
+import 'package:spotiflac/providers/player_motion_artwork_provider.dart';
 import 'package:spotiflac/providers/settings_provider.dart';
 import 'package:spotiflac/services/platform_bridge.dart';
 import 'package:spotiflac/services/music_player_service.dart'
     show readPlaybackFileMetadataWithRetry;
 import 'package:spotiflac/services/downloaded_embedded_cover_resolver.dart';
-import 'package:spotiflac/services/ffmpeg_service.dart';
+import 'package:spotiflac/services/ffmpeg_conversion.dart';
+import 'package:spotiflac/services/ffmpeg_metadata.dart';
+import 'package:spotiflac/services/ffmpeg_models.dart';
+import 'package:spotiflac/services/ffmpeg_probe.dart';
 import 'package:spotiflac/services/replaygain_service.dart';
+import 'package:spotiflac/services/source_deletion_events.dart';
+import 'package:spotiflac/services/source_metadata_events.dart';
 import 'package:spotiflac/l10n/l10n.dart';
 import 'package:spotiflac/utils/adaptive_layout.dart';
 import 'package:spotiflac/utils/audio_conversion_utils.dart';
@@ -60,6 +75,10 @@ import 'package:spotiflac/theme/spotiflac_icons.dart';
 import 'package:spotiflac/widgets/album_detail_header.dart'
     show HeaderMetaRow, HeaderMetaItem, HeaderCircleButton, HeaderFilledButton;
 import 'package:spotiflac/widgets/desktop/context_menu.dart';
+import 'package:spotiflac/widgets/link/link_actions.dart';
+import 'package:spotiflac/widgets/link/link_library_actions.dart';
+import 'package:spotiflac/services/link/features/link_track_refs.dart';
+import 'package:spotiflac/services/link/link_library_jobs.dart';
 import 'package:spotiflac/widgets/spotiflac_context_menu.dart';
 import 'package:spotiflac/widgets/spotiflac_metadata_row.dart';
 import 'package:spotiflac/widgets/player_artwork.dart';
@@ -75,9 +94,9 @@ import 'package:spotiflac/widgets/settings_group.dart';
 import 'package:spotiflac/constants/music_services.dart';
 import 'package:spotiflac/controllers/batch_track_actions.dart'
     show convertLibraryTrack;
-import 'package:spotiflac/screens/collapsing_header_scroll_mixin.dart';
+import 'package:spotiflac/controllers/clickable_metadata.dart';
+import 'package:spotiflac/controllers/collapsing_header_scroll_mixin.dart';
 import 'package:spotiflac/screens/track_metadata_edit_sheet.dart';
-import 'package:spotiflac/utils/clickable_metadata.dart';
 
 part 'track_metadata_screen_cover.dart';
 part 'track_metadata_screen_display.dart';
@@ -169,6 +188,8 @@ class _TrackMetadataScreenState extends ConsumerState<TrackMetadataScreen>
   bool get _isNetworkItem => cleanFilePath.startsWith('network://');
   bool _networkFileDeletable = false;
   bool get _canDeleteFile => !_isNetworkItem || _networkFileDeletable;
+  bool get _canEditMetadataFile =>
+      _fileExists && (!_isNetworkItem || _networkFileDeletable);
   bool _isDeleting = false;
   int? get _fileSize => switch (_fileAccess) {
     FileAccessFound(:final stat) => stat.size,
@@ -195,6 +216,8 @@ class _TrackMetadataScreenState extends ConsumerState<TrackMetadataScreen>
   bool _isTrackSwipeNavigationInFlight = false;
   int _metadataLoadGeneration = 0;
   int _metadataTransitionDirection = 0;
+  late final void Function() _unsubscribeMetadata;
+  late final void Function() _unsubscribeDeletion;
   late DownloadHistoryItem? _currentDownloadItem;
   late LocalLibraryItem? _currentLocalLibraryItem;
   late int? _currentNavigationIndex;
@@ -216,11 +239,41 @@ class _TrackMetadataScreenState extends ConsumerState<TrackMetadataScreen>
     _currentDownloadItem = widget.item;
     _currentLocalLibraryItem = widget.localItem;
     _currentNavigationIndex = widget.navigationIndex;
+    _unsubscribeMetadata = SourceMetadataEvents.instance.subscribe((
+      source,
+    ) async {
+      if (!mounted || source != cleanFilePath) return;
+      setState(() {
+        _metadataLoadGeneration++;
+        _hasLoadedResolvedAudioMetadata = false;
+        _editedMetadata = null;
+        _embeddedLyricsChecked = false;
+        _lyrics = null;
+        _rawLyrics = null;
+        _lyricsError = null;
+        _lyricsLoading = false;
+      });
+      await _checkFile();
+      if (mounted && source == cleanFilePath && !_isNetworkItem) {
+        unawaited(_refreshEmbeddedCoverPreview(force: true));
+      }
+    });
+    _unsubscribeDeletion = SourceDeletionEvents.instance.subscribe((
+      source,
+    ) async {
+      if (!mounted || source != cleanFilePath) return;
+      setState(() {
+        _metadataLoadGeneration++;
+        _fileAccess = const FileAccessMissing();
+      });
+    });
     unawaited(_checkFile());
   }
 
   @override
   void dispose() {
+    _unsubscribeMetadata();
+    _unsubscribeDeletion();
     unawaited(_cleanupTempFileAndParentIfNotCached(_embeddedCoverPreviewPath));
     _lyricsScrollController.dispose();
     super.dispose();
@@ -228,7 +281,9 @@ class _TrackMetadataScreenState extends ConsumerState<TrackMetadataScreen>
 
   /// setState is @protected, so the extension part files route rebuilds
   /// through this forwarder.
-  void _setState(VoidCallback fn) => setState(fn);
+  void _setState(VoidCallback fn) {
+    if (mounted) setState(fn);
+  }
 
   @override
   double calculateExpandedHeight(BuildContext context) {
@@ -349,6 +404,9 @@ class _TrackMetadataScreenState extends ConsumerState<TrackMetadataScreen>
       );
       final resolvedDuration = readPositiveInt(metadata['duration']);
       final resolvedAlbum = metadata['album']?.toString();
+      final resolvedCover = normalizeOptionalString(
+        metadata['cover_path']?.toString(),
+      );
       final resolvedTitle = metadata['title']?.toString();
       final resolvedArtist = metadata['artist']?.toString();
       final resolvedAlbumArtist = metadata['album_artist']?.toString();
@@ -517,6 +575,7 @@ class _TrackMetadataScreenState extends ConsumerState<TrackMetadataScreen>
           _editedMetadata = {
             ...?_editedMetadata,
             ...replayGainMetadata,
+            'cover_path': ?resolvedCover,
             'bpm': ?resolvedBpm,
             'mood': ?resolvedMood,
             // ignore: use_null_aware_elements
@@ -684,7 +743,7 @@ class _TrackMetadataScreenState extends ConsumerState<TrackMetadataScreen>
         _lyricsLoading = false;
         _lyricsError = null;
         _lyricsSource = null;
-        showTitleInAppBar = false;
+        showTitleNotifier.value = false;
         _lyricsEmbedded = false;
         _isInstrumental = false;
         _embeddedLyricsChecked = false;
@@ -731,9 +790,13 @@ class _TrackMetadataScreenState extends ConsumerState<TrackMetadataScreen>
               stretch: true,
               backgroundColor: colorScheme.surface,
               surfaceTintColor: Colors.transparent,
-              title: AnimatedOpacity(
-                duration: const Duration(milliseconds: 200),
-                opacity: showTitleInAppBar ? 1.0 : 0.0,
+              title: ValueListenableBuilder(
+                valueListenable: showTitleNotifier,
+                builder: (_, showTitle, title) => AnimatedOpacity(
+                  duration: const Duration(milliseconds: 200),
+                  opacity: showTitle ? 1.0 : 0.0,
+                  child: title,
+                ),
                 child: ExplicitTrackTitle(
                   title: trackName,
                   explicit: isExplicit,

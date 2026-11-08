@@ -196,9 +196,7 @@ void main() {
       await File('${directory.path}/spotiflac-lens-check.png').writeAsBytes(
         png.buffer.asUint8List(png.offsetInBytes, png.lengthInBytes),
       );
-      debugPrint(
-        'Glass diagnostic: ${directory.path}/spotiflac-lens-check.png',
-      );
+      debugPrint('Glass diagnostic: ${directory.path}/spotiflac-lens-check.png');
       for (final y in [200, 360]) {
         // An inward lens shifts the left edge into the brighter background.
         final edgeX = y == 200 ? 42 : 72;

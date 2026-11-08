@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:liquid_glass_easy/liquid_glass_easy.dart';
 import 'package:spotiflac/widgets/spotiflac_selection_pill.dart';
 import 'package:spotiflac/l10n/l10n.dart';
 import 'package:spotiflac/providers/music_player_provider.dart';
@@ -142,7 +143,8 @@ void main() {
     (tester) async {
       await pumpShell(tester, blur: true, liquidGlass: false);
       void expectSharedBackdrop({
-        int movingSurfaces = 2,
+        // The search capsule crosses the bar; the leading circle is the bar.
+        int movingSurfaces = 1,
         int sharedSurfaces = 2,
       }) {
         final filters = find.descendant(
@@ -176,10 +178,66 @@ void main() {
       await tester.pump(const Duration(milliseconds: 190));
       expectSharedBackdrop();
       await tester.pumpAndSettle();
-      expectSharedBackdrop(sharedSurfaces: 1);
+      expectSharedBackdrop(movingSurfaces: 2, sharedSurfaces: 1);
       expect(tester.takeException(), isNull);
     },
   );
+
+  for (final withPlayer in [true, false]) {
+    testWidgets(
+      'liquid side capsules join the bar read only at rest (player: $withPlayer)',
+      (tester) async {
+        SpotiFLACGlass.debugShaderFilterSupport = true;
+        addTearDown(() => SpotiFLACGlass.debugShaderFilterSupport = null);
+        await pumpShell(tester, blur: true, withPlayer: withPlayer);
+        // Every painted lens carries a batch key, so each takes the single
+        // composed pass, and lenses with the same key share one read.
+        List<Element> lenses() => find
+            .descendant(
+              of: find.byType(SpotiFLACBottomBar),
+              matching: find.byType(LiquidGlassLens),
+            )
+            .evaluate()
+            .toList();
+        List<int> keys(List<Element> lenses) => [
+          for (final lens in lenses) LiquidGlassBatch.backdropIdOf(lens)!,
+        ];
+
+        final expanded = keys(lenses());
+        expect(expanded, hasLength(withPlayer ? 2 : 1));
+        expect(expanded.toSet(), hasLength(1));
+
+        chrome.value = true;
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 190));
+        final folding = lenses();
+        final foldingKeys = keys(folding);
+        expect(foldingKeys, hasLength(withPlayer ? 3 : 2));
+        // The search capsule crosses the tabs, so it samples on its own.
+        expect(foldingKeys.toSet(), hasLength(2));
+        expect(
+          foldingKeys.where(expanded.contains),
+          hasLength(folding.length - 1),
+        );
+
+        await tester.pumpAndSettle();
+        final resting = lenses();
+        expect(resting, hasLength(withPlayer ? 3 : 2));
+        expect(keys(resting).toSet(), expanded.toSet());
+        // Switching batches reparents the search capsule's lens instead of
+        // rebuilding it. The leading circle takes over from the bar only here.
+        expect(resting.where(folding.contains), hasLength(withPlayer ? 2 : 1));
+
+        chrome.expand();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 190));
+        expect(keys(lenses()).toSet(), hasLength(2));
+        await tester.pumpAndSettle();
+        expect(keys(lenses()), expanded);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   for (final liquidGlass in [false, true]) {
     testWidgets(
@@ -234,9 +292,13 @@ void main() {
           await tester.pump();
           if (collapsed) {
             await tester.pump(const Duration(milliseconds: 190));
+            // The bar has narrowed past the middle by now.
             await expectBlur(
-              capsuleSample,
-              'Capsule halfway to collapsed=$collapsed',
+              tester.getCenter(
+                    find.byKey(const ValueKey('spotiflac-compact-leading')),
+                  ) +
+                  const Offset(0, 18),
+              'Bar halfway to collapsed=$collapsed',
             );
           }
           // Sample below the icons once the growing circles are large enough to
@@ -247,8 +309,9 @@ void main() {
             'spotiflac-compact-search',
           ]) {
             final center = tester.getCenter(find.byKey(ValueKey(key)));
+            // Just under the icon: a fast circle is squashed along its travel.
             await expectBlur(
-              center + const Offset(0, 18),
+              center + const Offset(0, 14),
               '$key moving to collapsed=$collapsed',
             );
           }
@@ -383,9 +446,7 @@ void main() {
         chrome.expand();
         await tester.pumpAndSettle();
         expect(
-          tester
-              .widget<SpotiFLACTabBar>(find.byType(SpotiFLACTabBar))
-              .selectedIndex,
+          tester.widget<SpotiFLACTabBar>(find.byType(SpotiFLACTabBar)).selectedIndex,
           index,
         );
       }
@@ -395,9 +456,7 @@ void main() {
       'edge icons travel continuously without fading (glass: $blur)',
       (tester) async {
         await pumpShell(tester, blur: blur);
-        final homeButton = find.byKey(
-          const ValueKey('spotiflac-compact-leading'),
-        );
+        final homeButton = find.byKey(const ValueKey('spotiflac-compact-leading'));
         final icon = find.descendant(
           of: homeButton,
           matching: find.byIcon(Icons.home),
@@ -618,9 +677,7 @@ void main() {
   ) async {
     await pumpShell(tester);
     final playerState = tester.state(find.byType(MiniPlayer));
-    final expandedHeight = tester
-        .getSize(find.byType(SpotiFLACBottomBar))
-        .height;
+    final expandedHeight = tester.getSize(find.byType(SpotiFLACBottomBar)).height;
     await tester.drag(find.byType(ListView), const Offset(0, -240));
     await tester.pumpAndSettle();
     expect(chrome.value, isTrue);
@@ -634,10 +691,7 @@ void main() {
     await tester.tap(find.byTooltip('Home'));
     await tester.pumpAndSettle();
     expect(chrome.value, isFalse);
-    expect(
-      tester.getSize(find.byType(SpotiFLACBottomBar)).height,
-      expandedHeight,
-    );
+    expect(tester.getSize(find.byType(SpotiFLACBottomBar)).height, expandedHeight);
     expect(tester.takeException(), isNull);
   });
 
@@ -833,9 +887,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(SpotiFLACSelectionPill), findsNothing);
       expect(
-        tester.element(
-          find.byType(SpotiFLACSelectionPill, skipOffstage: false),
-        ),
+        tester.element(find.byType(SpotiFLACSelectionPill, skipOffstage: false)),
         same(glass),
       );
       expect(TickerMode.valuesOf(glass).enabled, isFalse);

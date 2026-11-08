@@ -4,16 +4,22 @@ import 'package:spotiflac/l10n/l10n.dart';
 import 'package:spotiflac/models/unified_library_item.dart';
 import 'package:spotiflac/providers/music_player_provider.dart';
 import 'package:spotiflac/widgets/desktop/context_menu.dart';
+import 'package:spotiflac/widgets/desktop/desktop_link_transfer_actions.dart';
 import 'package:spotiflac/widgets/playlist_picker_sheet.dart';
+import 'package:spotiflac/services/network_offline_saver.dart';
+import 'package:spotiflac/widgets/network_offline_actions.dart';
+import 'package:spotiflac/providers/network_upload_provider.dart';
+import 'package:spotiflac/widgets/network_upload_actions.dart';
 
 /// Context menu groups for library files (downloaded or scanned), acting on
 /// [items]: the selection the menu was opened on.
 ///
 /// The playback and playlist actions match [LibrarySelectionPlaybackActions];
 /// the screen passes its own selection-bar callbacks for the rest, and omits
-/// those it does not offer. Actions that finish with the menu (play, queue,
-/// playlist, details) call [onDone] to end the selection; the bulk actions
-/// keep it and end it themselves.
+/// those it does not offer. SpotiFLAC Link adds "Send to (phone)" and "Save to
+/// this computer" while a phone is connected. Actions that finish with the
+/// menu (play, queue, playlist, transfers, details) call [onDone] to end the
+/// selection; the bulk actions keep it and end it themselves.
 List<List<ContextMenuAction>> libraryTrackMenuGroups(
   BuildContext context,
   WidgetRef ref, {
@@ -29,6 +35,7 @@ List<List<ContextMenuAction>> libraryTrackMenuGroups(
   final l10n = context.l10n;
   final root = Navigator.of(context, rootNavigator: true).context;
   final count = items.length;
+  final showPlayer = ref.read(playerUiEnabledProvider);
 
   Future<void> enqueue({required bool playNext}) async {
     await ref
@@ -48,16 +55,18 @@ List<List<ContextMenuAction>> libraryTrackMenuGroups(
             onPlay();
           },
         ),
-      ContextMenuAction(
-        icon: Icons.playlist_play,
-        label: l10n.trackPlayNext,
-        onSelected: () => enqueue(playNext: true),
-      ),
-      ContextMenuAction(
-        icon: Icons.queue_music,
-        label: l10n.trackAddToQueue,
-        onSelected: () => enqueue(playNext: false),
-      ),
+      if (showPlayer)
+        ContextMenuAction(
+          icon: Icons.playlist_play,
+          label: l10n.trackPlayNext,
+          onSelected: () => enqueue(playNext: true),
+        ),
+      if (showPlayer)
+        ContextMenuAction(
+          icon: Icons.queue_music,
+          label: l10n.trackAddToQueue,
+          onSelected: () => enqueue(playNext: false),
+        ),
     ],
     [
       ContextMenuAction(
@@ -69,6 +78,30 @@ List<List<ContextMenuAction>> libraryTrackMenuGroups(
           showAddTracksToPlaylistSheet(root, ref, tracks);
         },
       ),
+    ],
+    desktopLinkTransferActions(context, ref, items, onDone: onDone),
+    [
+      if (items.any((item) => networkOfflineOrigin(item) != null))
+        ContextMenuAction(
+          icon: Icons.download_for_offline_outlined,
+          label: l10n.offlineSave,
+          onSelected: () {
+            onDone?.call();
+            saveNetworkOffline(root, ref, items);
+          },
+        ),
+      if (networkUploadOffered(
+        ref.read(networkUploadConnectionsProvider).value,
+        items,
+      ))
+        ContextMenuAction(
+          icon: Icons.cloud_upload_outlined,
+          label: l10n.networkUpload,
+          onSelected: () {
+            onDone?.call();
+            uploadToNetworkStorage(root, ref, items);
+          },
+        ),
     ],
     [
       if (onOpenDetails != null && count == 1)
@@ -96,10 +129,22 @@ List<List<ContextMenuAction>> libraryTrackMenuGroups(
         ),
     ],
     [
+      if (items.every((item) => item.historyItem?.originFilePath != null))
+        ContextMenuAction(
+          icon: Icons.cloud_off_outlined,
+          label: l10n.offlineDeleteServer,
+          destructive: true,
+          onSelected: () {
+            onDone?.call();
+            deleteOfflineServerCopies(root, ref, items);
+          },
+        ),
       if (onDelete != null)
         ContextMenuAction(
           icon: Icons.delete_outline,
-          label: l10n.selectionDeleteTracksCount(count),
+          label: items.every((item) => item.historyItem?.originFilePath != null)
+              ? l10n.offlineRemove
+              : l10n.selectionDeleteTracksCount(count),
           destructive: true,
           onSelected: onDelete,
         ),

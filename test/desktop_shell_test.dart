@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,8 +10,13 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spotiflac/l10n/app_localizations.dart';
 import 'package:spotiflac/models/library_collections.dart';
+import 'package:spotiflac/models/settings.dart';
 import 'package:spotiflac/providers/music_player_provider.dart';
+import 'package:spotiflac/providers/settings_provider.dart';
 import 'package:spotiflac/providers/system_volume_provider.dart';
+import 'package:spotiflac/services/playback_deck.dart';
+import 'package:spotiflac/services/link/desktop/link_desktop_host.dart';
+import 'package:spotiflac/services/remote_playback.dart';
 import 'package:spotiflac/services/shell_navigation_service.dart';
 import 'package:spotiflac/services/user_profile_store.dart';
 import 'package:spotiflac/theme/app_theme.dart';
@@ -19,6 +25,7 @@ import 'package:spotiflac/utils/desktop_platform.dart';
 import 'package:spotiflac/widgets/app_icon.dart';
 import 'package:spotiflac/widgets/desktop/desktop_commands.dart';
 import 'package:spotiflac/widgets/desktop/desktop_downloads_button.dart';
+import 'package:spotiflac/widgets/desktop/desktop_inspector.dart';
 import 'package:spotiflac/widgets/desktop/desktop_navigation.dart';
 import 'package:spotiflac/widgets/desktop/desktop_player_bar.dart';
 import 'package:spotiflac/widgets/desktop/desktop_shortcuts.dart';
@@ -26,9 +33,19 @@ import 'package:spotiflac/widgets/desktop/desktop_window.dart';
 import 'package:spotiflac/widgets/expressive_navigation_bar.dart';
 import 'package:spotiflac/widgets/mini_player.dart';
 import 'package:spotiflac/widgets/spotiflac_bottom_bar.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'support/fixed_settings.dart';
 
 class _FakeController implements MusicPlayerController {
   final calls = <String>[];
+  VoidCallback? onDismiss;
+
+  @override
+  Future<void> dismiss() async {
+    calls.add('dismiss');
+    onDismiss?.call();
+  }
 
   @override
   Future<void> togglePlayPause(bool isPlaying) async =>
@@ -42,6 +59,20 @@ class _FakeController implements MusicPlayerController {
 
   @override
   Future<void> seek(Duration position) async => calls.add('seek');
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _RemotePlayback implements RemotePlayback {
+  @override
+  String get name => 'Phone';
+
+  @override
+  Stream<RemoteTransfer?> get transfers => const Stream.empty();
+
+  @override
+  Stream<double> get volumes => Stream.value(0.5);
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -72,10 +103,7 @@ const _libraryLinks = [
 ];
 
 List<DesktopDestination> _destinations({required bool spotiflac}) => [
-  for (final tab in desktopDestinationTabs(
-    spotiflac: spotiflac,
-    showStore: true,
-  ))
+  for (final tab in desktopDestinationTabs(spotiflac: spotiflac, showStore: true))
     DesktopDestination(
       tab: tab,
       icon: Icons.circle_outlined,
@@ -91,10 +119,13 @@ void main() {
   late List<ShellTab> selections;
 
   setUp(() {
+    // The rail's menu button saves its state.
+    SharedPreferences.setMockInitialValues({});
     debugDesktopPlatformOverride = true;
     debugDesktopTitleBarInContentOverride = false;
     desktopSidebarCollapsed.value = false;
     desktopSidebarLink.value = null;
+    desktopPlayerDismissed.value = false;
     controller = _FakeController();
     volumeWrites = [];
     selections = [];
@@ -105,35 +136,62 @@ void main() {
     debugDesktopTitleBarInContentOverride = null;
     desktopSidebarCollapsed.value = false;
     desktopSidebarLink.value = null;
+    desktopPlayerDismissed.value = false;
   });
 
-  List<Override> overrides({MediaItem? item = _track, bool playing = false}) =>
-      [
-        currentMediaItemProvider.overrideWithBuild(
-          (ref, notifier) => Stream.value(item),
+  List<Override> overrides({
+    MediaItem? item = _track,
+    Stream<MediaItem?>? mediaItems,
+    bool playing = false,
+    bool loading = false,
+    bool linkAvailable = false,
+    RemotePlayback? remote,
+    String playerMode = 'internal',
+    UserProfile profile = const UserProfile(name: 'Ada Lovelace'),
+  }) => [
+    settingsProvider.overrideWith(
+      () => FixedSettingsNotifier(AppSettings(playerMode: playerMode)),
+    ),
+    currentMediaItemProvider.overrideWithBuild(
+      (ref, notifier) => mediaItems ?? Stream.value(item),
+    ),
+    playbackStateProvider.overrideWith(
+      (ref) => Stream.value(
+        PlaybackState(
+          playing: playing,
+          processingState: loading
+              ? AudioProcessingState.buffering
+              : AudioProcessingState.ready,
         ),
-        playbackStateProvider.overrideWith(
-          (ref) => Stream.value(PlaybackState(playing: playing)),
-        ),
-        musicPlayerControllerProvider.overrideWithValue(controller),
-        systemVolumeProvider.overrideWith((ref) => Stream.value(0.5)),
-        systemVolumeWriterProvider.overrideWithValue((value) async {
-          volumeWrites.add(value);
-        }),
-        desktopSidebarPlaylistsProvider.overrideWithValue([_playlist]),
-        desktopSidebarProfileProvider.overrideWithValue(
-          const UserProfile(name: 'Ada Lovelace'),
-        ),
-      ];
+      ),
+    ),
+    activeRemotePlaybackProvider.overrideWithValue(remote),
+    linkDevicesAvailableProvider.overrideWithValue(linkAvailable),
+    musicPlayerControllerProvider.overrideWithValue(controller),
+    systemVolumeProvider.overrideWith((ref) => Stream.value(0.5)),
+    systemVolumeWriterProvider.overrideWithValue((value) async {
+      volumeWrites.add(value);
+    }),
+    desktopSidebarPlaylistsProvider.overrideWithValue([_playlist]),
+    desktopSidebarProfileProvider.overrideWithValue(profile),
+  ];
 
   Future<void> pumpShell(
     WidgetTester tester, {
     required bool spotiflac,
     required double width,
+    ShellTab selected = ShellTab.home,
     MediaItem? item = _track,
+    Stream<MediaItem?>? mediaItems,
+    bool playing = false,
+    bool loading = false,
+    bool linkAvailable = false,
+    RemotePlayback? remote,
+    String playerMode = 'internal',
     List<DesktopSidebarLink> libraryLinks = const [],
     ValueChanged<String>? onOpenLibraryLink,
     VoidCallback? onOpenProfile,
+    UserProfile profile = const UserProfile(name: 'Ada Lovelace'),
   }) async {
     tester.view.physicalSize = Size(width, 800);
     tester.view.devicePixelRatio = 1;
@@ -141,7 +199,16 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       ProviderScope(
-        overrides: overrides(item: item),
+        overrides: overrides(
+          item: item,
+          mediaItems: mediaItems,
+          playing: playing,
+          loading: loading,
+          linkAvailable: linkAvailable,
+          remote: remote,
+          profile: profile,
+          playerMode: playerMode,
+        ),
         child: MaterialApp(
           theme: spotiflac
               ? SpotiFLACTheme.build(Brightness.light)
@@ -151,7 +218,7 @@ void main() {
           home: Scaffold(
             body: DesktopShellLayout(
               destinations: _destinations(spotiflac: spotiflac),
-              selected: ShellTab.home,
+              selected: selected,
               onSelected: selections.add,
               libraryLinks: libraryLinks,
               onOpenLibraryLink: onOpenLibraryLink,
@@ -162,7 +229,12 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    if (loading) {
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+    } else {
+      await tester.pumpAndSettle();
+    }
   }
 
   /// The page shown in the content pane.
@@ -177,7 +249,140 @@ void main() {
     expect(find.byType(MiniPlayer), findsNothing);
   }
 
+  for (final spotiflac in [false, true]) {
+    testWidgets('paused desktop player dismisses and returns for a new song '
+        '($spotiflac)', (tester) async {
+      final items = StreamController<MediaItem?>();
+      addTearDown(items.close);
+      controller.onDismiss = () => items.add(null);
+      await pumpShell(
+        tester,
+        spotiflac: spotiflac,
+        width: 900,
+        mediaItems: items.stream,
+      );
+      items.add(_track);
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Dismiss'), findsOneWidget);
+      desktopInspectorPanel.value = DesktopInspectorPanel.upNext;
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('desktop-player-dismiss')));
+      await tester.pumpAndSettle();
+
+      expect(controller.calls, ['dismiss']);
+      expect(find.byType(DesktopPlayerBar), findsNothing);
+      expect(desktopInspectorPanel.value, isNull);
+      expect(desktopNowPlayingOpen.value, isFalse);
+      expect(tester.getSize(contentPage()).height, 800);
+      expect(
+        MediaQuery.paddingOf(tester.element(find.text('content'))).bottom,
+        0,
+      );
+
+      items.add(_track.copyWith(id: 'next', title: 'Another song'));
+      await tester.pumpAndSettle();
+      expect(find.byType(DesktopPlayerBar), findsOneWidget);
+      expect(find.text('Another song'), findsWidgets);
+      expect(tester.takeException(), isNull);
+    });
+
+    for (final state in ['playing', 'loading', 'remote', 'idle']) {
+      testWidgets('desktop player cannot dismiss $state playback ($spotiflac)', (
+        tester,
+      ) async {
+        await pumpShell(
+          tester,
+          spotiflac: spotiflac,
+          width: 900,
+          item: state == 'idle' ? null : _track,
+          playing: state == 'playing',
+          loading: state == 'loading',
+          remote: state == 'remote' ? _RemotePlayback() : null,
+        );
+        expect(
+          find.byKey(const ValueKey('desktop-player-dismiss')),
+          findsNothing,
+        );
+        expect(controller.calls, isEmpty);
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    testWidgets('external mode removes desktop player surfaces ($spotiflac)', (
+      tester,
+    ) async {
+      desktopNowPlayingOpen.value = true;
+      desktopInspectorPanel.value = DesktopInspectorPanel.lyrics;
+      addTearDown(() {
+        desktopNowPlayingOpen.value = false;
+        desktopInspectorPanel.value = null;
+      });
+      await pumpShell(
+        tester,
+        spotiflac: spotiflac,
+        width: 1400,
+        playerMode: 'external',
+      );
+      expect(find.byType(DesktopPlayerBar), findsNothing);
+      expect(find.byKey(const ValueKey('desktop-now-playing')), findsNothing);
+      expect(find.byType(DesktopInspector), findsNothing);
+      expect(find.text('A song'), findsNothing);
+      expect(tester.getSize(contentPage()).height, 800);
+      expect(
+        MediaQuery.paddingOf(tester.element(find.text('content'))).bottom,
+        0,
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   group('Material shell', () {
+    for (final width in [800.0, 900.0]) {
+      for (final playing in [false, true]) {
+        for (final link in [false, true]) {
+          testWidgets(
+            'player controls fit at $width (playing: $playing, Link: $link)',
+            (tester) async {
+              await pumpShell(
+                tester,
+                spotiflac: false,
+                width: width,
+                playing: playing,
+                linkAvailable: link,
+              );
+              expect(tester.takeException(), isNull);
+              final bar = tester.getRect(find.byType(DesktopPlayerBar));
+              for (final key in [
+                'desktop-player-lyrics',
+                'desktop-player-up-next',
+                'desktop-player-mini',
+                if (link) 'desktop-link-devices-button',
+                'desktop-downloads-button',
+                if (!playing) 'desktop-player-dismiss',
+              ]) {
+                final button = find.byKey(ValueKey(key));
+                expect(button, findsOneWidget);
+                final rect = tester.getRect(button);
+                expect(rect.left, greaterThanOrEqualTo(bar.left));
+                expect(rect.right, lessThanOrEqualTo(bar.right));
+                expect(rect.top, greaterThanOrEqualTo(bar.top));
+                expect(rect.bottom, lessThanOrEqualTo(bar.bottom));
+              }
+              await tester.tap(find.byTooltip('Next track (Ctrl+Right)'));
+              expect(controller.calls, ['next']);
+              if (!playing) {
+                await tester.tap(
+                  find.byKey(const ValueKey('desktop-player-dismiss')),
+                );
+                expect(controller.calls, ['next', 'dismiss']);
+              }
+              expect(tester.takeException(), isNull);
+            },
+          );
+        }
+      }
+    }
+
     testWidgets('collapses the rail at 900 and shows the player bar', (
       tester,
     ) async {
@@ -261,6 +466,23 @@ void main() {
       expect(find.byType(DesktopDownloadsButton), findsOneWidget);
     });
 
+    testWidgets('the sidebar shortcut remembers the rail state', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      restoreDesktopSidebar(prefs);
+      // Wide windows open with the rail expanded.
+      expect(desktopSidebarCollapsed.value, isFalse);
+
+      toggleDesktopSidebar();
+      await tester.pump();
+      expect(desktopSidebarCollapsed.value, isTrue);
+      desktopSidebarCollapsed.value = false;
+      restoreDesktopSidebar(prefs);
+      expect(desktopSidebarCollapsed.value, isTrue);
+    });
+
     testWidgets('expanded rail keeps a gap between indicators', (tester) async {
       await pumpShell(tester, spotiflac: false, width: 1400);
 
@@ -270,47 +492,168 @@ void main() {
       expect(library.center.dy - home.center.dy, closeTo(56 + 8, 0.5));
     });
 
-    testWidgets('rail starts collapsed with no menu button', (tester) async {
+    testWidgets('collapsed rail shows icons alone and its menu expands it', (
+      tester,
+    ) async {
       desktopSidebarCollapsed.value = true;
       await pumpShell(tester, spotiflac: false, width: 1400);
       double railWidth() =>
           tester.getSize(find.byType(DesktopNavigationRail)).width;
       expect(railWidth(), closeTo(desktopCollapsedRailWidth, 0.5));
-      for (final icon in [Icons.menu, Icons.menu_open]) {
-        expect(
-          find.byWidgetPredicate((w) => w is AppIcon && w.icon == icon),
-          findsNothing,
-        );
-      }
+      Finder menuIcon(IconData icon) =>
+          find.byWidgetPredicate((w) => w is AppIcon && w.icon == icon);
+      expect(menuIcon(Icons.menu), findsOneWidget);
+      // The menu button sits over the destination icons.
+      expect(
+        tester.getCenter(menuIcon(Icons.menu)).dx,
+        closeTo(tester.getCenter(find.byTooltip('library')).dx, 0.5),
+      );
+      // No labels under the icons: tooltips and semantics name them, and
+      // the whole 56dp square around an icon takes the click.
+      expect(find.text('library'), findsNothing);
+      expect(find.byTooltip('library'), findsOneWidget);
+      final semantics = tester.ensureSemantics();
+      await tester.pump();
+      expect(
+        tester
+            .getSemantics(find.byKey(const ValueKey('desktop-rail:library')))
+            .label,
+        // The label, then the badge count.
+        'library\n2',
+      );
+      semantics.dispose();
+      final library = tester.getRect(find.byTooltip('library'));
+      expect(library.size, const Size(56, 56));
+      await tester.tapAt(library.topLeft + const Offset(4, 4));
+      expect(selections, [ShellTab.library]);
 
-      // The sidebar shortcut expands it; halfway, the rail is between its
-      // widths with one label showing.
-      desktopSidebarCollapsed.value = false;
+      // The menu button expands it; halfway, the rail is between its widths
+      // with one label showing.
+      await tester.tap(find.byKey(const ValueKey('desktop-rail-menu')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 120));
+      expect(desktopSidebarCollapsed.value, isFalse);
       expect(railWidth(), greaterThan(desktopCollapsedRailWidth));
       expect(railWidth(), lessThan(desktopSidebarWidth));
       expect(find.text('library'), findsOneWidget);
       await tester.pumpAndSettle();
       expect(railWidth(), closeTo(desktopSidebarWidth, 0.5));
+      expect(menuIcon(Icons.menu_open), findsOneWidget);
     });
 
-    testWidgets('expanded rail pills hug their labels and take the clicks', (
+    testWidgets('narrow windows hide the rail menu button', (tester) async {
+      await pumpShell(tester, spotiflac: false, width: 900);
+
+      expect(find.byKey(const ValueKey('desktop-rail-menu')), findsNothing);
+    });
+
+    testWidgets('expanded rail lists the playlists under the destinations', (
+      tester,
+    ) async {
+      final opened = <String>[];
+      await pumpShell(
+        tester,
+        spotiflac: false,
+        width: 1400,
+        onOpenLibraryLink: opened.add,
+      );
+
+      final settings = tester.getRect(find.text('settings'));
+      final allPlaylists = tester.getRect(find.text('All Playlists'));
+      final playlist = tester.getRect(find.text('Road trip'));
+      expect(find.text('Playlists'), findsOneWidget);
+      expect(
+        allPlaylists.top,
+        greaterThan(tester.getRect(find.text('repository')).bottom),
+      );
+      expect(playlist.top, greaterThan(allPlaylists.bottom));
+      expect(settings.top, greaterThan(playlist.bottom));
+      // Rows start their icons at the destination icons and fill the rail.
+      final row = tester.getRect(
+        find.byKey(const ValueKey('desktop-rail-link:playlist:mix')),
+      );
+      expect(row.height, 44);
+      expect(
+        tester
+            .getRect(find.byKey(const ValueKey('desktop-rail-link:playlists')))
+            .width,
+        row.width,
+      );
+
+      await tester.tap(find.text('Road trip'));
+      await tester.tap(find.text('All Playlists'));
+      expect(opened, ['playlist:mix', 'playlists']);
+
+      // An open playlist takes the selection from Library.
+      await pumpShell(
+        tester,
+        spotiflac: false,
+        width: 1400,
+        selected: ShellTab.library,
+        onOpenLibraryLink: opened.add,
+      );
+      bool selectedFill(Finder finder) =>
+          tester
+              .widget<Material>(
+                find.descendant(of: finder, matching: find.byType(Material)),
+              )
+              .type ==
+          MaterialType.canvas;
+      final mix = find.byKey(const ValueKey('desktop-rail-link:playlist:mix'));
+      expect(selectedFill(mix), isFalse);
+      desktopSidebarLink.value = 'playlist:mix';
+      await tester.pumpAndSettle();
+      expect(selectedFill(mix), isTrue);
+
+      // Collapsed, only the destinations show.
+      desktopSidebarCollapsed.value = true;
+      await tester.pumpAndSettle();
+      expect(find.text('Playlists'), findsNothing);
+      expect(find.text('Road trip'), findsNothing);
+    });
+
+    testWidgets('Library leaves an open playlist for the Library root', (
+      tester,
+    ) async {
+      final opened = <String>[];
+      await pumpShell(
+        tester,
+        spotiflac: false,
+        width: 1400,
+        onOpenLibraryLink: opened.add,
+      );
+
+      // Nothing open: Library switches tabs.
+      await tester.tap(find.text('library'));
+      expect(selections, [ShellTab.library]);
+      expect(opened, isEmpty);
+
+      // A playlist left open from another tab: Library returns to the root
+      // instead of showing the playlist again.
+      desktopSidebarLink.value = DesktopSidebarLink.allPlaylistsId;
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('library'));
+      expect(opened, [DesktopSidebarLink.libraryRootId]);
+      expect(selections, [ShellTab.library]);
+    });
+
+    testWidgets('expanded rail pills span the rail and take the clicks', (
       tester,
     ) async {
       await pumpShell(tester, spotiflac: false, width: 1400);
 
       final library = tester.getRect(find.text('library'));
       final settings = tester.getRect(find.text('settings'));
-      // Beside a pill, inside the rail: nothing happens.
+      // In the rail's margin beside a pill: nothing happens.
       final rail = tester.getRect(find.byType(DesktopNavigationRail));
       await tester.tapAt(Offset(rail.right - 12, library.center.dy));
       await tester.tapAt(Offset(rail.right - 12, settings.center.dy));
       expect(selections, isEmpty);
 
-      // On the pill, just past the label: selects.
-      await tester.tapAt(Offset(library.right + 8, library.center.dy));
-      await tester.tapAt(Offset(settings.right + 8, settings.center.dy));
+      // Near the pill's far end, past any label: selects, as the Playlists
+      // rows do.
+      await tester.tapAt(Offset(rail.right - 28, library.center.dy));
+      await tester.tapAt(Offset(rail.right - 28, settings.center.dy));
       expect(selections, [ShellTab.library, ShellTab.settings]);
     });
   });
@@ -323,14 +666,15 @@ void main() {
         expect(find.byType(DesktopSidebar), findsOneWidget);
         expect(
           tester.getSize(find.byType(DesktopSidebar)).width,
-          DesktopSidebar.footprint,
+          DesktopSidebar.width,
         );
         // The Material rail must not appear in the SpotiFLAC style.
         expect(find.byType(DesktopNavigationRail), findsNothing);
         expect(find.byType(NavigationRail), findsNothing);
         expectNoTouchNavigation();
         expect(find.byType(DesktopPlayerBar), findsOneWidget);
-        expect(find.text('A song'), findsOneWidget);
+        // A title too long for the capsule also shows its marquee copy.
+        expect(find.text('A song'), findsWidgets);
         expect(find.byKey(const ValueKey('desktop-sidebar-search')), findsOne);
       });
     }
@@ -359,10 +703,53 @@ void main() {
       expect(DesktopPlayerBar.floatingWidth(2000), 900);
     });
 
+    testWidgets(
+      'capsule artwork grows and offers Now Playing under the mouse',
+      (tester) async {
+        await pumpShell(tester, spotiflac: true, width: 1400);
+
+        final overlay = find.byKey(
+          const ValueKey('desktop-player-artwork-overlay'),
+        );
+        expect(tester.widget<AnimatedOpacity>(overlay).opacity, 0);
+        final scale = find.ancestor(
+          of: overlay,
+          matching: find.byType(AnimatedScale),
+        );
+        expect(tester.widget<AnimatedScale>(scale).scale, 1);
+
+        final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+        addTearDown(mouse.removePointer);
+        await mouse.addPointer(location: Offset.zero);
+        await mouse.moveTo(tester.getCenter(overlay));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+
+        expect(tester.widget<AnimatedOpacity>(overlay).opacity, 1);
+        expect(tester.widget<AnimatedScale>(scale).scale, 1.1);
+      },
+    );
+
     testWidgets('player capsule keeps volume in a popover', (tester) async {
       await pumpShell(tester, spotiflac: true, width: 1400);
 
       expect(find.byType(Slider), findsOneWidget, reason: 'seek bar only');
+      playbackOutputVolume.value = 0.5;
+      addTearDown(() => playbackOutputVolume.value = 1);
+      tester.binding.handlePointerEvent(
+        PointerScrollEvent(
+          position: tester.getCenter(
+            find.byKey(const ValueKey('desktop-player-volume')),
+          ),
+          scrollDelta: const Offset(0, -20),
+        ),
+      );
+      await tester.pump();
+      expect(volumeWrites.single, closeTo(0.55, 0.000001));
+      expect(
+        find.byKey(const ValueKey('desktop-player-volume-popover')),
+        findsNothing,
+      );
       await tester.tap(find.byKey(const ValueKey('desktop-player-volume')));
       await tester.pumpAndSettle();
       expect(
@@ -398,8 +785,61 @@ void main() {
         find.ancestor(of: find.text('home'), matching: find.byType(InkWell)),
       );
       expect(home.height, 32);
-      // Music's measurements: rows inset 6pt in a panel inset 8pt.
-      expect(home.left, DesktopSidebar.margin + 6);
+      // The sidebar runs to the window's edge, so its rows bring the inset.
+      expect(home.left, 10);
+    });
+
+    testWidgets('the sidebar is one piece with the window', (tester) async {
+      await pumpShell(tester, spotiflac: true, width: 1400);
+
+      final window = tester.getRect(find.byType(MaterialApp));
+      final sidebar = tester.getRect(find.byType(DesktopSidebar));
+      expect(sidebar.left, window.left);
+      expect(sidebar.top, window.top);
+      expect(sidebar.bottom, window.bottom);
+      expect(
+        tester.getRect(find.byKey(const ValueKey('desktop-content'))).left,
+        sidebar.right,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(DesktopSidebar),
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is DecoratedBox &&
+                switch (widget.decoration) {
+                  BoxDecoration(:final borderRadius, :final boxShadow) =>
+                    borderRadius != null || boxShadow != null,
+                  _ => false,
+                },
+          ),
+        ),
+        findsNothing,
+        reason: 'the panel has no corners or shadow of its own',
+      );
+    });
+
+    testWidgets('the sidebar shows the page hero under its tint', (
+      tester,
+    ) async {
+      addTearDown(() => ShellNavigationService.chromeBackdrop.value = null);
+      await pumpShell(tester, spotiflac: true, width: 1400);
+      const backdrop = ValueKey('desktop-sidebar-backdrop');
+      expect(find.byKey(backdrop), findsNothing);
+
+      ShellNavigationService.chromeBackdrop.value = '/tmp/artist.jpg';
+      await tester.pumpAndSettle();
+      final top = tester.getRect(find.byKey(backdrop)).top;
+      expect(top, 0);
+
+      ShellNavigationService.chromeBackdropOffset.value = 120;
+      await tester.pump();
+      expect(tester.getRect(find.byKey(backdrop)).top, top - 120);
+      ShellNavigationService.chromeBackdropOffset.value = 0;
+
+      ShellNavigationService.chromeBackdrop.value = null;
+      await tester.pumpAndSettle();
+      expect(find.byKey(backdrop), findsNothing);
     });
 
     testWidgets('sidebar lists Library pages and playlists', (tester) async {
@@ -442,6 +882,28 @@ void main() {
       expect(selections, isEmpty);
     });
 
+    testWidgets('an unnamed account row shows a label that fits', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await pumpShell(
+        tester,
+        spotiflac: true,
+        width: 1400,
+        profile: const UserProfile(),
+      );
+
+      expect(find.text('Profile'), findsOneWidget);
+      expect(find.text('Set up your profile'), findsNothing);
+      expect(
+        tester.getSemantics(
+          find.byKey(const ValueKey('desktop-sidebar-account')),
+        ),
+        matchesSemantics(label: 'Set up your profile', isButton: true),
+      );
+      semantics.dispose();
+    });
+
     testWidgets('sidebar stays in narrow windows and ignores the shortcut', (
       tester,
     ) async {
@@ -457,11 +919,11 @@ void main() {
       );
       expect(
         tester.getSize(find.byType(DesktopSidebar)).width,
-        DesktopSidebar.footprint,
+        DesktopSidebar.width,
       );
       expect(
         tester.getRect(find.byKey(const ValueKey('desktop-content'))).left,
-        DesktopSidebar.footprint,
+        DesktopSidebar.width,
       );
     });
   });
@@ -482,10 +944,14 @@ void main() {
 
     tearDown(() => ShellNavigationService.unregisterTabSelectionHandler(owner));
 
-    Future<void> pumpApp(WidgetTester tester, {bool playing = false}) async {
+    Future<void> pumpApp(
+      WidgetTester tester, {
+      bool playing = false,
+      String playerMode = 'internal',
+    }) async {
       await tester.pumpWidget(
         ProviderScope(
-          overrides: overrides(playing: playing),
+          overrides: overrides(playing: playing, playerMode: playerMode),
           child: MaterialApp(
             navigatorKey: navigatorKey,
             theme: AppTheme.light(),
@@ -525,6 +991,32 @@ void main() {
       await press(tester, LogicalKeyboardKey.arrowDown, control: true);
       expect(volumeWrites, [closeTo(0.55, 1e-9), closeTo(0.45, 1e-9)]);
     });
+
+    testWidgets(
+      'external mode ignores player shortcuts while navigation still works',
+      (tester) async {
+        await pumpApp(tester, playerMode: 'external');
+        await press(tester, LogicalKeyboardKey.space);
+        await press(tester, LogicalKeyboardKey.arrowRight, control: true);
+        await press(tester, LogicalKeyboardKey.arrowUp, control: true);
+        final context = tester.element(find.text('home'));
+        for (final command in [
+          DesktopCommand.lyrics,
+          DesktopCommand.upNext,
+          DesktopCommand.miniPlayer,
+        ]) {
+          Actions.maybeInvoke(context, DesktopCommandIntent(command));
+        }
+        await tester.pump();
+        expect(controller.calls, isEmpty);
+        expect(volumeWrites, isEmpty);
+        expect(desktopNowPlayingOpen.value, isFalse);
+        expect(desktopInspectorPanel.value, isNull);
+        expect(desktopMiniPlayerOpen.value, isFalse);
+        await press(tester, LogicalKeyboardKey.comma, control: true);
+        expect(requested, [ShellTab.settings]);
+      },
+    );
 
     testWidgets('leave Space and arrows to a focused text field', (
       tester,

@@ -11,12 +11,16 @@ import 'package:spotiflac/l10n/app_localizations.dart';
 import 'package:spotiflac/models/unified_library_item.dart';
 import 'package:spotiflac/providers/download_history_provider.dart';
 import 'package:spotiflac/providers/library_search_provider.dart';
+import 'package:spotiflac/providers/library_lyrics_search_provider.dart';
 import 'package:spotiflac/providers/playback_provider.dart';
 import 'package:spotiflac/screens/track_metadata_screen.dart';
 import 'package:spotiflac/services/library_database.dart';
 import 'package:spotiflac/services/library_search.dart';
+import 'package:spotiflac/services/library_lyrics_search.dart';
 import 'package:spotiflac/services/music_player_service.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
+import 'package:spotiflac/utils/desktop_platform.dart';
+import 'package:spotiflac/widgets/app_choice_chip.dart';
 import 'package:spotiflac/widgets/library_search_results.dart';
 import 'package:spotiflac/widgets/track_card.dart';
 
@@ -46,6 +50,94 @@ LibrarySearchHit _hit(
 );
 
 void main() {
+  for (final desktop in [false, true]) {
+    for (final spotiflac in [false, true]) {
+      testWidgets(
+        'Lyrics filter is explicit, reuses indexing while typing, and cancels on exit ($desktop/$spotiflac)',
+        (tester) async {
+          debugDesktopPlatformOverride = desktop;
+          addTearDown(() => debugDesktopPlatformOverride = null);
+          tester.view.physicalSize = Size(desktop ? 1280 : 390, 900);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.reset);
+          SharedPreferences.setMockInitialValues({});
+          final query = ValueNotifier('moonlight');
+          addTearDown(query.dispose);
+          var started = 0;
+          var stopped = 0;
+          final progress = StreamController<LibraryLyricsIndexProgress>();
+          addTearDown(progress.close);
+          final queries = <String>[];
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [
+                librarySearchProvider.overrideWith((ref, request) async => []),
+                libraryLyricsIndexProvider.overrideWith((ref) {
+                  started++;
+                  ref.onDispose(() => stopped++);
+                  return progress.stream;
+                }),
+                libraryLyricsSearchProvider.overrideWith((ref, request) async {
+                  queries.add(request.query);
+                  return [_hit(LibrarySearchKind.songs, 0, query: 'Matching')];
+                }),
+              ],
+              child: MaterialApp(
+                theme: spotiflac
+                    ? SpotiFLACTheme.build(Brightness.light)
+                    : ThemeData(),
+                localizationsDelegates: AppLocalizations.localizationsDelegates,
+                supportedLocales: AppLocalizations.supportedLocales,
+                home: Scaffold(
+                  body: ValueListenableBuilder<String>(
+                    valueListenable: query,
+                    builder: (context, value, _) => CustomScrollView(
+                      slivers: [
+                        LibrarySearchResults(
+                          query: value,
+                          shelves: spotiflac,
+                          onOpenArtist: (_) {},
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          expect(started, 0);
+          expect(queries, isEmpty);
+          final lyrics = find.widgetWithText(AppChoiceChip, 'Lyrics');
+          await tester.ensureVisible(lyrics);
+          await tester.pumpAndSettle();
+          await tester.tap(lyrics);
+          await tester.pump();
+          await tester.pump();
+          progress.add(const LibraryLyricsIndexProgress(checked: 8));
+          await tester.pump();
+          await tester.pump();
+          expect(started, 1);
+          expect(find.textContaining('8 songs checked'), findsOneWidget);
+          expect(find.text('Matching songs 0'), findsOneWidget);
+          query.value = 'dancing';
+          await tester.pump();
+          await tester.pump();
+          expect(queries, ['moonlight', 'dancing']);
+          expect(started, 1);
+          final all = find.widgetWithText(AppChoiceChip, 'All');
+          await tester.ensureVisible(all);
+          await tester.pump(const Duration(milliseconds: 300));
+          await tester.tap(all);
+          await tester.pumpAndSettle();
+          expect(stopped, 1);
+          expect(find.textContaining('songs checked'), findsNothing);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+
   for (final spotiflac in [false, true]) {
     for (final local in [false, true]) {
       testWidgets(
@@ -179,9 +271,7 @@ void main() {
             }),
           ],
           child: MaterialApp(
-            theme: spotiflac
-                ? SpotiFLACTheme.build(Brightness.dark)
-                : ThemeData(),
+            theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : ThemeData(),
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             home: Scaffold(
@@ -314,9 +404,7 @@ void main() {
               ),
             ],
             child: MaterialApp(
-              theme: spotiflac
-                  ? SpotiFLACTheme.build(Brightness.dark)
-                  : ThemeData(),
+              theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : ThemeData(),
               localizationsDelegates: AppLocalizations.localizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
               home: Scaffold(
@@ -371,5 +459,110 @@ void main() {
         expect(tester.takeException(), isNull);
       },
     );
+  }
+
+  for (final spotiflac in [false, true]) {
+    testWidgets('wide Library search offers covers, songs included ($spotiflac)', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues({});
+      FlutterSecureStorage.setMockInitialValues({});
+      tester.view.physicalSize = const Size(1280, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final requests = <LibrarySearchRequest>[];
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            librarySearchProvider.overrideWith((ref, request) async {
+              requests.add(request);
+              return List.generate(request.limit, (i) {
+                final hit = _hit(request.kind, request.offset + i);
+                return request.kind == LibrarySearchKind.songs
+                    ? LibrarySearchHit(
+                        kind: hit.kind,
+                        id: hit.id,
+                        title: hit.title,
+                        source: 'local',
+                      )
+                    : hit;
+              });
+            }),
+            librarySearchTrackProvider.overrideWith(
+              (ref, key) async => UnifiedLibraryItem.fromLocalLibrary(
+                LocalLibraryItem(
+                  id: key.id,
+                  trackName: 'Song ${key.id}',
+                  artistName: 'Artist',
+                  albumName: 'Album',
+                  filePath: '/music/${key.id}.mp3',
+                  scannedAt: DateTime(2026),
+                ),
+              ),
+            ),
+          ],
+          child: MaterialApp(
+            theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : ThemeData(),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Scaffold(
+              body: CustomScrollView(
+                slivers: [
+                  LibrarySearchResults(query: 'Found', onOpenArtist: (_) {}),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      // Rows until the shared view setting picks covers.
+      expect(find.byType(TrackCard), findsWidgets);
+      expect(find.byTooltip('Grid'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Grid'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TrackCard), findsNothing);
+      expect(find.byTooltip('List'), findsOneWidget);
+      // The overview: one shelf per kind, songs as covers the albums' size.
+      expect(find.byType(SliverGrid), findsNothing);
+      final song = find.byKey(const ValueKey('songs:local:0'));
+      expect(song, findsOneWidget);
+      expect(
+        tester.getSize(song).width,
+        tester.getSize(find.byKey(const ValueKey('albums::0'))).width,
+      );
+
+      // One kind fills a grid of covers and still pages.
+      await tester.tap(find.text('Songs').first);
+      await tester.pumpAndSettle();
+      expect(requests.last.kind, LibrarySearchKind.songs);
+      expect(requests.last.limit, 41);
+      expect(find.byType(SliverGrid), findsOneWidget);
+      expect(find.byType(TrackCard), findsNothing);
+
+      // A long press selects, as on the rows.
+      await tester.longPress(find.text('Found songs 0'));
+      await tester.pumpAndSettle();
+      expect(find.text('1 selected'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('songs:local:0')),
+          matching: find.byIcon(Icons.check),
+        ),
+        findsOneWidget,
+      );
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.textContaining('selected'), findsNothing);
+
+      // A narrow pane keeps the rows and offers no switch.
+      tester.view.physicalSize = const Size(700, 1600);
+      await tester.pumpAndSettle();
+      expect(find.byType(SliverGrid), findsNothing);
+      expect(find.byType(TrackCard), findsWidgets);
+      expect(find.byTooltip('List'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
   }
 }

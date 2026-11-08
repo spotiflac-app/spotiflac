@@ -7,35 +7,34 @@ import 'package:spotiflac/widgets/spotiflac_artist_header.dart';
 
 void main() {
   for (final brightness in Brightness.values) {
-    testWidgets(
-      'SpotiFLAC loading layouts fit a narrow screen in $brightness',
-      (tester) async {
-        tester.view.physicalSize = const Size(320, 640);
-        tester.view.devicePixelRatio = 1;
-        addTearDown(tester.view.reset);
-        for (final skeleton in const [
-          ArtistScreenSkeleton(showCoverHeader: false),
-          AlbumTrackListSkeleton(showCoverHeader: true),
-          TrackListSkeleton(showCoverHeader: true),
-        ]) {
-          await tester.pumpWidget(
-            MaterialApp(
-              theme: SpotiFLACTheme.build(brightness),
-              home: Scaffold(body: skeleton),
-            ),
-          );
-          await tester.pump(const Duration(milliseconds: 100));
-          expect(tester.takeException(), isNull);
-          await tester.drag(
-            find.byType(SingleChildScrollView).first,
-            const Offset(0, -350),
-          );
-          await tester.pump(const Duration(milliseconds: 100));
-          expect(tester.takeException(), isNull);
-        }
-        await tester.pumpWidget(const SizedBox.shrink());
-      },
-    );
+    testWidgets('SpotiFLAC loading layouts fit a narrow screen in $brightness', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      for (final skeleton in const [
+        ArtistScreenSkeleton(showCoverHeader: false),
+        AlbumTrackListSkeleton(showCoverHeader: true),
+        TrackListSkeleton(showCoverHeader: true),
+      ]) {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: SpotiFLACTheme.build(brightness),
+            home: Scaffold(body: skeleton),
+          ),
+        );
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(tester.takeException(), isNull);
+        await tester.drag(
+          find.byType(SingleChildScrollView).first,
+          const Offset(0, -350),
+        );
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(tester.takeException(), isNull);
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
   }
 
   testWidgets(

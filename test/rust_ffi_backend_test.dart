@@ -376,9 +376,7 @@ void main() {
     test('prefers the environment override', () {
       expect(
         desktopBackendLibraryCandidates(
-          environment: {
-            'SPOTIFLAC_DESKTOP_LIB': '/dev/libspotiflac_desktop.dylib',
-          },
+          environment: {'SPOTIFLAC_DESKTOP_LIB': '/dev/libspotiflac_desktop.dylib'},
           operatingSystem: 'macos',
           executable: '/Applications/SpotiFLAC.app/Contents/MacOS/SpotiFLAC',
         ),

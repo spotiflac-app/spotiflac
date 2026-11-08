@@ -11,6 +11,13 @@ import 'package:spotiflac/services/playback_equalizer.dart';
 
 final _log = AppLogger('AudioOutput');
 
+/// [url] marked for the Darwin audioplayers fork as a file still arriving.
+/// The fork then prepares it without indexing its timing first, which would
+/// read to the end of a file still being written and time out (see
+/// third_party/audioplayers_darwin/SPOTIFLAC_PATCHES.md).
+@visibleForTesting
+String darwinArrivingUrl(String url) => '$url#spotiflac-arriving';
+
 /// Only verified native playback reports active. File metadata alone never does.
 final usbAudioStatus = ValueNotifier<UsbAudioStatus>(const UsbAudioStatus());
 
@@ -80,6 +87,62 @@ final AudioContext _musicAudioContext = AudioContext(
   ),
 );
 
+/// audioplayers' [TimerPositionUpdater], except that a tick [wanted] answers
+/// false for asks the platform nothing. The updates the plugin requests
+/// itself, after a load, seek, pause or stop, always read the position.
+class _PositionTicker extends PositionUpdater {
+  _PositionTicker({
+    required super.getPosition,
+    required this.interval,
+    this.wanted,
+  });
+
+  final Duration interval;
+  final bool Function()? wanted;
+  final _positions = StreamController<Duration>.broadcast();
+  Timer? _timer;
+  bool _polling = false;
+  bool _disposed = false;
+
+  @override
+  Stream<Duration> get positionStream => _positions.stream;
+
+  @override
+  Future<void> update() async {
+    final position = await getPosition();
+    // A retired updater has already closed its stream when a slow reply
+    // arrives. Check immediately before publishing it.
+    if (!_disposed && position != null) _positions.add(position);
+  }
+
+  @override
+  void start() {
+    _timer?.cancel();
+    _timer = Timer.periodic(interval, (_) async {
+      if (_polling || !(wanted?.call() ?? true)) return;
+      _polling = true;
+      try {
+        await update();
+      } finally {
+        _polling = false;
+      }
+    });
+  }
+
+  @override
+  void stop() {
+    _timer?.cancel();
+    _timer = null;
+  }
+
+  @override
+  Future<void> dispose() async {
+    _disposed = true;
+    await super.dispose();
+    await _positions.close();
+  }
+}
+
 PlaybackDeckState _deckState(PlayerState state) => switch (state) {
   PlayerState.stopped => PlaybackDeckState.stopped,
   PlayerState.playing => PlaybackDeckState.playing,
@@ -104,6 +167,10 @@ class AudioplayersPlaybackDeck implements PlaybackDeck {
            (Platform.isAndroid ||
                Platform.isIOS ||
                (isDesktopPlatform && Platform.isMacOS)),
+       _platformChainsPlayers =
+           Platform.isAndroid ||
+           Platform.isIOS ||
+           (isDesktopPlatform && Platform.isMacOS),
        _nativeAvailable = nativeAvailable ?? Platform.isAndroid {
     playbackEqualizer.addListener(_equalizerChanged);
     playbackOutputVolume.addListener(_outputVolumeChanged);
@@ -132,12 +199,18 @@ class AudioplayersPlaybackDeck implements PlaybackDeck {
     ]);
   }
 
+  /// Forces [setNextDeck] support, for tests on any host.
+  @visibleForTesting
+  static bool? debugChainsPlayers;
+
   static const _channel = MethodChannel('com.spotiflac.app/usb_pcm');
   static const _events = EventChannel('com.spotiflac.app/usb_pcm/events');
   static Stream<dynamic>? _nativeEvents;
   static int _nextToken = 0;
   final AudioPlayer _ordinary;
   final bool _equalizerAvailable;
+  final bool _platformChainsPlayers;
+  bool get _chainsPlayers => debugChainsPlayers ?? _platformChainsPlayers;
   bool _equalizerDisposed = false;
   static const _effects = MethodChannel('xyz.luan/audioplayers');
   bool _equalizerSent = false;
@@ -203,10 +276,13 @@ class AudioplayersPlaybackDeck implements PlaybackDeck {
   AsyncError? _ordinaryError;
   StreamSubscription<dynamic>? _nativeSubscription;
   StreamSubscription<Duration>? _positionSubscription;
+  Duration _positionInterval = const Duration(milliseconds: 200);
+  bool Function()? _positionWanted;
   Timer? _timer;
   bool _polling = false;
   bool _direct = false;
   bool _preparing = false;
+  Completer<void>? _ordinaryPreparation;
   bool _disposed = false;
   int _token = 0;
   Duration? _duration;
@@ -225,6 +301,11 @@ class AudioplayersPlaybackDeck implements PlaybackDeck {
   @override
   Future<void> cancelPreparation() async {
     if (_preparing) await stop();
+    final preparation = _ordinaryPreparation;
+    if (preparation == null) return;
+    _ordinaryPreparation = null;
+    preparation.complete();
+    await _ordinary.release();
   }
 
   @override
@@ -240,9 +321,12 @@ class AudioplayersPlaybackDeck implements PlaybackDeck {
   Stream<void> get onPlayerComplete => _completions.stream;
 
   @override
-  void startPositionUpdates(Duration interval) {
-    _ordinary.positionUpdater = TimerPositionUpdater(
+  void startPositionUpdates(Duration interval, {bool Function()? wanted}) {
+    _positionInterval = interval;
+    _positionWanted = wanted;
+    _ordinary.positionUpdater = _PositionTicker(
       interval: interval,
+      wanted: wanted,
       getPosition: getCurrentPosition,
     );
     unawaited(_positionSubscription?.cancel());
@@ -282,12 +366,18 @@ class AudioplayersPlaybackDeck implements PlaybackDeck {
   }
 
   @override
-  Future<void> setNetworkSource(String url) async {
+  Future<void> setNetworkSource(String url, {bool arriving = false}) async {
     await stop();
     _source = null;
     _routeLost = false;
     _nativeStarted = false;
-    await _setOrdinarySource(UrlSource(url));
+    await _setOrdinarySource(
+      UrlSource(
+        arriving && (Platform.isMacOS || Platform.isIOS)
+            ? darwinArrivingUrl(url)
+            : url,
+      ),
+    );
   }
 
   @override
@@ -309,6 +399,7 @@ class AudioplayersPlaybackDeck implements PlaybackDeck {
       _token = ++_nextToken;
       final preparingToken = _token;
       _preparing = true;
+      usbAudioStatus.value = const UsbAudioStatus(reason: 'preparing');
       _nativeSubscription ??=
           (_nativeEvents ??= _events.receiveBroadcastStream()).listen(
             _onNativeEvent,
@@ -353,9 +444,13 @@ class AudioplayersPlaybackDeck implements PlaybackDeck {
             transport: response?['transport'] as String? ?? 'pcm',
             driver: response?['driver'] as String? ?? 'android',
           );
-          usbAudioStatus.value = UsbAudioStatus(
-            reason: _volumeBlocked ? 'volume_unavailable' : 'ready',
+          _log.i(
+            'Native output prepared: ${_preparedStatus.driver}, '
+            '${_preparedStatus.sampleRate} Hz, ${_preparedStatus.bitDepth}-bit',
           );
+          usbAudioStatus.value = _volumeBlocked
+              ? const UsbAudioStatus(reason: 'volume_unavailable')
+              : const UsbAudioStatus(reason: 'ready');
           _durations.add(_duration!);
           return;
         }
@@ -392,8 +487,54 @@ class AudioplayersPlaybackDeck implements PlaybackDeck {
     // reuse the previous MediaPlayer or its pending preparation callbacks.
     await _ordinary.release();
     _ordinaryError = null;
-    await _ordinary.setSource(source);
+    final abandoned = _ordinaryPreparation = Completer<void>();
+    try {
+      // A network source waits for its server, up to the plugin's prepare
+      // timeout; a newer song abandons it instead of queueing behind it.
+      await Future.any([_ordinary.setSource(source), abandoned.future]);
+    } finally {
+      if (identical(_ordinaryPreparation, abandoned)) {
+        _ordinaryPreparation = null;
+      }
+    }
+    if (abandoned.isCompleted) return;
     await _syncEqualizer();
+  }
+
+  /// Reconcile the display with the current native session without reopening it.
+  Future<void> refreshNativeStatus() async {
+    if (!_direct || _disposed || _preparing) return;
+    final token = _token;
+    try {
+      final status = await _channel.invokeMapMethod<String, dynamic>('status');
+      if (_disposed ||
+          !_direct ||
+          token != _token ||
+          status?['token'] != token) {
+        return;
+      }
+      final reason = status?['reason'];
+      if (reason == 'active') {
+        if (usbAudioStatus.value.reason != 'active') {
+          _log.i(
+            'Native output status reconciled: ${_preparedStatus.driver} active',
+          );
+        }
+        usbAudioStatus.value = _preparedStatus;
+      } else if (reason == 'ready' || reason == 'volume_unavailable') {
+        if (usbAudioStatus.value.reason != reason) {
+          usbAudioStatus.value = UsbAudioStatus(reason: reason as String);
+        }
+      } else if (reason == 'route_changed' || reason == 'idle') {
+        if (!_routeLost) {
+          _pauseLostRoute(const UsbAudioStatus(reason: 'route_changed'));
+        }
+      }
+    } on MissingPluginException {
+      // An older native build has no read-only status query.
+    } on PlatformException catch (error) {
+      _log.w('Cannot refresh native output status: ${error.code}');
+    }
   }
 
   void _onNativeEvent(dynamic event) {
@@ -481,12 +622,15 @@ class AudioplayersPlaybackDeck implements PlaybackDeck {
       return _ordinary.resume();
     }
     if (_disposed || token != _token || !_direct) return;
+    if (!_nativeStarted) {
+      _log.i('Native output active: ${_preparedStatus.driver}');
+    }
     _nativeStarted = true;
     _setState(PlaybackDeckState.playing);
     usbAudioStatus.value = _preparedStatus;
     _timer?.cancel();
-    _timer = Timer.periodic(const Duration(milliseconds: 200), (_) async {
-      if (_polling || _disposed) return;
+    _timer = Timer.periodic(_positionInterval, (_) async {
+      if (_polling || _disposed || !(_positionWanted?.call() ?? true)) return;
       _polling = true;
       final token = _token;
       try {
@@ -519,6 +663,29 @@ class AudioplayersPlaybackDeck implements PlaybackDeck {
       'position': position.inMilliseconds,
     });
     if (!_disposed && token == _token && _direct) _positions.add(position);
+  }
+
+  @override
+  Future<bool> setNextDeck(PlaybackDeck? next) async {
+    // The forks chain their own players: Android with
+    // MediaPlayer.setNextMediaPlayer, Darwin from the end notification.
+    if (_direct || !_chainsPlayers) return false;
+    final player = next is AudioplayersPlaybackDeck && !next._direct
+        ? next._ordinary
+        : null;
+    if (next != null && player == null) return false;
+    try {
+      await _effects.invokeMethod<void>('setNextPlayer', {
+        'playerId': _ordinary.playerId,
+        'nextPlayerId': ?player?.playerId,
+      });
+      return player != null;
+    } on PlatformException catch (error) {
+      _log.w('Next player link unavailable: $error');
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
   }
 
   @override

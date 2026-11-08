@@ -1,6 +1,5 @@
 import 'dart:collection';
 import 'dart:math';
-
 import 'package:spotiflac/models/download_item.dart';
 import 'package:spotiflac/models/track.dart';
 import 'package:spotiflac/providers/download_queue_state.dart';

@@ -25,19 +25,11 @@ void main() {
 
         // Material Settings stays Settings instead of becoming Search.
         expect(
-          switched(
-            materialSettings,
-            fromSpotiFLAC: false,
-            showStore: showStore,
-          ),
+          switched(materialSettings, fromSpotiFLAC: false, showStore: showStore),
           spotiflacSettings,
         );
         expect(
-          switched(
-            spotiflacSettings,
-            fromSpotiFLAC: true,
-            showStore: showStore,
-          ),
+          switched(spotiflacSettings, fromSpotiFLAC: true, showStore: showStore),
           materialSettings,
         );
         // SpotiFLAC's Search lands on Material's Home, where Material searches.

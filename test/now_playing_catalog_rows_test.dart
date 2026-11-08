@@ -130,9 +130,7 @@ Widget _app(
     ...overrides,
   ],
   child: MaterialApp(
-    theme: spotiflac
-        ? SpotiFLACTheme.build(Brightness.light)
-        : AppTheme.light(),
+    theme: spotiflac ? SpotiFLACTheme.build(Brightness.light) : AppTheme.light(),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     home: home,

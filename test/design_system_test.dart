@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spotiflac/l10n/app_localizations.dart';
+import 'package:spotiflac/models/theme_settings.dart';
 import 'package:spotiflac/theme/app_theme.dart';
 import 'package:spotiflac/theme/app_tokens.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
@@ -92,7 +93,7 @@ void main() {
       );
       expect(
         SpotiFLACTheme.build(Brightness.dark).colorScheme.primary,
-        SpotiFLACTheme.darkAccent,
+        SpotiFLACTheme.accentColor(SpotiFLACAccent.blue, Brightness.dark),
       );
     });
 

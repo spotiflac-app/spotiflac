@@ -24,7 +24,11 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
   tearDown(() => debugDesktopPlatformOverride = null);
 
-  Future<void> open(WidgetTester tester, {required bool spotiflac}) async {
+  Future<void> open(
+    WidgetTester tester, {
+    required bool spotiflac,
+    MediaItem item = _item,
+  }) async {
     final metadata = PlayerMetadataController(
       readMetadata: (_) async => const {},
     );
@@ -44,7 +48,7 @@ void main() {
                   context,
                   Theme.of(context).colorScheme,
                   metadata: metadata,
-                  mediaItem: _item,
+                  mediaItem: item,
                 ),
                 child: const Text('open'),
               ),
@@ -106,4 +110,21 @@ void main() {
       },
     );
   }
+
+  testWidgets('SpotiFLAC decodes the cover at its thumbnail size', (tester) async {
+    await open(
+      tester,
+      spotiflac: true,
+      item: _item.copyWith(artUri: Uri.file('/covers/song.jpg')),
+    );
+    final image = tester.widget<Image>(
+      find.descendant(
+        of: find.byType(SpotiFLACPlayerDetailsSheet),
+        matching: find.byType(Image),
+      ),
+    );
+    final provider = image.image as ResizeImage;
+    expect(provider.width, (70 * tester.view.devicePixelRatio).ceil());
+    expect(provider.height, isNull);
+  });
 }

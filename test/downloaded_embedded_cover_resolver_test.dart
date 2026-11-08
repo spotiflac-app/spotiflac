@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:spotiflac/services/downloaded_embedded_cover_resolver.dart';
 import 'package:spotiflac/widgets/cached_cover_image.dart';
 
@@ -124,6 +126,111 @@ void main() {
         recovered,
       );
       expect(extractions, 2);
+    },
+  );
+
+  test(
+    'a preview without a source timestamp stays on disk after memory eviction',
+    () async {
+      const untimed = 'content://example.documents/tree/nas/document/u.flac';
+      var hashes = 0;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(backendChannel, (call) async {
+            if (call.method == 'runNativeDataJob') {
+              final request =
+                  jsonDecode((call.arguments as Map)['request_json'] as String)
+                      as Map;
+              expect(request['operation'], 'hash_file');
+              expect(await File(request['path'] as String).readAsBytes(), [
+                7,
+                8,
+              ]);
+              hashes++;
+              return {
+                'sha256': sha256.convert([7, 8]).toString(),
+              };
+            }
+            if (call.method == 'getSafFileModTimes') {
+              final uris = jsonDecode(
+                (call.arguments as Map)['uris'] as String,
+              );
+              return jsonEncode({
+                for (final uri in uris as List)
+                  if (uri != untimed) uri: 1234,
+              });
+            }
+            expect(call.method, 'extractCoverToFile');
+            final args = call.arguments as Map<Object?, Object?>;
+            await File(args['output_path']! as String).writeAsBytes([7, 8]);
+            return jsonEncode({'success': true});
+          });
+
+      final preview = await DownloadedEmbeddedCoverResolver.resolveOrExtract(
+        untimed,
+      );
+      expect(preview, isNotNull);
+      expect(hashes, 1);
+      expect(
+        preview,
+        endsWith('_${sha256.convert([7, 8]).toString().substring(0, 16)}.jpg'),
+      );
+      expect(p.isWithin(persistentCacheDirectory.path, preview!), isTrue);
+      // 180 newer previews push the first one out of the memory cache.
+      for (var index = 0; index < 180; index++) {
+        await DownloadedEmbeddedCoverResolver.resolveOrExtract(
+          'content://example.documents/tree/nas/document/$index.flac',
+        );
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      expect(await File(preview).readAsBytes(), [7, 8]);
+      expect(
+        await DownloadedEmbeddedCoverResolver.resolveOrExtract(untimed),
+        preview,
+      );
+    },
+  );
+
+  test(
+    'an edited cover of a source without a timestamp gets a new path',
+    () async {
+      const untimed = 'content://example.documents/tree/nas/document/e.flac';
+      var cover = [7, 8];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(backendChannel, (call) async {
+            if (call.method == 'getSafFileModTimes') return jsonEncode({});
+            if (call.method == 'runNativeDataJob') {
+              final request =
+                  jsonDecode((call.arguments as Map)['request_json'] as String)
+                      as Map;
+              expect(request['operation'], 'hash_file');
+              final bytes = await File(request['path'] as String).readAsBytes();
+              return {'sha256': sha256.convert(bytes).toString()};
+            }
+            expect(call.method, 'extractCoverToFile');
+            final args = call.arguments as Map<Object?, Object?>;
+            await File(args['output_path']! as String).writeAsBytes(cover);
+            return jsonEncode({'success': true});
+          });
+
+      final original = await DownloadedEmbeddedCoverResolver.resolveOrExtract(
+        untimed,
+      );
+      // A memory miss extracts the same cover to the same path.
+      await DownloadedEmbeddedCoverResolver.resetMemoryStateForTesting();
+      expect(
+        await DownloadedEmbeddedCoverResolver.resolveOrExtract(untimed),
+        original,
+      );
+
+      // Editing the cover in the app invalidates and extracts again.
+      cover = [9, 9, 9];
+      await DownloadedEmbeddedCoverResolver.invalidate(untimed);
+      final edited = await DownloadedEmbeddedCoverResolver.resolveOrExtract(
+        untimed,
+      );
+      expect(edited, isNot(original));
+      expect(await File(edited!).readAsBytes(), [9, 9, 9]);
+      expect(await File(original!).exists(), isFalse);
     },
   );
 

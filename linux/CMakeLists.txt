@@ -100,32 +100,10 @@ install(FILES "${FLUTTER_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 
 foreach(bundled_library ${PLUGIN_BUNDLED_LIBRARIES})
-  # dart_smb2 0.1.3's prebuilt requires glibc 2.38. Install the same r8
-  # source rebuilt on our Linux baseline instead (see below).
-  # JNI is pulled in by path_provider_android. Linux uses path_provider_linux
-  # and has no Java calls; do not ship the unused libjvm-dependent bridge.
-  get_filename_component(bundled_name "${bundled_library}" NAME)
-  if(bundled_name STREQUAL "libsmb2.so" OR bundled_name STREQUAL "libdartjni.so"
-      OR bundled_library STREQUAL "$<TARGET_FILE:jni>")
-    continue()
-  endif()
   install(FILES "${bundled_library}"
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
     COMPONENT Runtime)
 endforeach(bundled_library)
-
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
-  set(SPOTIFLAC_SMB2_TARGET "linux-arm64")
-else()
-  set(SPOTIFLAC_SMB2_TARGET "linux-x64")
-endif()
-set(SPOTIFLAC_SMB2_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../build/smb2/${SPOTIFLAC_SMB2_TARGET}")
-if(NOT EXISTS "${SPOTIFLAC_SMB2_DIR}/libsmb2.so")
-  message(FATAL_ERROR "Run bash scripts/build_linux_smb2.sh before building Linux.")
-endif()
-install(FILES "${SPOTIFLAC_SMB2_DIR}/libsmb2.so" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}" COMPONENT Runtime)
-install(DIRECTORY "${SPOTIFLAC_SMB2_DIR}/" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}/smb2"
-  COMPONENT Runtime PATTERN "*.so" EXCLUDE)
 
 # Rust desktop backend, loaded by dart:ffi from the bundle's lib/ directory.
 # It is prebuilt by `bash scripts/build_rust_backend.sh desktop`.
@@ -158,10 +136,6 @@ if(EXISTS "${SPOTIFLAC_FFMPEG_DIR}/ffmpeg" AND EXISTS "${SPOTIFLAC_FFMPEG_DIR}/f
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}/ffmpeg" COMPONENT Runtime)
   install(FILES "${SPOTIFLAC_FFMPEG_DIR}/LICENSE.txt" "${SPOTIFLAC_FFMPEG_DIR}/SOURCE.txt"
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}/ffmpeg" COMPONENT Runtime)
-  if(EXISTS "${SPOTIFLAC_FFMPEG_DIR}/licenses")
-    install(DIRECTORY "${SPOTIFLAC_FFMPEG_DIR}/licenses"
-      DESTINATION "${INSTALL_BUNDLE_LIB_DIR}/ffmpeg" COMPONENT Runtime)
-  endif()
 else()
   message(WARNING
     "No LGPL FFmpeg is staged in ${SPOTIFLAC_FFMPEG_DIR}; the bundle will use "
@@ -172,7 +146,7 @@ endif()
 set(NATIVE_ASSETS_DIR "${PROJECT_BUILD_DIR}native_assets/linux/")
 install(DIRECTORY "${NATIVE_ASSETS_DIR}"
    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
-   COMPONENT Runtime PATTERN "libdartjni.so" EXCLUDE)
+   COMPONENT Runtime)
 
 # Fully re-copy the assets directory on each build to avoid having stale files
 # from a previous install.

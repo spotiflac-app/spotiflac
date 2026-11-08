@@ -6,6 +6,7 @@ import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:spotiflac/controllers/player_metadata_controller.dart';
 import 'package:spotiflac/l10n/l10n.dart';
 import 'package:spotiflac/providers/music_player_provider.dart';
+import 'package:spotiflac/providers/settings_provider.dart';
 import 'package:spotiflac/routes/now_playing_route.dart';
 import 'package:spotiflac/utils/playback_seek_preview.dart';
 import 'package:spotiflac/widgets/spotiflac_context_menu.dart';
@@ -19,6 +20,7 @@ import 'package:spotiflac/widgets/player_gesture_regions.dart';
 import 'package:spotiflac/widgets/player_lyrics.dart';
 import 'package:spotiflac/widgets/player_lyrics_controls.dart';
 import 'package:spotiflac/widgets/player_metadata_title.dart';
+import 'package:spotiflac/widgets/playback_source_label.dart';
 import 'package:spotiflac/widgets/player_playback_controls.dart';
 import 'package:spotiflac/widgets/player_track_swipe.dart';
 
@@ -56,6 +58,7 @@ class SpotiFLACPlayerLayout extends ConsumerWidget {
     required this.onTrackNavigation,
     required this.onMoreActions,
     this.artworkAspectRatio,
+    this.controlsHeadroom = 0,
   });
 
   final MediaItem mediaItem;
@@ -65,6 +68,10 @@ class SpotiFLACPlayerLayout extends ConsumerWidget {
   final int page;
   final Widget motionArtwork;
   final double? artworkAspectRatio;
+
+  /// Spare height kept above the volume row while portrait has it to give,
+  /// which holds the track header and timeline higher than the toolbar.
+  final double controlsHeadroom;
   final bool insetArtwork;
   final double artworkTopInset;
   final SpotiFLACPlayerArtworkKeys artworkKeys;
@@ -99,22 +106,19 @@ class SpotiFLACPlayerLayout extends ConsumerWidget {
         ? Duration.zero
         : const Duration(milliseconds: 380);
     final queue = ref.watch(playQueueProvider).value ?? const <MediaItem>[];
-    final reportedIndex = ref.watch(
-      playbackStateProvider.select((state) => state.value?.queueIndex),
+    final currentIndex = ref.watch(currentQueueIndexProvider);
+    final showVolume = ref.watch(
+      settingsProvider.select((s) => s.playerShowVolume),
     );
-    final currentIndex =
-        reportedIndex != null &&
-            reportedIndex >= 0 &&
-            reportedIndex < queue.length &&
-            queue[reportedIndex].id == mediaItem.id
-        ? reportedIndex
-        : queue.indexWhere((item) => item.id == mediaItem.id);
     final landscape =
         MediaQuery.sizeOf(context).width > MediaQuery.sizeOf(context).height;
     Widget hideControls(Widget child) => PlayerLyricsControlsVisibility(
       hidden: showLyrics && lyricsControlsHidden && !landscape,
       child: child,
     );
+    // Any rebuild below this builder, such as a position tick, lays it out
+    // and so repaints its parent; what it returns keeps its own layer (the
+    // scroll viewport has one already).
     final body = LayoutBuilder(
       builder: (context, constraints) {
         final screenSize = MediaQuery.sizeOf(context);
@@ -137,7 +141,7 @@ class SpotiFLACPlayerLayout extends ConsumerWidget {
               0.0,
               (stage.maxHeight - (artworkOnly ? 24 : 8)).clamp(0.0, 360.0),
             );
-            final ratio = artworkAspectRatio ?? 1.0;
+            final ratio = artworkOnly ? 1.0 : artworkAspectRatio ?? 1.0;
             final artWidth = ratio < 1 ? artSize * ratio : artSize;
             final artHeight = ratio > 1 ? artSize / ratio : artSize;
             final fullBleed = !insetArtwork && !artworkOnly;
@@ -363,6 +367,13 @@ class SpotiFLACPlayerLayout extends ConsumerWidget {
         final transportShift = landscape
             ? 0.0
             : ((volumeGap - 16) / 2).clamp(0.0, 8.0);
+        // Controls keep their intrinsic height. Small portrait screens and
+        // large accessibility text can scroll instead of clipping the volume.
+        final minHeight = 480.0 + (scale - 1).clamp(0, 3) * 120;
+        final headroom = (constraints.maxHeight - minHeight).clamp(
+          0.0,
+          controlsHeadroom,
+        );
         Widget controls() => AnimatedBuilder(
           animation: artworkForeground,
           builder: (context, _) => PlayerPlaybackControls(
@@ -378,18 +389,25 @@ class SpotiFLACPlayerLayout extends ConsumerWidget {
         );
 
         if (landscape) {
-          return SpotiFLACLandscapePlayer(
-            page: page,
-            isPlaying: ref.watch(playbackPlayingProvider),
-            controlsHeldOpen: lyricsOptionsOpen,
-            onPageChanged: onPageChanged,
-            artwork: stage(artworkOnly: true),
-            header: _trackHeader(context, colorScheme, compact: true),
-            lyrics: lyricsBuilder(true),
-            lyricsOptions: showLyrics ? lyricsOptions : null,
-            queue: SpotiFLACPlayerQueue(colorScheme: colorScheme),
-            controls: controls(),
-            volume: const PlayerVolumeControl(),
+          return RepaintBoundary(
+            child: SpotiFLACLandscapePlayer(
+              page: page,
+              isPlaying: ref.watch(playbackPlayingProvider),
+              autoHideLyricsControls: ref.watch(
+                settingsProvider.select(
+                  (settings) => settings.autoHideLyricsControls,
+                ),
+              ),
+              controlsHeldOpen: lyricsOptionsOpen,
+              onPageChanged: onPageChanged,
+              artwork: stage(artworkOnly: true),
+              header: _trackHeader(context, colorScheme, compact: true),
+              lyrics: lyricsBuilder(true),
+              lyricsOptions: showLyrics ? lyricsOptions : null,
+              queue: SpotiFLACPlayerQueue(colorScheme: colorScheme),
+              controls: controls(),
+              volume: showVolume ? const PlayerVolumeControl() : null,
+            ),
           );
         }
 
@@ -438,29 +456,28 @@ class SpotiFLACPlayerLayout extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 controls(),
-                SizedBox(height: volumeGap - transportShift),
-                AnimatedBuilder(
-                  animation: artworkForeground,
-                  builder: (context, _) => PlayerVolumeControl(
-                    key: artworkKeys.volume,
-                    foreground: foreground('volume').onSurface,
+                if (showVolume) ...[
+                  SizedBox(height: volumeGap - transportShift + headroom),
+                  AnimatedBuilder(
+                    animation: artworkForeground,
+                    builder: (context, _) => PlayerVolumeControl(
+                      key: artworkKeys.volume,
+                      foreground: foreground('volume').onSurface,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
+                ],
+                SizedBox(height: showVolume ? 8 : 8 + headroom),
               ],
             ),
           ),
         );
 
-        // Controls keep their intrinsic height. Small portrait screens and
-        // large accessibility text can scroll instead of clipping the volume.
-        final minHeight = 480.0 + (scale - 1).clamp(0, 3) * 120;
         if (constraints.maxHeight < minHeight) {
           return SingleChildScrollView(
             child: SizedBox(height: minHeight, child: content()),
           );
         }
-        return content();
+        return RepaintBoundary(child: content());
       },
     );
     return PlayerTrackSwipe(
@@ -509,7 +526,6 @@ class SpotiFLACPlayerLayout extends ConsumerWidget {
                           mediaItem: mediaItem,
                           metadata: metadata,
                           maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 22 - 4 * progress,
                             fontWeight: FontWeight.w600,
@@ -531,6 +547,10 @@ class SpotiFLACPlayerLayout extends ConsumerWidget {
                             ),
                           ),
                         ),
+                      ),
+                      PlaybackSourceLabel(
+                        item: mediaItem,
+                        color: colorScheme.onSurface.withValues(alpha: 0.72),
                       ),
                     ],
                   ),

@@ -4,7 +4,7 @@ use tempfile::TempDir;
 
 fn metadata(version: u64, data: Value) -> Vec<u8> {
     serde_json::to_vec(&json!({
-        "magic": "spotiflac-backup",
+        "magic": if version == 2 { "spotiflac-backup" } else { "spotiflac-backup" },
         "format_version": version,
         "app_version": "5.1.0", "history_count": 1, "data": data,
     }))
@@ -42,7 +42,7 @@ fn native_archive_round_trip_preserves_payloads_and_selective_categories() {
                     version,
                     json!({
                         "settings": {"theme": "spotiflac"},
-                        "collections": {"playlists": [{"id": "a", "name": "éŸ³æ¥½"}]},
+                        "collections": {"playlists": [{"id": "a", "name": "音楽"}]},
                         "playlist_covers": {"a": {"file": "covers/a.jpg", "ext": ".jpg"}},
                         "profile": {"name": "Listener", "photo": PHOTO_ENTRY},
                         "extensions": {"items": [{"id": "provider"}]},
@@ -88,7 +88,7 @@ fn native_archive_round_trip_preserves_payloads_and_selective_categories() {
             .unwrap();
             assert_eq!(
                 envelope["data"]["collections"]["playlists"][0]["name"],
-                "éŸ³æ¥½"
+                "音楽"
             );
             fs::remove_dir_all(result["temporary_directory_path"].as_str().unwrap()).unwrap();
         }

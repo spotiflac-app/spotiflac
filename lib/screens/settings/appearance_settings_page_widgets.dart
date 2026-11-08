@@ -245,8 +245,7 @@ class _SpotiFLACGlassClaritySlider extends ConsumerWidget {
     final contrastBlocked = ref.watch(
       spotiflacGlassContrastBlockedProvider(MediaQuery.highContrastOf(context)),
     );
-    final adjustable =
-        !contrastBlocked && ref.watch(spotiflacBlurEnabledProvider);
+    final adjustable = !contrastBlocked && ref.watch(spotiflacBlurEnabledProvider);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       child: Column(
@@ -334,9 +333,7 @@ class _SpotiFLACGlassClaritySlider extends ConsumerWidget {
                   ? (value) =>
                         notifier.setSpotiFLACGlassClarity(value, persist: false)
                   : null,
-              onChangeEnd: adjustable
-                  ? notifier.setSpotiFLACGlassClarity
-                  : null,
+              onChangeEnd: adjustable ? notifier.setSpotiFLACGlassClarity : null,
             ),
           ),
           Row(
@@ -366,10 +363,7 @@ class _SpotiFLACGlassClaritySlider extends ConsumerWidget {
 }
 
 class _SpotiFLACAccentPicker extends StatelessWidget {
-  const _SpotiFLACAccentPicker({
-    required this.selected,
-    required this.onChanged,
-  });
+  const _SpotiFLACAccentPicker({required this.selected, required this.onChanged});
 
   final SpotiFLACAccent selected;
   final ValueChanged<SpotiFLACAccent> onChanged;
@@ -560,6 +554,7 @@ class _ThemeModeSelector extends StatelessWidget {
           labels: labels.values.toList(),
           selectedIndex: labels.keys.toList().indexOf(currentMode),
           onChanged: (index) => onChanged(labels.keys.elementAt(index)),
+          samplesBackdrop: false,
         ),
       );
     }

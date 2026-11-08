@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:io';
-
+import 'package:flutter/painting.dart' show PaintingBinding;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,6 +9,7 @@ import 'package:spotiflac/providers/settings_provider.dart';
 import 'package:spotiflac/services/library_cleanup.dart';
 import 'package:spotiflac/services/library_database.dart';
 import 'package:spotiflac/services/network_library_scanner.dart';
+import 'package:spotiflac/services/network_storage_service.dart';
 import 'package:spotiflac/services/notification_service.dart';
 import 'package:spotiflac/services/platform_bridge.dart';
 import 'package:spotiflac/utils/logger.dart';
@@ -151,10 +152,14 @@ class LocalLibraryNotifier extends Notifier<LocalLibraryState> {
   LocalLibraryNotifier({
     LibraryDatabase? database,
     LocalLibraryAvailabilityProbe? availabilityProbe,
+    NetworkStorageService? networkStorage,
   }) : _db = database ?? LibraryDatabase.instance,
+       _networkStorage = networkStorage ?? NetworkStorageService.instance,
        _availabilityProbe = availabilityProbe;
 
   final LibraryDatabase _db;
+  final NetworkStorageService _networkStorage;
+  void Function()? _unsubscribeNetworkRemoval;
   final LocalLibraryAvailabilityProbe? _availabilityProbe;
   final NotificationService _notificationService = NotificationService();
   static const _progressPollingInterval = Duration(milliseconds: 350);
@@ -183,8 +188,11 @@ class LocalLibraryNotifier extends Notifier<LocalLibraryState> {
   bool _scanCancelRequested = false;
   bool _scanPauseRequested = false;
   bool _scanInProgress = false;
+  bool _scanNotificationsEnabled = true;
   Future<void>? _scanCompletion;
   NetworkLibraryScanner? _networkScanner;
+  String? _activeScanPath;
+  String? _activeScanSourceId;
   String? _nativeLibraryRequestId;
   final Set<String> _pendingReconnectScans = {};
   bool _drainingReconnectScans = false;
@@ -205,7 +213,11 @@ class LocalLibraryNotifier extends Notifier<LocalLibraryState> {
 
   @override
   LocalLibraryState build() {
+    _unsubscribeNetworkRemoval = _networkStorage.connectionRemovals.subscribe(
+      _onNetworkConnectionRemoved,
+    );
     ref.onDispose(() {
+      _unsubscribeNetworkRemoval?.call();
       _scanCancelRequested = true;
       _scanPauseRequested = false;
       _pendingReconnectScans.clear();
@@ -256,7 +268,7 @@ class LocalLibraryNotifier extends Notifier<LocalLibraryState> {
   }
 
   Future<void> _ensureLoadedFromDatabase() {
-    if (_hasLoadedFromDatabase) {
+    if (!ref.mounted || _hasLoadedFromDatabase) {
       return Future<void>.value();
     }
     return _loadFuture ??= _loadFromDatabase();
@@ -323,6 +335,7 @@ class LocalLibraryNotifier extends Notifier<LocalLibraryState> {
           trackKeySet: lookupIndex.matchKeys,
           isrcSet: lookupIndex.isrcs,
         );
+        ref.read(localLibraryIndexRevisionProvider.notifier)._bump();
         _log.i(
           'Loaded local library summary: $count items, lastScannedAt: '
           '$lastScannedAt, excludedDownloadedCount: $excludedDownloadedCount',
@@ -412,6 +425,7 @@ class LocalLibraryNotifier extends Notifier<LocalLibraryState> {
         .where((entry) => entry.id == sourceId)
         .firstOrNull;
     _sourceVersion++;
+    if (!enabled) await _cancelSourceScan(sourceId);
     await _db.updateSourceState(sourceId, enabled: enabled);
     await _refreshSummaryFromStorage();
     if (enabled &&
@@ -424,8 +438,42 @@ class LocalLibraryNotifier extends Notifier<LocalLibraryState> {
 
   Future<void> removeSource(String sourceId) async {
     _sourceVersion++;
+    _pendingReconnectScans.remove(sourceId);
+    await _cancelSourceScan(sourceId);
     await _db.removeSource(sourceId);
     await _setScanFailures(sourceId, null);
+    await _refreshSummaryFromStorage();
+  }
+
+  Future<void> _cancelSourceScan(String sourceId) async {
+    if (!_scanInProgress || _activeScanSourceId != sourceId) return;
+    final completion = _scanCompletion;
+    final waitForScan = state.isScanning;
+    await cancelScan();
+    // Preflight can still be awaiting an availability probe. Its source
+    // version checks discard the result after this source change.
+    if (waitForScan && completion != null) await completion;
+  }
+
+  Future<void> _onNetworkConnectionRemoved(String connectionId) async {
+    if (!ref.mounted) return;
+    bool matches(String path) {
+      final uri = Uri.tryParse(path);
+      return uri?.scheme == 'network' && uri?.host == connectionId;
+    }
+
+    _sourceVersion++;
+    if (matches(_activeScanPath ?? '') && _activeScanSourceId != null) {
+      await _cancelSourceScan(_activeScanSourceId!);
+    }
+    if (!ref.mounted) return;
+    final sources = await _db.getSources();
+    if (!ref.mounted) return;
+    for (final source in sources.where((source) => matches(source.path))) {
+      _pendingReconnectScans.remove(source.id);
+      await _db.updateSourceState(source.id, available: false);
+      if (!ref.mounted) return;
+    }
     await _refreshSummaryFromStorage();
   }
 
@@ -439,18 +487,29 @@ class LocalLibraryNotifier extends Notifier<LocalLibraryState> {
         });
   }
 
-  Future<void> scanAllSources({bool forceFullScan = false}) async {
+  Future<void> scanAllSources({
+    bool forceFullScan = false,
+    bool notify = true,
+  }) async {
     await _ensureLoadedFromDatabase();
     final sourceIds = state.sources
         .where((source) => source.enabled && source.available)
         .map((source) => source.id)
         .toList(growable: false);
-    await _scanSourcesSequentially(sourceIds, forceFullScan: forceFullScan);
+    await _scanSourcesSequentially(
+      sourceIds,
+      forceFullScan: forceFullScan,
+      notify: notify,
+    );
   }
 
+  /// Automatic callers can suppress result notices and wait for the current
+  /// scan's cleanup, which can outlive the visible scanning state.
   Future<void> startSourceScan(
     String sourceId, {
     bool forceFullScan = false,
+    bool notify = true,
+    bool waitForCurrentScan = false,
   }) async {
     final reconnect = _pendingReconnectScans.contains(sourceId);
     while (ref.mounted) {
@@ -460,7 +519,7 @@ class LocalLibraryNotifier extends Notifier<LocalLibraryState> {
         return;
       }
       if (_scanInProgress) {
-        if (!reconnect) return;
+        if (!reconnect && !waitForCurrentScan) return;
         final active = _scanCompletion;
         if (active != null) await active;
         continue;
@@ -470,6 +529,8 @@ class LocalLibraryNotifier extends Notifier<LocalLibraryState> {
         forceFullScan: forceFullScan,
         iosBookmark: source.bookmark,
         sourceId: source.id,
+        notify: notify,
+        waitForCurrentScan: reconnect || waitForCurrentScan,
       );
       return;
     }
@@ -480,18 +541,29 @@ class LocalLibraryNotifier extends Notifier<LocalLibraryState> {
     bool forceFullScan = false,
     String? iosBookmark,
     String? sourceId,
+    bool notify = true,
+    bool waitForCurrentScan = false,
   }) async {
     if (!ref.mounted) return;
     await _recoverInterruptedScan();
     if (!ref.mounted) return;
-    if (_scanInProgress || state.isScanning) {
-      _log.w('Scan already in progress');
-      return;
+    while (_scanInProgress || state.isScanning) {
+      if (!waitForCurrentScan) {
+        _log.w('Scan already in progress');
+        return;
+      }
+      final active = _scanCompletion;
+      if (active == null) return;
+      await active;
+      if (!ref.mounted) return;
     }
 
     final completion = Completer<void>();
     _scanCompletion = completion.future;
     _scanInProgress = true;
+    _scanNotificationsEnabled = notify;
+    _activeScanPath = folderPath;
+    _activeScanSourceId = sourceId;
     if (sourceId != null) _pendingReconnectScans.remove(sourceId);
     _scanCancelRequested = false;
     _scanPauseRequested = false;
@@ -515,6 +587,9 @@ class LocalLibraryNotifier extends Notifier<LocalLibraryState> {
         );
       }
       _scanInProgress = false;
+      _scanNotificationsEnabled = true;
+      _activeScanPath = null;
+      _activeScanSourceId = null;
       _scanCompletion = null;
       _nativeLibraryRequestId = null;
       completion.complete();
@@ -714,3 +789,18 @@ final localLibraryProvider =
     NotifierProvider<LocalLibraryNotifier, LocalLibraryState>(
       LocalLibraryNotifier.new,
     );
+
+/// Moves with [LocalLibraryState.loadedIndexVersion] without creating the
+/// Library notifier, so a view can refresh when the index changes and leave
+/// loading it to the startup warmup.
+final localLibraryIndexRevisionProvider =
+    NotifierProvider<LocalLibraryIndexRevision, int>(
+      LocalLibraryIndexRevision.new,
+    );
+
+class LocalLibraryIndexRevision extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void _bump() => state++;
+}

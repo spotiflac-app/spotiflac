@@ -41,9 +41,7 @@ void main() {
   test(
     'ZIP backup pages history and streams cover files during restore',
     () async {
-      final root = await Directory.systemTemp.createTemp(
-        'spotiflac-backup-test-',
-      );
+      final root = await Directory.systemTemp.createTemp('spotiflac-backup-test-');
       addTearDown(() async {
         if (await root.exists()) await root.delete(recursive: true);
       });
@@ -180,14 +178,14 @@ void main() {
     () async {
       final root = await Directory.systemTemp.createTemp('legacy-backup-');
       addTearDown(() => root.delete(recursive: true));
-      final envelope = BackupService.buildEnvelope(
-        settings: {'theme': 'light'},
-        history: [],
-        collections: {},
-        playlistCovers: {},
-        extensions: {},
-      );
-      expect(envelope['magic'], 'spotiflac-backup');
+      final envelope = <String, dynamic>{
+        'magic': 'spotiflac-backup',
+        'format_version': 1,
+        'data': {
+          'settings': {'theme': 'light'},
+          'history': <Object?>[],
+        },
+      };
       expect(BackupService.parse(jsonEncode(envelope))!.hasHistory, isTrue);
       envelope['magic'] = 'spotiflac-backup';
       expect(BackupService.parse(jsonEncode(envelope))!.hasHistory, isTrue);

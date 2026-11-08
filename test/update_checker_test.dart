@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -19,8 +22,7 @@ Map<String, Object?> release(String version) => {
   'draft': false,
   'body': '- Release notes',
   'published_at': '2026-09-26T06:32:33Z',
-  'html_url':
-      'https://github.com/spotiflac-app/spotiflac/releases/tag/v$version',
+  'html_url': 'https://github.com/spotiflac-app/spotiflac/releases/tag/v$version',
   'assets': [
     for (final abi in ['arm32', 'arm64'])
       {
@@ -34,43 +36,30 @@ Map<String, Object?> release(String version) => {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  late Directory root;
+  const paths = MethodChannel('plugins.flutter.io/path_provider');
+  final messenger =
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+  Future<Map<String, dynamic>> cached() async =>
+      jsonDecode(
+            await File(
+              '${root.path}/preference_blobs/update_releases.json',
+            ).readAsString(),
+          )
+          as Map<String, dynamic>;
 
-  setUp(() {
+  setUp(() async {
+    root = await Directory.systemTemp.createTemp('update-blob-');
+    messenger.setMockMethodCallHandler(paths, (_) async => root.path);
     SharedPreferences.setMockInitialValues({});
     LogBuffer().clear();
     LogBuffer.loggingEnabled = true;
   });
-  tearDown(() => LogBuffer.loggingEnabled = false);
-
-  for (final (installed, available, expected) in [
-    ('5.2.7-preview.1', '5.2.7-preview.2', true),
-    ('5.2.7-beta.2', '5.2.7-beta.10', true),
-    ('5.2.7-beta.10', '5.2.7-beta.2', false),
-    ('5.2.7-beta.2', '5.2.7-rc.1', true),
-    ('5.2.7-rc.1', '5.2.7', true),
-    ('5.2.7', '5.2.7-rc.1', false),
-    ('5.2.7+1', '5.2.7+2', false),
-    ('5.2.7-preview.2', '5.2.7-preview.2', false),
-  ]) {
-    test('preview update ordering: $installed to $available', () async {
-      final checker = UpdateChecker(
-        installedVersion: installed,
-        isAndroid: true,
-        supportedAbis: ['arm64-v8a'],
-        client: MockClient(
-          (_) async => http.Response(
-            jsonEncode([
-              {...release(available), 'prerelease': available.contains('-')},
-            ]),
-            200,
-          ),
-        ),
-      );
-      final update = await checker.checkForUpdate(channel: 'preview');
-      expect(update != null, expected);
-      if (expected) expect(update!.version, available);
-    });
-  }
+  tearDown(() async {
+    LogBuffer.loggingEnabled = false;
+    messenger.setMockMethodCallHandler(paths, null);
+    await root.delete(recursive: true);
+  });
 
   for (final (abi, asset) in [
     ('arm64-v8a', 'arm64'),
@@ -107,17 +96,18 @@ void main() {
       expect(update?.apkSha256, List.filled(64, 'a').join());
       final prefs = await SharedPreferences.getInstance();
       expect(
-        prefs.getString('update_checker_releases_etag'),
+        (await cached())['update_checker_releases_etag'],
         '"new-release-list"',
       );
       expect(
-        prefs.getString('update_checker_releases_json'),
+        (await cached())['update_checker_releases_json'],
         contains('v5.0.5'),
       );
+      expect(prefs.getKeys(), isEmpty);
     });
   }
 
-  test('discovers release assets with supported filename variants', () async {
+  test('discovers SpotiFLAC release assets after the app rename', () async {
     final renamedRelease = release('5.2.1')
       ..['assets'] = [
         for (final abi in ['arm32', 'arm64'])
@@ -172,6 +162,45 @@ void main() {
     },
   );
 
+  test('a delayed 304 preserves a newer body and its matching ETag', () async {
+    SharedPreferences.setMockInitialValues({
+      'update_checker_releases_json': jsonEncode([release('5.0.1')]),
+      'update_checker_releases_etag': '"old"',
+    });
+    final requestStarted = Completer<void>();
+    final response = Completer<http.Response>();
+    final delayed = UpdateChecker(
+      isAndroid: true,
+      installedVersion: '5.0.0',
+      supportedAbis: ['arm64-v8a'],
+      client: MockClient((request) {
+        expect(request.headers['If-None-Match'], '"old"');
+        requestStarted.complete();
+        return response.future;
+      }),
+    );
+    final waiting = delayed.checkForUpdate();
+    await requestStarted.future;
+    final newer = UpdateChecker(
+      isAndroid: true,
+      installedVersion: '5.0.0',
+      supportedAbis: ['arm64-v8a'],
+      client: MockClient(
+        (_) async => http.Response(
+          jsonEncode([release('5.0.6')]),
+          200,
+          headers: {'etag': '"new"'},
+        ),
+      ),
+    );
+    expect((await newer.checkForUpdate())?.version, '5.0.6');
+    response.complete(http.Response('', 304));
+    await waiting;
+    final stored = await cached();
+    expect(stored['update_checker_releases_json'], contains('5.0.6'));
+    expect(stored['update_checker_releases_etag'], '"new"');
+  });
+
   test(
     'replacing a body without an ETag removes the previous validator',
     () async {
@@ -188,12 +217,7 @@ void main() {
         ),
       );
       expect((await checker.checkForUpdate())?.version, '5.0.5');
-      expect(
-        (await SharedPreferences.getInstance()).getString(
-          'update_checker_releases_etag',
-        ),
-        isNull,
-      );
+      expect((await cached())['update_checker_releases_etag'], isNull);
     },
   );
 
@@ -221,8 +245,9 @@ void main() {
       expect(messages, contains('could not be verified'));
       expect(messages, isNot(contains('No update available')));
       final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getString('update_checker_releases_json'), cachedBody);
-      expect(prefs.getString('update_checker_releases_etag'), '"cached"');
+      expect((await cached())['update_checker_releases_json'], cachedBody);
+      expect((await cached())['update_checker_releases_etag'], '"cached"');
+      expect(prefs.getKeys(), isEmpty);
     });
   }
 
@@ -357,7 +382,14 @@ void main() {
             ),
           ),
         );
-        await tester.tap(find.text('Check now'));
+        await tester.runAsync(() async {
+          await tester.tap(find.text('Check now'));
+          for (var i = 0; i < 100; i++) {
+            await Future<void>.delayed(const Duration(milliseconds: 10));
+            await tester.pump();
+            if (find.byType(UpdateDialog).evaluate().isNotEmpty) return;
+          }
+        });
         await tester.pumpAndSettle();
         expect(find.byType(UpdateDialog), findsOneWidget);
         expect(find.text('v5.0.5'), findsOneWidget);
@@ -390,7 +422,6 @@ void main() {
                     version: '5.3.0',
                     changelog: '- Desktop builds',
                     downloadUrl: 'https://example.test/releases/v5.3.0',
-                    publishedAt: DateTime(2026, 10, 20),
                     installKind: UpdateInstallKind.releasePage,
                   ),
                   onDisableUpdates: () {},

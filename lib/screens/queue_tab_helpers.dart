@@ -57,7 +57,6 @@ class _GroupedLocalAlbum {
 }
 
 class _FilterContentData {
-  final List<DownloadHistoryItem> historyItems;
   final List<UnifiedLibraryItem> unifiedItems;
   final List<UnifiedLibraryItem> filteredUnifiedItems;
   final List<_GroupedAlbum> filteredGroupedAlbums;
@@ -67,7 +66,6 @@ class _FilterContentData {
   final int? totalAlbumCountOverride;
 
   const _FilterContentData({
-    required this.historyItems,
     required this.unifiedItems,
     required this.filteredUnifiedItems,
     required this.filteredGroupedAlbums,
@@ -181,61 +179,6 @@ class _QueueLibraryPageRequest
     sortMode,
     localLibraryEnabled,
     cursor,
-  );
-}
-
-class _QueueLibraryCountsRequest {
-  final String searchQuery;
-  final String? filterSource;
-  final String? filterQuality;
-  final String? filterFormat;
-  final String? filterMetadata;
-  final bool localLibraryEnabled;
-
-  const _QueueLibraryCountsRequest({
-    required this.searchQuery,
-    required this.filterSource,
-    required this.filterQuality,
-    required this.filterFormat,
-    required this.filterMetadata,
-    required this.localLibraryEnabled,
-  });
-
-  QueueLibraryDbQuery toDbQuery() => QueueLibraryDbQuery(
-    searchQuery: searchQuery,
-    source: filterSource,
-    quality: filterQuality,
-    format: filterFormat,
-    metadata: filterMetadata,
-    includeLocal: localLibraryEnabled,
-  );
-
-  bool get allowsInMemoryHistoryFallback =>
-      searchQuery.trim().isEmpty &&
-      filterSource != 'local' &&
-      filterQuality == null &&
-      filterFormat == null &&
-      filterMetadata == null;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is _QueueLibraryCountsRequest &&
-          searchQuery == other.searchQuery &&
-          filterSource == other.filterSource &&
-          filterQuality == other.filterQuality &&
-          filterFormat == other.filterFormat &&
-          filterMetadata == other.filterMetadata &&
-          localLibraryEnabled == other.localLibraryEnabled;
-
-  @override
-  int get hashCode => Object.hash(
-    searchQuery,
-    filterSource,
-    filterQuality,
-    filterFormat,
-    filterMetadata,
-    localLibraryEnabled,
   );
 }
 
@@ -364,23 +307,13 @@ class _QueueLibraryPageData implements QueueLibraryPageContent {
     );
   }
 
-  _FilterContentData toFilterContentData(
-    LibraryCollectionsState collectionState, {
+  _FilterContentData toFilterContentData({
     int? totalTrackCount,
     int? totalAlbumCount,
   }) {
-    final filteredItems = !collectionState.hasPlaylistTracks
-        ? items
-        : items
-              .where(
-                (item) =>
-                    !collectionState.isTrackInAnyPlaylist(item.collectionKey),
-              )
-              .toList(growable: false);
     return _FilterContentData(
-      historyItems: historyItems,
       unifiedItems: items,
-      filteredUnifiedItems: filteredItems,
+      filteredUnifiedItems: items,
       filteredGroupedAlbums: groupedAlbums,
       filteredGroupedLocalAlbums: groupedLocalAlbums,
       showFilteringIndicator: false,
@@ -507,20 +440,4 @@ final _queueLibraryPageProvider = FutureProvider.autoDispose
         localItems: localItems,
         nextCursor: page.nextCursor,
       );
-    });
-
-final _queueLibraryCountsProvider = FutureProvider.autoDispose
-    .family<QueueLibraryCounts, _QueueLibraryCountsRequest>((
-      ref,
-      request,
-    ) async {
-      ref.watch(
-        downloadHistoryProvider.select((state) => state.loadedIndexVersion),
-      );
-      if (request.localLibraryEnabled) {
-        ref.watch(
-          localLibraryProvider.select((state) => state.loadedIndexVersion),
-        );
-      }
-      return LibraryDatabase.instance.getQueueCounts(request.toDbQuery());
     });

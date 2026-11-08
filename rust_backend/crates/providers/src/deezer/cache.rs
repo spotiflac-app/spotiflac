@@ -1,9 +1,7 @@
 //! In-memory cache for Deezer album, artist, and playlist responses, with in-flight request sharing.
 
 use super::{Check, DeezerClient, ResolverError};
-use spotiflac_core::metadata::{
-    AlbumExtendedMetadata, AlbumResponsePayload, ArtistResponsePayload,
-};
+use spotiflac_core::metadata::{AlbumExtendedMetadata, AlbumResponsePayload, ArtistResponsePayload};
 use std::collections::BTreeMap;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::{Arc, Condvar, Mutex};

@@ -40,31 +40,13 @@ const _artistSorts = {'artist-asc', 'artist-desc'};
 const _albumSorts = {'album-asc', 'album-desc'};
 const _dateSorts = {'latest', 'oldest'};
 
-/// Sort choices offered by the Library sort sheet, in display order.
-const _librarySortModes = [
-  'latest',
-  'oldest',
-  'size-desc',
-  'size-asc',
-  'a-z',
-  'z-a',
-  'artist-asc',
-  'artist-desc',
-  'album-asc',
-  'album-desc',
-  'release-newest',
-  'release-oldest',
-  'genre-asc',
-  'genre-desc',
-];
-
 extension _QueueTabSections on _QueueTabState {
   Iterable<String> get _availableLibrarySortModes {
     final mode =
         widget.librarySection ?? ref.read(settingsProvider).historyFilterMode;
     return mode == 'playlists'
-        ? _librarySortModes.where((sort) => !sort.startsWith('size-'))
-        : _librarySortModes;
+        ? librarySortModes.where((sort) => !sort.startsWith('size-'))
+        : librarySortModes;
   }
 
   String _sortLabel(BuildContext context, String mode) {
@@ -134,10 +116,18 @@ extension _QueueTabSections on _QueueTabState {
       return _cachedTrackSections;
     }
     final sections = <_LibrarySection>[];
+    // Date labels name only the month, so each month is formatted once.
+    final monthLabels = _dateSorts.contains(_sortMode) ? <int, String>{} : null;
     String? label;
     var start = 0;
     for (var i = 0; i < items.length; i++) {
-      final next = _trackSectionLabel(context, items[i]) ?? '';
+      final added = items[i].addedAt;
+      final next = monthLabels != null
+          ? monthLabels.putIfAbsent(
+              added.year * 12 + added.month,
+              () => _trackSectionLabel(context, items[i]) ?? '',
+            )
+          : _trackSectionLabel(context, items[i]) ?? '';
       if (i == 0) {
         label = next;
       } else if (next != label) {
@@ -194,8 +184,8 @@ extension _QueueTabSections on _QueueTabState {
 
   void _setSortMode(String mode) {
     if (mode == _sortMode || !mounted) return;
+    ref.read(settingsProvider.notifier).setHistorySortMode(mode);
     _setState(() {
-      _sortMode = mode;
       _resetLibraryPaging();
     });
   }
@@ -249,16 +239,16 @@ extension _QueueTabSections on _QueueTabState {
     final filterCount = _activeFilterCount;
     final grid = viewMode == 'grid';
     return [
-      _LibraryToolGroup(
+      ToolButtonGroup(
         tools: [
-          _LibraryTool(
+          ToolButton(
             icon: const AppIcon(Icons.sort),
             label: _sortLabel(context, _sortMode),
             // The menu anchors below the button but opens from the page, so
             // it does not inherit the button's text and icon styles.
             onPressed: (button) => _showSortSheet(context, anchor: button),
           ),
-          _LibraryTool(
+          ToolButton(
             icon: Badge(
               isLabelVisible: filterCount > 0,
               label: Text('$filterCount'),
@@ -269,7 +259,7 @@ extension _QueueTabSections on _QueueTabState {
             onLongPress: filterCount > 0 ? _resetFilters : null,
           ),
           if (viewMode != null)
-            _LibraryTool(
+            ToolButton(
               icon: AppIcon(grid ? Icons.view_list : Icons.grid_view),
               tooltip: grid
                   ? l10n.appearanceHistoryViewList
@@ -429,14 +419,13 @@ extension _QueueTabSections on _QueueTabState {
             sections.add(_LibrarySection(label, i, entries.length));
           }
         }
-        void openArtist(String artist) => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => Scaffold(
-              body: SpotiFLACLibraryScreen(
-                page: SpotiFLACLibraryPage.albums,
-                artist: artist,
-                onOpenSection: (_) {},
-              ),
+        void openArtist(String artist) => pushPage<void>(
+          context,
+          (_) => Scaffold(
+            body: SpotiFLACLibraryScreen(
+              page: SpotiFLACLibraryPage.albums,
+              artist: artist,
+              onOpenSection: (_) {},
             ),
           ),
         );

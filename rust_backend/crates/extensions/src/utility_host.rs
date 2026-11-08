@@ -1,7 +1,7 @@
 use crate::runtime::{Control, ExtensionServices};
-use rquickjs::{Ctx, Function, Object, Value};
 use spotiflac_core::matching;
 pub(crate) use spotiflac_network::random_user_agent;
+use rquickjs::{Ctx, Function, Object, Value};
 use std::sync::Arc;
 
 pub(crate) fn register<'js>(

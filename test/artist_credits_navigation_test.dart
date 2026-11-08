@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:spotiflac/controllers/clickable_metadata.dart';
 import 'package:spotiflac/l10n/l10n.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
-import 'package:spotiflac/utils/clickable_metadata.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -16,9 +16,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           child: MaterialApp(
-            theme: spotiflac
-                ? SpotiFLACTheme.build(Brightness.dark)
-                : ThemeData(),
+            theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : ThemeData(),
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             home: Builder(

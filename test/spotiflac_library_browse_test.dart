@@ -12,6 +12,7 @@ import 'package:spotiflac/providers/settings_provider.dart';
 import 'package:spotiflac/screens/spotiflac_library_screen.dart';
 import 'package:spotiflac/services/album_completeness.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
+import 'package:spotiflac/widgets/app_search_field.dart';
 
 class _Settings extends SettingsNotifier {
   @override
@@ -261,6 +262,14 @@ void main() {
     await tester.tap(find.byTooltip('Search your library'));
     await tester.pumpAndSettle();
     expect(tester.testTextInput.isVisible, isTrue);
+    // The field scrolls with the page over its plain background.
+    expect(
+      find.descendant(
+        of: find.byType(AppSearchField),
+        matching: find.byType(BackdropFilter),
+      ),
+      findsNothing,
+    );
     await tester.enterText(find.byType(TextField), 'My album');
     await tester.pump(const Duration(milliseconds: 350));
     await tester.pumpAndSettle();

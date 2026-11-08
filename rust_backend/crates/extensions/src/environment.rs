@@ -10,13 +10,13 @@ use crate::storage::{
     ExtensionStore, StorageError, StorageMasterKey, StoreKind, valid_extension_id,
 };
 use crate::{ExtensionError, ExtensionRuntime, ExtensionServices, RuntimeLimits};
-use serde_json::{Map, Value};
 use spotiflac_core::app_version::AppVersion;
 use spotiflac_core::cancellation::{CancellationDomain, CancellationRegistry};
 use spotiflac_core::downloads::DownloadState;
 use spotiflac_core::progress::ProgressRegistry;
 use spotiflac_network::{NetworkService, policy::NetworkPermissions};
 use spotiflac_providers::lyrics::{CallGraph, CallNode, LyricsService};
+use serde_json::{Map, Value};
 use std::cmp::Ordering as Comparison;
 use std::collections::BTreeMap;
 use std::fs;
@@ -40,6 +40,7 @@ pub(crate) static SUPPORTED_RUNTIME_FEATURES: LazyLock<BTreeMap<String, isize>> 
             ("accountForms", 1),
             ("accountDownloadMode", 1),
             ("directMedia", 1),
+            ("deferredPreview", 1),
         ]
         .into_iter()
         .map(|(name, version)| (name.to_owned(), version))
@@ -357,6 +358,7 @@ impl ExtensionEnvironment {
                     network_timeout(manifest.capabilities.get("networkTimeoutSeconds")),
                 )
             });
+        network.set_grants(manifest.network_grants(&settings));
         // Legacy metadata helpers do not require the general file permission.
         // They receive read access to this sandbox and native-granted roots.
         let legacy_files = self
@@ -726,5 +728,26 @@ pub fn compare_versions(first: &str, second: &str) -> Comparison {
         if !result.is_eq() {
             return result;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deferred_preview_extensions_require_this_app_build() {
+        let manifest = ExtensionManifest::parse(
+            &serde_json::json!({
+                "name":"generic-media","version":"1.0.0","description":"Generic fixture",
+                "type":["metadata_provider"],"minAppVersion":"5.3.0",
+                "requiredRuntimeFeatures":["deferredPreview@1"]
+            })
+            .to_string(),
+        )
+        .unwrap();
+        assert!(validate_gates(&manifest, "5.3.0", &SUPPORTED_RUNTIME_FEATURES).is_ok());
+        let without = BTreeMap::new();
+        assert!(validate_gates(&manifest, "5.3.0", &without).is_err());
     }
 }

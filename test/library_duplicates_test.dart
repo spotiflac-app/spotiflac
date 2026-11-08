@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:spotiflac/services/library_database_models.dart';
+import 'package:spotiflac/models/library_database_models.dart';
 import 'package:spotiflac/services/library_duplicates.dart';
 import 'package:spotiflac/services/library_schema.dart';
 import 'package:spotiflac/services/network_storage_service.dart';

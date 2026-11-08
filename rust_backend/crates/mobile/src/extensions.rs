@@ -1,7 +1,5 @@
 use crate::cancellation::RequestLease;
-use spotiflac_extensions::environment::{
-    EnvironmentError, ExtensionEnvironment as CoreEnvironment,
-};
+use spotiflac_extensions::environment::{EnvironmentError, ExtensionEnvironment as CoreEnvironment};
 use spotiflac_extensions::{ExtensionError, ExtensionRuntime, RuntimeLimits};
 use std::path::Path;
 use std::sync::{Arc, Mutex};

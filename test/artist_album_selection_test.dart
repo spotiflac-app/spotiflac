@@ -44,9 +44,7 @@ Future<void> _pumpArtist(
   await tester.pumpWidget(
     ProviderScope(
       child: MaterialApp(
-        theme: spotiflac
-            ? SpotiFLACTheme.build(Brightness.light)
-            : AppTheme.light(),
+        theme: spotiflac ? SpotiFLACTheme.build(Brightness.light) : AppTheme.light(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: ArtistScreen(
@@ -203,7 +201,8 @@ void main() {
           ),
       ];
       await _pumpArtist(tester, spotiflac: spotiflac, albums: albums);
-      final shelf = find.byType(DesktopScrollArrows);
+      // SpotiFLAC's highlights row scrolls too; the albums are the last shelf.
+      final shelf = find.byType(DesktopScrollArrows).last;
       final list = find.descendant(of: shelf, matching: find.byType(ListView));
       final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
       addTearDown(mouse.removePointer);
@@ -251,6 +250,27 @@ void main() {
       await tester.tap(_card(3));
       await tester.pumpAndSettle();
       _expectSelection(tester, {2, 3});
+      await _disposeArtist(tester);
+    });
+
+    testWidgets('$style: select all toggle clears but keeps selection mode', (
+      tester,
+    ) async {
+      debugDesktopPlatformOverride = false;
+      await _pumpArtist(tester, spotiflac: spotiflac);
+      await tester.longPress(_card(2));
+      await tester.pumpAndSettle();
+      SelectionBottomBar bar() =>
+          tester.widget<SelectionBottomBar>(find.byType(SelectionBottomBar));
+      expect(bar().allSelected, isFalse);
+      bar().onToggleSelectAll();
+      await tester.pumpAndSettle();
+      _expectSelection(tester, {0, 1, 2, 3, 4});
+      expect(bar().allSelected, isTrue);
+      bar().onToggleSelectAll();
+      await tester.pumpAndSettle();
+      _expectSelection(tester, {});
+      expect(bar().allSelected, isFalse);
       await _disposeArtist(tester);
     });
   }

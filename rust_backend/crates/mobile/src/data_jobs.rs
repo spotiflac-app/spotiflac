@@ -60,6 +60,8 @@ fn execute(
     let operation = string(request, "operation")?;
     match operation {
         "hash_file" => Ok(json!({"sha256": hash_file(string(request, "path")?, check)?})),
+        "directory_stats" => crate::native_directory_stats::execute(request, check),
+        "train_autoplay_taste" => crate::native_autoplay_taste::execute(request, check),
         "matches_network_upload" => crate::network_tags::matches_upload(request, check),
         "network_metadata" => {
             let metadata = crate::network_tags::read_to_cache(
@@ -87,6 +89,9 @@ fn execute(
             crate::native_id3::execute(request, Some(bytes), check)
         }
         "parse_lyrics" => crate::native_lyrics::execute(request, Some(bytes), check),
+        "parse_lyrics_translation_reply" => {
+            crate::native_lyrics_translation::execute(request, Some(bytes), check)
+        }
         "palette" => {
             let colors = spotiflac_core::native_palette::quantize_rgba(bytes, check)?;
             Ok(json!({"colors": colors}))
@@ -98,6 +103,22 @@ fn execute(
             )?;
             serde_json::to_value(grid).map_err(|error| error.to_string())
         }
+        "audio_features" => {
+            use spotiflac_core::native_audio_features as features;
+            let paths = request
+                .get("paths")
+                .and_then(Value::as_array)
+                .ok_or("Missing native data field: paths")?
+                .iter()
+                .map(|path| path.as_str().ok_or("Invalid audio feature window path"))
+                .collect::<Result<Vec<_>, _>>()?;
+            let described = features::analyze_audio_features_files(&paths, check)?;
+            Ok(json!({
+                "version": features::AUDIO_FEATURES_VERSION,
+                "features": described.map(|value| value.to_vector()),
+            }))
+        }
+        "recognize_song" => crate::native_recognition::execute(request, bytes, check),
         "spectral_cutoff" => {
             let width = request
                 .get("width")
@@ -196,5 +217,37 @@ mod tests {
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         );
         assert!(hash_file(file.path().to_str().unwrap(), &|| Err("cancelled".into())).is_err());
+    }
+
+    #[test]
+    fn describes_decoded_windows_and_rejects_bad_requests() {
+        let mut tone = tempfile::NamedTempFile::new().unwrap();
+        for index in 0..22_050 * 8 {
+            let value = 0.5 * (index as f64 * 440.0 * std::f64::consts::TAU / 22_050.0).sin();
+            tone.write_all(&(((value * 32767.0) as i16).to_le_bytes()))
+                .unwrap();
+        }
+        let mut silence = tempfile::NamedTempFile::new().unwrap();
+        silence.write_all(&[0; 22_050 * 2 * 8]).unwrap();
+        let run = |paths: Value| {
+            execute(
+                &json!({"operation": "audio_features", "paths": paths}),
+                &[],
+                &|| Ok(()),
+                None,
+            )
+        };
+        let tone_path = tone.path().to_str().unwrap();
+        let described = run(json!([tone_path, tone_path])).unwrap();
+        assert_eq!(described["version"], 1);
+        assert_eq!(
+            described["features"].as_array().unwrap().len(),
+            spotiflac_core::native_audio_features::AudioFeatures::LEN
+        );
+        let silent = run(json!([silence.path().to_str().unwrap()])).unwrap();
+        assert!(silent["features"].is_null());
+        assert!(run(json!([])).is_err());
+        assert!(run(json!([1])).is_err());
+        assert!(run(json!(["/missing/window.pcm"])).is_err());
     }
 }

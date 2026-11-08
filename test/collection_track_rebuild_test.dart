@@ -66,21 +66,16 @@ class _Recent extends RecentAccessNotifier {
   }) {}
 }
 
-Widget _app(
-  ProviderContainer container,
-  Widget child, {
-  bool spotiflac = false,
-}) => UncontrolledProviderScope(
-  container: container,
-  child: MaterialApp(
-    theme: spotiflac
-        ? SpotiFLACTheme.build(Brightness.light)
-        : AppTheme.light(),
-    localizationsDelegates: AppLocalizations.localizationsDelegates,
-    supportedLocales: AppLocalizations.supportedLocales,
-    home: Scaffold(body: child),
-  ),
-);
+Widget _app(ProviderContainer container, Widget child, {bool spotiflac = false}) =>
+    UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        theme: spotiflac ? SpotiFLACTheme.build(Brightness.light) : AppTheme.light(),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(body: child),
+      ),
+    );
 
 void main() {
   testWidgets(

@@ -23,10 +23,14 @@ class SpotiFLACPlayerDetailsSheet extends ConsumerWidget {
   final ScrollController scrollController;
   final MediaItem? mediaItem;
 
+  static const _artworkSize = 70.0;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final item = mediaItem;
+    final artworkCacheWidth =
+        (_artworkSize * MediaQuery.devicePixelRatioOf(context)).ceil();
     return SpotiFLACGlass.navigation(
       blurEnabled: ref.watch(spotiflacBlurEnabledProvider),
       child: SafeArea(
@@ -74,10 +78,11 @@ class SpotiFLACPlayerDetailsSheet extends ConsumerWidget {
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(10),
                                 child: SizedBox.square(
-                                  dimension: 70,
+                                  dimension: _artworkSize,
                                   child: PlayerArtwork(
                                     artUri: item.artUri?.toString(),
                                     colorScheme: theme.colorScheme,
+                                    cacheWidth: artworkCacheWidth,
                                   ),
                                 ),
                               ),

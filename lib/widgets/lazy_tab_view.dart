@@ -53,19 +53,25 @@ class _LazyTabViewState extends State<LazyTabView> {
       return;
     }
     _preloadScheduled = true;
-    // Mount Search between animations rather than during its first tab switch.
-    SchedulerBinding.instance.scheduleTask<void>(
-      () {
-        _preloadScheduled = false;
-        if (!mounted) return;
-        final pending = widget.preloadKeys
-            .intersection(_tabKeys)
-            .difference(_mountedTabs);
-        if (pending.isNotEmpty) setState(() => _mountedTabs.addAll(pending));
-      },
-      Priority.idle,
-      debugLabel: 'Preload navigation tab',
-    );
+    SchedulerBinding.instance.addPostFrameCallback(_preloadWhenIdle);
+  }
+
+  void _preloadWhenIdle(Duration _) {
+    if (!mounted) return;
+    final pending = widget.preloadKeys
+        .intersection(_tabKeys)
+        .difference(_mountedTabs);
+    if (pending.isEmpty) {
+      _preloadScheduled = false;
+      return;
+    }
+    // Waiting for animation frames avoids the scheduler's busy idle-task loop.
+    if (SchedulerBinding.instance.transientCallbackCount > 0) {
+      SchedulerBinding.instance.addPostFrameCallback(_preloadWhenIdle);
+      return;
+    }
+    _preloadScheduled = false;
+    setState(() => _mountedTabs.addAll(pending));
   }
 
   @override
@@ -83,12 +89,42 @@ class _LazyTabViewState extends State<LazyTabView> {
             excluding: index != widget.index,
             child: TickerMode(
               enabled: index == widget.index,
-              child: _mountedTabs.contains(_tabKey(index))
-                  ? widget.children[index]
-                  : const SizedBox.shrink(),
+              child: _TabInsets(
+                hidden: index != widget.index,
+                child: _mountedTabs.contains(_tabKey(index))
+                    ? widget.children[index]
+                    : const SizedBox.shrink(),
+              ),
             ),
           ),
         ),
     ],
   );
+}
+
+/// Keeps hidden tabs at their last visible window size and without a keyboard.
+class _TabInsets extends StatefulWidget {
+  const _TabInsets({required this.hidden, required this.child});
+
+  final bool hidden;
+  final Widget child;
+
+  @override
+  State<_TabInsets> createState() => _TabInsetsState();
+}
+
+class _TabInsetsState extends State<_TabInsets> {
+  Size? _visibleSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final data = MediaQuery.of(context);
+    if (!widget.hidden || _visibleSize == null) _visibleSize = data.size;
+    return MediaQuery(
+      data: data
+          .copyWith(size: _visibleSize)
+          .removeViewInsets(removeBottom: widget.hidden),
+      child: widget.child,
+    );
+  }
 }

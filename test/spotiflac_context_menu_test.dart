@@ -82,14 +82,13 @@ void main() {
                       anchor: anchor,
                       preferAbove: preferAbove,
                       builder: (menuContext) {
-                        SpotiFLACMenuAction action(
-                          String label,
-                          IconData icon,
-                        ) => SpotiFLACMenuAction(
-                          icon: icon,
-                          label: label,
-                          onPressed: () => Navigator.of(menuContext).pop(label),
-                        );
+                        SpotiFLACMenuAction action(String label, IconData icon) =>
+                            SpotiFLACMenuAction(
+                              icon: icon,
+                              label: label,
+                              onPressed: () =>
+                                  Navigator.of(menuContext).pop(label),
+                            );
                         return SpotiFLACContextMenu(
                           dense: dense,
                           inheritSurface: chromeSurface != null,

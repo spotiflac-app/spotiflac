@@ -2,12 +2,15 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:spotiflac/services/desktop_updater.dart';
 import 'package:spotiflac/services/update_checker.dart';
+
+import 'support/preference_blob_fixture.dart';
 
 const _version = 'v5.3.0';
 
@@ -125,8 +128,7 @@ void main() {
       expect(
         UpdateHost.detectLinuxPackage(
           environment: {'APPIMAGE': '/home/user/SpotiFLAC.AppImage'},
-          resolvedExecutable:
-              '/tmp/.mount_SpotiFLACAbc/usr/lib/spotiflac/spotiflac',
+          resolvedExecutable: '/tmp/.mount_SpotiFLACAbc/usr/lib/spotiflac/spotiflac',
         ),
         LinuxPackageKind.appImage,
       );
@@ -196,7 +198,12 @@ void main() {
   });
 
   group('checkForUpdate on desktop', () {
-    setUp(() => SharedPreferences.setMockInitialValues({}));
+    late PreferenceBlobFixture blobs;
+    setUp(() async {
+      blobs = await PreferenceBlobFixture.create();
+      SharedPreferences.setMockInitialValues({});
+    });
+    tearDown(() => blobs.close());
 
     Map<String, Object?> release() => {
       'tag_name': _version,
@@ -218,50 +225,55 @@ void main() {
       ),
     );
 
-    test('desktop and Android use the project release repository', () async {
-      final requested = <Uri>[];
-      UpdateChecker recording(UpdateHost host) => UpdateChecker(
-        installedVersion: '5.2.1',
-        host: host,
-        client: MockClient((request) async {
-          requested.add(request.url);
-          return http.Response('[]', 200);
-        }),
-      );
-      await recording(_appImageHost).checkForUpdate();
-      await recording(UpdateHost.android).checkForUpdate();
-      expect(requested.map((url) => url.path), [
-        '/repos/spotiflac-app/spotiflac/releases',
-        '/repos/spotiflac-app/spotiflac/releases',
-      ]);
-    });
+    test(
+      'desktop reads the desktop repository, Android the main one',
+      () async {
+        final requested = <Uri>[];
+        UpdateChecker recording(UpdateHost host) => UpdateChecker(
+          installedVersion: '5.2.1',
+          host: host,
+          client: MockClient((request) async {
+            requested.add(request.url);
+            return http.Response('[]', 200);
+          }),
+        );
+        await recording(_appImageHost).checkForUpdate();
+        await recording(UpdateHost.android).checkForUpdate();
+        expect(requested.map((url) => url.path), [
+          '/repos/spotiflac-app/spotiflac-releases/releases',
+          '/repos/spotiflac-app/spotiflac/releases',
+        ]);
+      },
+    );
 
-    test('a different repository cache is not reused', () async {
-      // Saved by an earlier desktop build, which read the main repository.
-      SharedPreferences.setMockInitialValues({
-        'update_checker_releases_json': jsonEncode([release()]),
-        'update_checker_releases_etag': '"main"',
-        'update_checker_releases_repo': 'other-owner/other-project',
-      });
-      final headers = <Map<String, String>>[];
-      final offline = UpdateChecker(
-        installedVersion: '5.2.1',
-        host: _appImageHost,
-        client: MockClient((request) async {
-          headers.add(request.headers);
-          throw http.ClientException('Offline');
-        }),
-      );
-      expect(await offline.checkForUpdate(), isNull);
-      expect(headers.single.containsKey('If-None-Match'), isFalse);
+    test(
+      'a main repository list saved before the split is not reused',
+      () async {
+        // Saved by an earlier desktop build, which read the main repository.
+        SharedPreferences.setMockInitialValues({
+          'update_checker_releases_json': jsonEncode([release()]),
+          'update_checker_releases_etag': '"main"',
+        });
+        final headers = <Map<String, String>>[];
+        final offline = UpdateChecker(
+          installedVersion: '5.2.1',
+          host: _appImageHost,
+          client: MockClient((request) async {
+            headers.add(request.headers);
+            throw http.ClientException('Offline');
+          }),
+        );
+        expect(await offline.checkForUpdate(), isNull);
+        expect(headers.single.containsKey('If-None-Match'), isFalse);
 
-      // A list fetched from the desktop repository is reused offline.
-      await checker(_appImageHost).checkForUpdate();
-      expect(
-        (await offline.checkForUpdate())?.assetName,
-        'SpotiFLAC-$_version-linux-x86_64.AppImage',
-      );
-    });
+        // A list fetched from the desktop repository is reused offline.
+        await checker(_appImageHost).checkForUpdate();
+        expect(
+          (await offline.checkForUpdate())?.assetName,
+          'SpotiFLAC-$_version-linux-x86_64.AppImage',
+        );
+      },
+    );
 
     test('an AppImage gets its package, checksums and target path', () async {
       final update = await checker(_appImageHost).checkForUpdate();
@@ -301,11 +313,14 @@ void main() {
     final payload = utf8.encode('verified package bytes');
     final payloadSha = sha256.convert(payload).toString();
     const assetName = 'SpotiFLAC-$_version-linux-x86_64.AppImage';
+    const channel = MethodChannel('com.spotiflac.app/backend');
 
     setUp(() async {
       temp = await Directory.systemTemp.createTemp('spotiflac-updater-test');
     });
     tearDown(() async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
       if (await temp.exists()) await temp.delete(recursive: true);
     });
 
@@ -313,7 +328,6 @@ void main() {
       version: '5.3.0',
       changelog: '',
       downloadUrl: 'https://example.test/releases/$_version',
-      publishedAt: DateTime(2026, 10, 20),
       installKind: UpdateInstallKind.linuxAppImage,
       assetName: assetName,
       assetUrl: 'https://example.test/$assetName',
@@ -340,6 +354,36 @@ void main() {
       expect(await file.readAsBytes(), payload);
       expect(File('${file.path}.part').existsSync(), isFalse);
     });
+
+    test(
+      'uses the native digest and rejects its mismatch before publishing',
+      () async {
+        var hashes = 0;
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, (call) async {
+              expect(call.method, 'runNativeDataJob');
+              final arguments = call.arguments as Map;
+              final request =
+                  jsonDecode(arguments['request_json'] as String) as Map;
+              expect(request['operation'], 'hash_file');
+              final file = File(request['path'] as String);
+              expect(file.path, endsWith('.part'));
+              expect(await file.readAsBytes(), payload);
+              hashes++;
+              return {'sha256': '0' * 64};
+            });
+        final updater = DesktopUpdater(
+          client: client('$payloadSha  $assetName\n'),
+          downloadDirectory: temp,
+        );
+        await expectLater(
+          updater.download(info()),
+          throwsA(isA<DesktopUpdateException>()),
+        );
+        expect(hashes, 1);
+        expect(temp.listSync(), isEmpty);
+      },
+    );
 
     test('rejects a package whose digest does not match', () async {
       final updater = DesktopUpdater(

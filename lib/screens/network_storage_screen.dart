@@ -4,18 +4,22 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:spotiflac/l10n/l10n.dart';
 import 'package:spotiflac/providers/music_player_provider.dart';
 import 'package:spotiflac/providers/local_library_provider.dart';
+import 'package:spotiflac/providers/network_upload_provider.dart';
 import 'package:spotiflac/providers/settings_provider.dart';
+import 'package:spotiflac/services/link/link_source_names.dart';
 import 'package:spotiflac/services/music_player_service.dart';
 import 'package:spotiflac/services/network_storage_service.dart';
 import 'package:spotiflac/services/network_storage_error.dart';
 import 'package:spotiflac/services/network_certificate.dart';
 import 'package:spotiflac/utils/adaptive_layout.dart';
+import 'package:spotiflac/utils/logger.dart';
 import 'package:spotiflac/utils/nav_bar_inset.dart';
 import 'package:spotiflac/widgets/app_sliver_header.dart';
 import 'package:spotiflac/widgets/app_search_field.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
 import 'package:spotiflac/theme/app_tokens.dart';
 import 'package:spotiflac/widgets/app_action_button.dart';
+import 'package:spotiflac/widgets/app_icon.dart';
 import 'package:spotiflac/widgets/app_loading_indicator.dart';
 import 'package:spotiflac/widgets/app_progress_indicator.dart';
 import 'package:spotiflac/widgets/expressive_button.dart';
@@ -29,11 +33,16 @@ class NetworkStorageScreen extends ConsumerStatefulWidget {
     this.path = '',
     this.service,
     this.displayName,
+    this.pickUploadFolder = false,
   });
   final NetworkConnection? connection;
   final String path;
   final NetworkStorageService? service;
   final String? displayName;
+
+  /// Browses folders only and pops with the source of the folder chosen to
+  /// upload into ([browseNetworkUploadFolder]).
+  final bool pickUploadFolder;
 
   @override
   ConsumerState<NetworkStorageScreen> createState() =>
@@ -84,6 +93,29 @@ class _NetworkStorageScreenState extends ConsumerState<NetworkStorageScreen> {
             source,
             '${connection.name}${widget.path.isEmpty ? '' : ' / ${widget.path}'}',
           );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${context.l10n.networkDownloadAccessFailed} ${_networkErrorMessage(context, classifyNetworkStorageError(error))}',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _selectingDestination = false);
+    }
+  }
+
+  Future<void> _chooseUploadFolder() async {
+    final connection = widget.connection;
+    if (connection == null || _selectingDestination) return;
+    setState(() => _selectingDestination = true);
+    try {
+      final source = NetworkStorageService.source(connection.id, widget.path);
+      await service.checkUploadAccess(source);
+      if (mounted) Navigator.of(context).pop(source);
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -187,13 +219,15 @@ class _NetworkStorageScreenState extends ConsumerState<NetworkStorageScreen> {
 
   Future<void> _edit([NetworkConnection? connection]) async {
     await Navigator.of(context).push(
-      _networkRoute(
+      _networkRoute<void>(
         context,
         builder: (_) =>
             _NetworkConnectionForm(service: service, connection: connection),
       ),
     );
-    if (mounted) await _load();
+    if (!mounted) return;
+    ref.invalidate(networkUploadConnectionsProvider);
+    await _load();
   }
 
   Future<void> _open(
@@ -201,17 +235,19 @@ class _NetworkStorageScreenState extends ConsumerState<NetworkStorageScreen> {
     String path = '',
     String? displayName,
   ]) async {
-    await Navigator.of(context).push(
-      _networkRoute(
+    final picked = await Navigator.of(context).push(
+      _networkRoute<String>(
         context,
         builder: (_) => NetworkStorageScreen(
           connection: connection,
           path: path,
           service: service,
           displayName: displayName,
+          pickUploadFolder: widget.pickUploadFolder,
         ),
       ),
     );
+    if (picked != null && mounted) Navigator.of(context).pop(picked);
   }
 
   Future<void> _play(NetworkEntry selected) async {
@@ -233,14 +269,6 @@ class _NetworkStorageScreenState extends ConsumerState<NetworkStorageScreen> {
                 }.contains(e.name.toLowerCase()),
           )
           .firstOrNull;
-      final artwork = cover == null
-          ? null
-          : Uri.parse(
-              await service.resolve(
-                NetworkStorageService.source(connection.id, cover.path),
-              ),
-            );
-      if (!mounted) return;
       await ref.read(musicPlayerControllerProvider).playAll([
         for (final entry in tracks)
           PlayableMedia(
@@ -254,7 +282,6 @@ class _NetworkStorageScreenState extends ConsumerState<NetworkStorageScreen> {
                 entry.song?.album ??
                 widget.path.split('/').where((p) => p.isNotEmpty).lastOrNull ??
                 '',
-            artUri: artwork?.toString(),
             networkArtworkSource: entry.song?.coverPath != null
                 ? NetworkStorageService.source(
                     connection.id,
@@ -301,7 +328,12 @@ class _NetworkStorageScreenState extends ConsumerState<NetworkStorageScreen> {
         ? connection.name
         : widget.displayName ??
               widget.path.split('/').where((p) => p.isNotEmpty).last;
-    final visible = _entries.where((e) => e.directory || e.audio).toList();
+    // Paired computers are served over Subsonic but are SpotiFLAC Link, which
+    // manages them, so they show as that and are not edited here.
+    final links = ref.watch(linkSourceNamesProvider);
+    final visible = _entries
+        .where((e) => e.directory || (e.audio && !widget.pickUploadFolder))
+        .toList();
     return Scaffold(
       body: CustomScrollView(
         slivers: [
@@ -346,6 +378,38 @@ class _NetworkStorageScreenState extends ConsumerState<NetworkStorageScreen> {
                   SliverToBoxAdapter(child: _NetworkProgress()),
                 if (!_loading &&
                     !_failed &&
+                    widget.pickUploadFolder &&
+                    connection != null &&
+                    connection.writable)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          AppActionButton(
+                            onPressed: _selectingDestination
+                                ? null
+                                : _chooseUploadFolder,
+                            icon: const AppIcon.adaptive(
+                              Icons.cloud_upload_outlined,
+                            ),
+                            label: Text(context.l10n.networkUploadHere),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            context.l10n.networkUploadDescription,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          if (_selectingDestination)
+                            const AppProgressIndicator.linear(),
+                        ],
+                      ),
+                    ),
+                  ),
+                if (!_loading &&
+                    !_failed &&
+                    !widget.pickUploadFolder &&
                     connection != null &&
                     connection.protocol != NetworkProtocol.http &&
                     (!_subsonic || widget.path.isEmpty))
@@ -453,24 +517,30 @@ class _NetworkStorageScreenState extends ConsumerState<NetworkStorageScreen> {
                     itemCount: _connections.length,
                     itemBuilder: (context, index) {
                       final c = _connections[index];
+                      final link = links.containsKey(c.id);
                       return SettingsGroup(
                         children: [
                           SettingsItem(
-                            icon: context.isSpotiFLAC
-                                ? CupertinoIcons.cloud
-                                : Icons.dns_outlined,
+                            icon: switch ((link, context.isSpotiFLAC)) {
+                              (true, true) => CupertinoIcons.desktopcomputer,
+                              (true, false) => Icons.computer,
+                              (false, true) => CupertinoIcons.cloud,
+                              (false, false) => Icons.dns_outlined,
+                            },
                             showIconInSpotiFLAC: true,
                             title: c.name,
                             subtitle:
-                                '${_protocolLabel(c.protocol)} · ${c.root.host}',
+                                '${_kindLabel(c, links)} · ${c.root.host}',
                             onTap: () => _open(c),
                             showDivider: false,
-                            trailing: _NetworkIconAction(
-                              tooltip: context.l10n.networkEditConnection,
-                              onPressed: () => _edit(c),
-                              icon: Icons.edit_outlined,
-                              cupertinoIcon: CupertinoIcons.pencil,
-                            ),
+                            trailing: link
+                                ? null
+                                : _NetworkIconAction(
+                                    tooltip: context.l10n.networkEditConnection,
+                                    onPressed: () => _edit(c),
+                                    icon: Icons.edit_outlined,
+                                    cupertinoIcon: CupertinoIcons.pencil,
+                                  ),
                           ),
                         ],
                       );
@@ -482,7 +552,7 @@ class _NetworkStorageScreenState extends ConsumerState<NetworkStorageScreen> {
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(24, 4, 24, 20),
                       child: Text(
-                        '${_protocolLabel(connection.protocol)} · ${connection.root.host}'
+                        '${_kindLabel(connection, links)} · ${connection.root.host}'
                         '${_subsonic ? '' : '\n/${widget.path}'}',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -625,6 +695,7 @@ class _NetworkConnectionFormState extends State<_NetworkConnectionForm> {
       _failed = false;
       _pendingCertificate = null;
     });
+    var saving = false;
     try {
       final c = NetworkConnection(
         id: widget.connection?.id ?? NetworkStorageService.newId(),
@@ -655,14 +726,20 @@ class _NetworkConnectionFormState extends State<_NetworkConnectionForm> {
             : null,
       );
       c.validate();
-      await widget.service.list(c);
+      await widget.service.verify(c);
+      saving = true;
       await widget.service.save(c);
       if (mounted) Navigator.pop(context);
     } catch (error) {
+      AppLogger('NetworkConnection').w(
+        'Connection failed: protocol=${_protocol.name}, stage=${saving ? 'save' : 'verify'}, type=${error.runtimeType}',
+      );
       if (mounted) {
         setState(() {
           _failed = true;
-          _failure = classifyNetworkStorageError(error);
+          _failure = saving
+              ? NetworkStorageError.storage
+              : classifyNetworkStorageError(error);
           _pendingCertificate = error is NetworkCertificateException
               ? error
               : null;
@@ -997,12 +1074,29 @@ class _NetworkConnectionFormState extends State<_NetworkConnectionForm> {
   );
 }
 
-PageRoute<void> _networkRoute(
+PageRoute<T> _networkRoute<T>(
   BuildContext context, {
   required WidgetBuilder builder,
 }) => context.isSpotiFLAC
-    ? CupertinoPageRoute<void>(builder: builder)
-    : MaterialPageRoute<void>(builder: builder);
+    ? CupertinoPageRoute<T>(builder: builder)
+    : MaterialPageRoute<T>(builder: builder);
+
+/// Browses [connection] for a folder to upload into: the folder's
+/// `network://` source, or null when the person goes back.
+Future<String?> browseNetworkUploadFolder(
+  BuildContext context,
+  NetworkConnection connection, {
+  NetworkStorageService? service,
+}) => Navigator.of(context).push(
+  _networkRoute<String>(
+    context,
+    builder: (_) => NetworkStorageScreen(
+      connection: connection,
+      service: service,
+      pickUploadFolder: true,
+    ),
+  ),
+);
 
 String _protocolLabel(NetworkProtocol protocol) => switch (protocol) {
   NetworkProtocol.smb => 'SMB',
@@ -1010,6 +1104,13 @@ String _protocolLabel(NetworkProtocol protocol) => switch (protocol) {
   NetworkProtocol.http => 'HTTP / HTTPS',
   NetworkProtocol.subsonic => 'Subsonic',
 };
+
+/// What [connection] is: SpotiFLAC Link for a paired computer ([links]), else
+/// its protocol.
+String _kindLabel(NetworkConnection connection, Map<String, String> links) =>
+    links.containsKey(connection.id)
+    ? 'SpotiFLAC Link'
+    : _protocolLabel(connection.protocol);
 
 String _networkErrorMessage(BuildContext context, NetworkStorageError error) =>
     switch (error) {
@@ -1025,6 +1126,8 @@ String _networkErrorMessage(BuildContext context, NetworkStorageError error) =>
       NetworkStorageError.invalidAddress => context.l10n.networkErrorAddress,
       NetworkStorageError.certificate => context.l10n.networkErrorCertificate,
       NetworkStorageError.serverApi => context.l10n.subsonicErrorApi,
+      NetworkStorageError.listing => context.l10n.networkErrorListing,
+      NetworkStorageError.storage => context.l10n.networkErrorStorage,
       NetworkStorageError.unknown => context.l10n.networkConnectionError,
     };
 

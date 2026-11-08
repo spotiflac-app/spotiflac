@@ -169,10 +169,7 @@ class _SpectrogramView extends StatelessWidget {
     // contrast even when the surrounding SpotiFLAC page uses the light theme.
     return context.isSpotiFLAC
         ? Theme(
-            data: SpotiFLACTheme.fromContext(
-              context,
-              brightness: Brightness.dark,
-            ),
+            data: SpotiFLACTheme.fromContext(context, brightness: Brightness.dark),
             child: card,
           )
         : card;

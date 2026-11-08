@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
 import 'package:spotiflac/widgets/error_card.dart';
@@ -12,14 +11,14 @@ import 'package:spotiflac/models/artist_concert.dart';
 import 'package:spotiflac/providers/track_provider.dart';
 import 'package:spotiflac/providers/settings_provider.dart';
 import 'package:spotiflac/screens/album_screen.dart';
-import 'package:spotiflac/screens/collapsing_header_scroll_mixin.dart';
+import 'package:spotiflac/controllers/clickable_metadata.dart';
+import 'package:spotiflac/controllers/collapsing_header_scroll_mixin.dart';
+import 'package:spotiflac/controllers/extension_auth_launcher.dart';
 import 'package:spotiflac/screens/artist_screen.dart';
 import 'package:spotiflac/services/platform_bridge.dart';
 import 'package:spotiflac/utils/adaptive_layout.dart';
-import 'package:spotiflac/utils/clickable_metadata.dart';
 import 'package:spotiflac/utils/desktop_platform.dart';
 import 'package:spotiflac/widgets/desktop/detail_header.dart';
-import 'package:spotiflac/utils/extension_auth_launcher.dart';
 import 'package:spotiflac/utils/string_utils.dart';
 import 'package:spotiflac/utils/editorial_notes.dart';
 import 'package:spotiflac/screens/playlist_screen.dart';
@@ -233,7 +232,7 @@ class _ArtistLoadingScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // SpotiFLAC keeps the Apple Music hero on desktop too.
+    // SpotiFLAC keeps its full-pane hero on desktop too.
     if (isDesktopPlatform && !context.isSpotiFLAC) {
       final url = coverUrl;
       return Scaffold(

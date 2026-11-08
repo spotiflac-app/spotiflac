@@ -3,62 +3,120 @@ import 'dart:io';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:spotiflac/l10n/supported_locales.dart';
 import 'package:spotiflac/models/settings.dart';
+import 'package:spotiflac/services/alsa_output_devices.dart';
 import 'package:spotiflac/services/app_state_database.dart';
+import 'package:spotiflac/services/exclusive_output_deck.dart';
+import 'package:spotiflac/services/file_access_check.dart';
+import 'package:spotiflac/services/ffmpeg_support.dart' show FFmpegExecution;
 import 'package:spotiflac/services/autoplay_personalization.dart';
+import 'package:spotiflac/services/autoplay_ranker.dart';
+import 'package:spotiflac/services/autoplay_taste.dart';
+import 'package:spotiflac/services/background_favorites.dart';
+import 'package:spotiflac/services/cover_store.dart';
+import 'package:spotiflac/services/cast_output.dart';
+import 'package:spotiflac/services/cast_playback_deck.dart';
 import 'package:spotiflac/services/discord_presence_service.dart';
+import 'package:spotiflac/services/history_database.dart';
+import 'package:spotiflac/services/download_file_recovery.dart';
+import 'package:spotiflac/services/library_collections_database.dart';
 import 'package:spotiflac/services/library_database.dart';
 import 'package:spotiflac/services/listening_statistics.dart';
+import 'package:spotiflac/services/lastfm/lastfm_service.dart';
 import 'package:spotiflac/services/media_kit_playback_deck.dart';
+import 'package:spotiflac/services/media_library_browser.dart';
+import 'package:spotiflac/services/media_session_art_cache.dart';
 import 'package:spotiflac/services/media_session_desktop.dart';
+import 'package:spotiflac/services/media_session_filter.dart';
 import 'package:spotiflac/services/music_playback_deck.dart';
 import 'package:spotiflac/services/music_player_service.dart';
 import 'package:spotiflac/services/network_metadata_service.dart';
+import 'package:spotiflac/services/network_playback_cache.dart';
 import 'package:spotiflac/services/network_storage_service.dart';
 import 'package:spotiflac/services/platform_bridge.dart';
 import 'package:spotiflac/services/playback_deck.dart';
 import 'package:spotiflac/services/playback_notification.dart';
 import 'package:spotiflac/services/playback_output_volume.dart';
 import 'package:spotiflac/services/player_widget_service.dart';
+import 'package:spotiflac/services/remote_media_session.dart';
+import 'package:spotiflac/services/remote_playback.dart';
+import 'package:spotiflac/services/song_analysis.dart';
 import 'package:spotiflac/services/source_deletion_events.dart';
+import 'package:spotiflac/services/source_metadata_events.dart';
 import 'package:spotiflac/services/system_volume_service.dart';
 import 'package:spotiflac/utils/desktop_platform.dart';
 import 'package:spotiflac/utils/logger.dart';
+import 'package:spotiflac/utils/file_access.dart' show fileExists;
 
 final _log = AppLogger('MusicPlayerRuntime');
+
+/// The handler the system media session talks to, and the player it shows
+/// unless a remote device plays in its place.
+({SwitchAudioHandler session, MusicPlayerHandler local})? _systemSession;
+
+/// A song the player could not play because of its [format]; [skipped]
+/// when the next song plays in its place.
+typedef UnplayableSong = ({String format, bool skipped});
 
 /// The process services used by a player. Tests can replace effects without
 /// changing the queue, transport, interruption or automation algorithms.
 class PlaybackDependencies {
   const PlaybackDependencies({
     this.createDeck = _createDeck,
+    this.createCastDeck = _createCastDeck,
     this.createPreviewDeck = _createPreviewDeck,
     this.audioSession = _getAudioSession,
     this.readMetadata = PlatformBridge.readFileMetadata,
     this.readNetworkMetadata = _readNetworkMetadata,
     this.resolveNetworkSource = _resolveNetworkSource,
+    this.offlineCopy = _offlineCopy,
+    this.networkCache = _networkCache,
+    this.networkSourceReachable = _networkSourceReachable,
+    this.recoverMissingFile = _recoverMissingFile,
+    this.fileAccess = checkFileAccess,
+    this.recoverMovedDownload = _recoverMovedDownload,
     this.initializeHandler = _initializeAudioHandler,
+    this.synchronizePlaybackState = _synchronizePlaybackState,
     this.createPersonalization = AutoplayPersonalization.new,
+    this.createTaste = AutoplayTaste.new,
+    this.createRanker = AutoplayRanker.new,
+    this.createSongAnalysis = _createSongAnalysis,
+    this.convertAudio = _convertAudio,
+    this.playbackCopies,
     AppStateDatabase? sessionDatabase,
     LibraryDatabase? libraryDatabase,
+    HistoryDatabase? historyDatabase,
+    LibraryCollectionsDatabase? collectionsDatabase,
     ListeningRecorder? recorder,
+    CoverStore? coverStore,
     SourceDeletionEvents? sourceDeletionEvents,
+    SourceMetadataEvents? sourceMetadataEvents,
     Stream<double>? volumeChanges,
     bool? isIOS,
     bool? isAndroid,
+    bool? isMacOS,
     this.notificationChannel = const MethodChannel(
       'com.spotiflac.app/playback_notification',
     ),
   }) : _sessionDatabase = sessionDatabase,
        _libraryDatabase = libraryDatabase,
+       _historyDatabase = historyDatabase,
+       _collectionsDatabase = collectionsDatabase,
        _recorder = recorder,
+       _coverStore = coverStore,
        _sourceDeletionEvents = sourceDeletionEvents,
+       _sourceMetadataEvents = sourceMetadataEvents,
        _volumeChanges = volumeChanges,
        _isIOS = isIOS,
-       _isAndroid = isAndroid;
+       _isAndroid = isAndroid,
+       _isMacOS = isMacOS;
 
   final PlaybackDeck Function(String playerId) createDeck;
+  final PlaybackDeck Function(CastOutput output, MediaItem? Function() metadata)
+  createCastDeck;
 
   /// The search and catalog preview player.
   final PlaybackDeck Function(String playerId) createPreviewDeck;
@@ -67,36 +125,102 @@ class PlaybackDependencies {
   readMetadata;
   final Future<Map<String, dynamic>> Function(String) readNetworkMetadata;
   final Future<String> Function(String) resolveNetworkSource;
+  final Future<String?> Function(String) offlineCopy;
+
+  /// The local copies of network songs around the one playing; null plays
+  /// every network song from its server.
+  final NetworkPlaybackCache? Function() networkCache;
+
+  /// Whether a `network://` Library song can play now, as autoplay asks
+  /// before queueing it.
+  final Future<bool> Function(String) networkSourceReachable;
+
+  /// What plays in place of a local song file that is gone but can be
+  /// fetched again, such as a song a paired phone sent that the received
+  /// folder pruned: a path, or a URL streaming it as it arrives. Null for
+  /// any other path; throws when it cannot be fetched.
+  final Future<String?> Function(String) recoverMissingFile;
+  final Future<FileAccessCheck> Function(String) fileAccess;
+  final Future<String?> Function(
+    String source,
+    String historyId,
+    AppSettings settings,
+  )
+  recoverMovedDownload;
   final Future<MusicPlayerHandler> Function(MusicPlayerHandler Function())
   initializeHandler;
+  final Future<void> Function() synchronizePlaybackState;
   final MethodChannel notificationChannel;
   final AutoplayPersonalization Function() createPersonalization;
+  final AutoplayTaste Function() createTaste;
+  final AutoplayRanker Function() createRanker;
+
+  /// Analysis of how the Library's songs sound, reading songs from it.
+  final SongAnalysis Function(LibraryDatabase library) createSongAnalysis;
+
+  /// Runs FFmpeg with these arguments; true when it succeeded. Makes the
+  /// FLAC copies AVPlayer plays in place of formats it cannot open.
+  final Future<bool> Function(List<String> arguments) convertAudio;
+
+  /// Where those copies go, emptied before the first; a folder in the
+  /// system temporary directory when null.
+  final Directory? playbackCopies;
   final AppStateDatabase? _sessionDatabase;
   final LibraryDatabase? _libraryDatabase;
+  final HistoryDatabase? _historyDatabase;
+  final LibraryCollectionsDatabase? _collectionsDatabase;
   final ListeningRecorder? _recorder;
+  final CoverStore? _coverStore;
   final SourceDeletionEvents? _sourceDeletionEvents;
+  final SourceMetadataEvents? _sourceMetadataEvents;
   final Stream<double>? _volumeChanges;
-  final bool? _isIOS, _isAndroid;
+  final bool? _isIOS, _isAndroid, _isMacOS;
 
   AppStateDatabase get sessionDatabase =>
       _sessionDatabase ?? AppStateDatabase.instance;
   LibraryDatabase get libraryDatabase =>
       _libraryDatabase ?? LibraryDatabase.instance;
+  HistoryDatabase get historyDatabase =>
+      _historyDatabase ?? HistoryDatabase.instance;
+  LibraryCollectionsDatabase get collectionsDatabase =>
+      _collectionsDatabase ?? LibraryCollectionsDatabase.instance;
   ListeningRecorder get recorder => _recorder ?? listeningRecorder;
+  CoverStore get coverStore => _coverStore ?? CoverStore.instance;
   SourceDeletionEvents get sourceDeletionEvents =>
       _sourceDeletionEvents ?? SourceDeletionEvents.instance;
+  SourceMetadataEvents get sourceMetadataEvents =>
+      _sourceMetadataEvents ?? SourceMetadataEvents.instance;
   Stream<double> get volumeChanges =>
       _volumeChanges ?? SystemVolumeService.instance.changes;
   bool get isIOS => _isIOS ?? Platform.isIOS;
   bool get isAndroid => _isAndroid ?? Platform.isAndroid;
 
+  /// The macOS app, which plays through AVPlayer like iOS.
+  bool get isMacOS => _isMacOS ?? (isDesktopPlatform && Platform.isMacOS);
+
   // Windows and Linux play through libmpv. Without the library they fall
-  // back to audioplayers, which has no equalizer there.
-  static PlaybackDeck _createDeck(String playerId) =>
-      playbackEngine == PlaybackEngine.mediaKit &&
-          MediaKitPlaybackDeck.isAvailable
-      ? MediaKitPlaybackDeck(playerId: playerId)
-      : AudioplayersPlaybackDeck(playerId: playerId);
+  // back to audioplayers, which has no equalizer there. macOS plays through
+  // AVPlayer and moves to libmpv for exclusive output (hog mode).
+  static PlaybackDeck _createDeck(String playerId) {
+    if (playbackEngine == PlaybackEngine.mediaKit &&
+        MediaKitPlaybackDeck.isAvailable) {
+      return MediaKitPlaybackDeck(playerId: playerId);
+    }
+    final shared = AudioplayersPlaybackDeck(playerId: playerId);
+    if (!isDesktopPlatform || defaultTargetPlatform != TargetPlatform.macOS) {
+      return shared;
+    }
+    return ExclusiveOutputDeck(
+      shared: shared,
+      createExclusive: () => MediaKitPlaybackDeck(playerId: playerId),
+      exclusiveAvailable: () => MediaKitPlaybackDeck.isAvailable,
+    );
+  }
+
+  static PlaybackDeck _createCastDeck(
+    CastOutput output,
+    MediaItem? Function() metadata,
+  ) => CastPlaybackDeck(output: output, metadata: metadata);
 
   // Previews follow the in-app volume on desktop. Mobile previews keep
   // playing without the equalizer.
@@ -104,27 +228,73 @@ class PlaybackDependencies {
       ? _createDeck(playerId)
       : AudioplayersPlaybackDeck(playerId: playerId, equalizerAvailable: false);
   static Future<AudioSession> _getAudioSession() => AudioSession.instance;
+  static Future<bool> _convertAudio(List<String> arguments) async =>
+      (await FFmpegExecution.arguments(arguments)).success;
+  static SongAnalysis _createSongAnalysis(LibraryDatabase library) =>
+      SongAnalysis(library: library);
   static Future<Map<String, dynamic>> _readNetworkMetadata(String source) =>
       NetworkMetadataService.instance.read(source);
   static Future<String> _resolveNetworkSource(String source) =>
       NetworkStorageService.instance.resolve(source);
+  static Future<String?> _offlineCopy(String source) async {
+    final row = await HistoryDatabase.instance.findOfflineCopy(source);
+    final path = row?['filePath'] as String?;
+    return path != null && await fileExists(path) ? path : null;
+  }
+
+  static NetworkPlaybackCache? _networkCache() => NetworkPlaybackCache.instance;
+
+  static Future<bool> _networkSourceReachable(String source) =>
+      NetworkStorageService.instance.reachable(source);
+  static Future<String?> _recoverMissingFile(String path) async {
+    final sources = NetworkStorageService.instance.virtualSources;
+    return sources is NetworkLocalCopies ? sources.recover(path) : null;
+  }
+
+  static Future<String?> _recoverMovedDownload(
+    String source,
+    String historyId,
+    AppSettings settings,
+  ) => DownloadFileRecovery.instance.recover(
+    source,
+    historyId: historyId,
+    settings: settings,
+  );
+
+  static Future<void> _synchronizePlaybackState() async {
+    // The session's switch takes each state from the player a microtask
+    // later; let the one just published reach it first.
+    await Future<void>.delayed(Duration.zero);
+    await AudioService.synchronizePlaybackState();
+  }
+
   static Future<MusicPlayerHandler> _initializeAudioHandler(
     MusicPlayerHandler Function() builder,
-  ) {
-    // MPRIS on Linux and SMTC on Windows; other OSes keep the plugin.
+  ) async {
+    // MPRIS on Linux and SMTC on Windows; other OSes keep the plugin and
+    // send it only the states their sessions cannot advance themselves.
     installDesktopMediaSession();
-    return AudioService.init(
-      builder: builder,
+    installMediaSessionFilter();
+    late final MusicPlayerHandler handler;
+    final session = await AudioService.init(
+      // The switch lets a remote device take over the system session.
+      builder: () => SwitchAudioHandler(handler = builder()),
+      cacheManager: mediaSessionArtCache(),
       config: const AudioServiceConfig(
         androidNotificationChannelId: 'com.spotiflac.app.playback',
         androidNotificationChannelName: 'Playback',
-        // System UI draws only the small icon's alpha. The opaque launcher
-        // default became a blank dot in the status bar and output switcher.
-        androidNotificationIcon: 'drawable/ic_launcher_monochrome',
-        androidNotificationOngoing: true,
-        androidStopForegroundOnPause: true,
+        // The notification mark omits the adaptive launcher's safe-zone padding.
+        androidNotificationIcon: 'drawable/ic_notification_spotiflac',
+        artDownscaleWidth: 512,
+        artDownscaleHeight: 512,
+        // Keep background resume eligible for audio focus. The Android fork
+        // releases the CPU wake lock on pause and demotes the service on stop.
+        androidStopForegroundOnPause: false,
+        androidBrowsableRootExtras: MediaLibraryBrowser.rootExtras,
       ),
     );
+    _systemSession = (session: session, local: handler);
+    return handler;
   }
 }
 
@@ -137,23 +307,58 @@ class MusicPlayerRuntime {
   }) : _settings = settings;
 
   final PlaybackDependencies dependencies;
+  LastfmService? _lastfm;
+  LastfmService get lastfm => _lastfm ??= LastfmService();
   AutoplayPersonalization? _personalization;
+  // What learning observes also teaches [taste] what plays together and
+  // [ranker] how much each part of a score counts.
   AutoplayPersonalization get personalization =>
-      _personalization ??= dependencies.createPersonalization();
+      _personalization ??= (dependencies.createPersonalization()
+        ..feedback.listen(taste.record)
+        ..feedback.listen(ranker.record));
+  AutoplayTaste? _taste;
+  AutoplayTaste get taste => _taste ??= dependencies.createTaste();
+  AutoplayRanker? _ranker;
+  AutoplayRanker get ranker => _ranker ??= dependencies.createRanker();
+  SongAnalysis? _songAnalysis;
+
+  /// How the Library's songs sound, analyzed in the background for Autoplay.
+  SongAnalysis get songAnalysis =>
+      _songAnalysis ??= dependencies.createSongAnalysis(
+        dependencies.libraryDatabase,
+      )..configure(_settings);
   AppSettings _settings;
   MusicPlayerHandler? _handler;
   void Function()? _unsubscribeSourceDeletion;
+  void Function()? _unsubscribeSourceMetadata;
   Future<MusicPlayerHandler>? _initFuture;
   Future<void>? _restoreFuture;
   final _handlers = StreamController<MusicPlayerHandler?>.broadcast(sync: true);
   final _mutedPlaybackEvents = StreamController<void>.broadcast();
+  final _unplayableSongs = StreamController<UnplayableSong>.broadcast();
   bool _initializing = false;
   bool _disposed = false;
   Future<void>? _disposeFuture;
   String _unknownTitle = 'Unknown title', _unknownArtist = 'Unknown artist';
   PlaybackNotification _notification = const PlaybackNotification();
   Future<bool> Function(MediaItem)? _toggleFavorite;
+  StreamSubscription<MediaItem?>? _backgroundFavorites;
   Future<void> Function()? exclusiveAudioHook;
+  RemotePlayback? _remote;
+  RemoteMediaSession? _remoteSession;
+  final _arriving = <String, ({String url, Future<void> done})>{};
+  bool _coversPrepared = false;
+  static const _coverTrimDelay = Duration(minutes: 2);
+
+  /// The Library that media browsers such as Android Auto show.
+  late final browser = MediaLibraryBrowser(
+    library: dependencies.libraryDatabase,
+    history: dependencies.historyDatabase,
+    collections: dependencies.collectionsDatabase,
+    includeLocal: () => _settings.localLibraryEnabled,
+    strings: () => appLocalizationsFor(_settings.locale),
+    covers: dependencies.coverStore,
+  );
 
   AppSettings get settings => _settings;
   MusicPlayerHandler? get handler => _initializing ? null : _handler;
@@ -168,10 +373,84 @@ class MusicPlayerRuntime {
     if (!_disposed) _mutedPlaybackEvents.add(null);
   }
 
+  /// Songs whose format this device cannot play, as they fail.
+  Stream<UnplayableSong> get unplayableSongs => _unplayableSongs.stream;
+
+  void notifyUnplayableSong(String format, {required bool skipped}) {
+    if (!_disposed) _unplayableSongs.add((format: format, skipped: skipped));
+  }
+
+  /// Feeds the exclusive output setting to the decks.
+  void _configureExclusiveOutput(AppSettings settings) {
+    final exclusive = settings.exclusiveOutput && isDesktopPlatform;
+    if (!exclusive) {
+      playbackExclusiveStatus.value = ExclusiveOutputStatus.pending;
+    } else if (!playbackExclusiveOutput.value) {
+      // Stop a playing preview before its deck would reopen the output too.
+      unawaited(exclusiveAudioHook?.call());
+    }
+    if (exclusive && defaultTargetPlatform == TargetPlatform.linux) {
+      final device = settings.exclusiveOutputDevice;
+      if (device.isNotEmpty) {
+        playbackExclusiveDevice.value = device;
+      } else {
+        // No choice yet: the first card, as ALSA's own default.
+        unawaited(
+          listAlsaOutputDevices().then((devices) {
+            if (devices.isNotEmpty && _settings.exclusiveOutputDevice.isEmpty) {
+              playbackExclusiveDevice.value = devices.first.id;
+            }
+          }),
+        );
+      }
+    }
+    playbackExclusiveOutput.value = exclusive;
+  }
+
   void configure(AppSettings settings) {
     final previous = _settings;
     _settings = settings;
+    _configureExclusiveOutput(settings);
+    _songAnalysis?.configure(settings);
     _handler?.applySettings(previous);
+    if (previous.playerMode == 'internal' &&
+        settings.playerMode != 'internal') {
+      _restoreFuture = null;
+      final handler = _handler;
+      if (handler != null) {
+        unawaited(
+          handler.stop(keepResume: true).catchError((
+            Object error,
+            StackTrace stack,
+          ) {
+            _log.e('Failed to stop the internal player', error, stack);
+          }),
+        );
+      }
+    }
+  }
+
+  /// Starts analyzing Library songs in the background, and the song playing
+  /// soon after it starts.
+  void startSongAnalysis() {
+    if (!_disposed) songAnalysis.start(mediaItemEvents());
+  }
+
+  /// Reads which network covers are stored, so songs show theirs from the
+  /// start, then trims the stored covers once, a while later.
+  void prepareCovers() {
+    if (_coversPrepared || _disposed) return;
+    _coversPrepared = true;
+    final covers = dependencies.coverStore;
+    unawaited(
+      () async {
+        await covers.warmUp();
+        await Future<void>.delayed(_coverTrimDelay);
+        if (!_disposed) await covers.trim();
+      }().catchError((Object error) {
+        _log.w('Could not trim stored covers: $error');
+      }),
+    );
   }
 
   void updateStrings({
@@ -182,10 +461,41 @@ class MusicPlayerRuntime {
     _unknownArtist = unknownArtist;
   }
 
+  /// Media controls for playback that started while the app shell is closed,
+  /// such as from a car. Its star loves songs through [favorites] and shows
+  /// whether the current song is loved, until the shell configures them.
+  void configureBackgroundNotification({
+    required PlaybackNotification presentation,
+    required BackgroundFavorites favorites,
+  }) {
+    if (_toggleFavorite != null || _disposed) return;
+    _notification = presentation;
+    _toggleFavorite = favorites.toggle;
+    _handler?.refreshNotificationControls();
+    ({String id, Object? source})? shown;
+    _backgroundFavorites = mediaItemEvents().listen((item) async {
+      final current = item == null
+          ? null
+          : (id: item.id, source: item.extras?['source']);
+      if (item == null || current == shown) return;
+      shown = current;
+      try {
+        final loved = await favorites.isLoved(item);
+        if (_backgroundFavorites != null && shown == current) {
+          updateFavorite(item, loved);
+        }
+      } catch (error) {
+        _log.w('Could not read whether the song is loved: $error');
+      }
+    });
+  }
+
   void configureNotification({
     required PlaybackNotification presentation,
     required Future<bool> Function(MediaItem) toggleFavorite,
   }) {
+    unawaited(_backgroundFavorites?.cancel());
+    _backgroundFavorites = null;
     _notification = presentation;
     _toggleFavorite = toggleFavorite;
     _handler?.refreshNotificationControls();
@@ -232,6 +542,10 @@ class MusicPlayerRuntime {
     if (!identical(existing, handler)) {
       _unsubscribeSourceDeletion = dependencies.sourceDeletionEvents.subscribe(
         handler.onSourceDeleted,
+        beforeDelete: handler.prepareSourceDeletion,
+      );
+      _unsubscribeSourceMetadata = dependencies.sourceMetadataEvents.subscribe(
+        handler.onSourceMetadataChanged,
       );
     }
     if (!_initializing && !identical(existing, handler)) _handlers.add(handler);
@@ -239,8 +553,11 @@ class MusicPlayerRuntime {
 
   void detach(MusicPlayerHandler handler) {
     if (!identical(_handler, handler)) return;
+    _lastfm?.bind(null);
     _unsubscribeSourceDeletion?.call();
     _unsubscribeSourceDeletion = null;
+    _unsubscribeSourceMetadata?.call();
+    _unsubscribeSourceMetadata = null;
     _handler = null;
     _restoreFuture = null;
     if (!_handlers.isClosed) _handlers.add(null);
@@ -283,6 +600,13 @@ class MusicPlayerRuntime {
       if (dependencies.isAndroid || dependencies.isIOS || isDesktopPlatform) {
         DiscordPresenceService.instance.bind(handler);
       }
+      if (isDesktopPlatform) {
+        lastfm.bind(
+          handler,
+          unknownTitle: () => unknownTitle,
+          unknownArtist: () => unknownArtist,
+        );
+      }
       return handler;
     } catch (error, stack) {
       _log.e('Failed to initialize playback', error, stack);
@@ -294,8 +618,72 @@ class MusicPlayerRuntime {
     }
   }
 
-  Future<void> restoreSession() =>
-      _restoreFuture ??= restorePlaybackSession(this);
+  Future<void> restoreSession() {
+    if (_settings.playerMode != 'internal') return Future.value();
+    return _restoreFuture ??= restorePlaybackSession(this).then<void>((_) {});
+  }
+
+  /// [MusicPlayerHandler.recoverRestoredArtwork] after [restoreSession].
+  Future<void> recoverRestoredArtwork() async {
+    await restoreSession();
+    await handler?.recoverRestoredArtwork();
+  }
+
+  /// Plays the local file [path], still being written (a song a paired
+  /// phone is sending), from [url] until [done] completes, so it starts
+  /// before the file is whole.
+  void streamWhileArriving(
+    String path, {
+    required String url,
+    required Future<void> done,
+  }) {
+    final entry = (url: url, done: done);
+    _arriving[path] = entry;
+    unawaited(
+      done.then<void>((_) {}, onError: (Object _) {}).whenComplete(() {
+        if (identical(_arriving[path], entry)) _arriving.remove(path);
+      }),
+    );
+  }
+
+  /// The stream and completion of [path] while it is still arriving.
+  ({String url, Future<void> done})? arrivingFile(String path) =>
+      _arriving[path];
+
+  /// Whether [url] streams a file that is still arriving.
+  bool streamsArrivingFile(String url) =>
+      _arriving.values.any((entry) => entry.url == url);
+
+  /// Hands the system media session (notification, lock screen, headset and
+  /// car buttons) to [remote] while it plays in this device's place, and
+  /// back to this device's player when null. A Library song picked in the
+  /// car plays here and takes the session back.
+  Future<void> showRemote(RemotePlayback? remote) async {
+    if (identical(remote, _remote)) return;
+    _remote = remote;
+    if (remote != null) {
+      try {
+        await initialize();
+      } on Object {
+        return;
+      }
+    }
+    if (identical(remote, _remote) && !_disposed) _showSession(remote);
+  }
+
+  void _showSession(RemotePlayback? remote) {
+    final system = _systemSession;
+    if (system == null || !identical(system.local, _handler)) return;
+    _remoteSession?.dispose();
+    _remoteSession = null;
+    system.session.inner = remote == null
+        ? system.local
+        : _remoteSession = RemoteMediaSession(
+            remote,
+            local: system.local,
+            onLocal: () => _showSession(null),
+          );
+  }
 
   /// The default runtime lives for the app lifetime. Scoped runtimes close
   /// subscriptions and reject new initialization when their owner disposes.
@@ -304,16 +692,25 @@ class MusicPlayerRuntime {
   Future<void> _dispose() async {
     _disposed = true;
     _toggleFavorite = null;
+    unawaited(_backgroundFavorites?.cancel());
+    _backgroundFavorites = null;
     exclusiveAudioHook = null;
+    _remoteSession?.dispose();
+    _remoteSession = null;
     await _handler?.dispose();
+    await _lastfm?.close();
     try {
       await _initFuture;
     } catch (_) {
       // Initialization may have failed because its pending handler was closed.
     }
     await _personalization?.dispose();
+    await _taste?.dispose();
+    await _ranker?.dispose();
+    await _songAnalysis?.dispose();
     await _handlers.close();
     await _mutedPlaybackEvents.close();
+    await _unplayableSongs.close();
   }
 
   Stream<T> _events<T>(

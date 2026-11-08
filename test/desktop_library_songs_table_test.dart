@@ -12,6 +12,7 @@ import 'package:spotiflac/providers/library_collections_provider.dart';
 import 'package:spotiflac/providers/local_library_provider.dart';
 import 'package:spotiflac/providers/playback_provider.dart';
 import 'package:spotiflac/providers/settings_provider.dart';
+import 'package:spotiflac/screens/spotiflac_library_screen.dart';
 import 'package:spotiflac/screens/queue_tab.dart';
 import 'package:spotiflac/services/history_database.dart';
 import 'package:spotiflac/services/library_database.dart';
@@ -27,15 +28,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 
 class _Settings extends SettingsNotifier {
-  _Settings(this.viewMode);
+  _Settings(this.viewMode, {this.filterMode = 'all'});
 
   final String viewMode;
+  final String filterMode;
 
   // The Rewind banner animates for as long as it is shown; keep it off so
   // the page settles.
   @override
   AppSettings build() => AppSettings(
-    defaultLibraryView: 'all',
+    defaultLibraryView: filterMode,
+    historyFilterMode: filterMode,
     historyViewMode: viewMode,
     listeningStatisticsEnabled: false,
   );
@@ -68,8 +71,26 @@ class _Local extends LocalLibraryNotifier {
 }
 
 class _Collections extends LibraryCollectionsNotifier {
+  _Collections({this.withPlaylistTracks = false});
+
+  final bool withPlaylistTracks;
+
   @override
-  LibraryCollectionsState build() => LibraryCollectionsState(isLoaded: true);
+  LibraryCollectionsState build() => LibraryCollectionsState(
+    isLoaded: true,
+    playlists: [
+      if (withPlaylistTracks)
+        UserPlaylistCollection(
+          id: 'playlist',
+          name: 'Playlist',
+          createdAt: DateTime(2026),
+          updatedAt: DateTime(2026),
+          tracks: const [],
+          tracksLoaded: false,
+          trackKeys: {'example-provider:song-0', 'example-provider:song-1'},
+        ),
+    ],
+  );
 }
 
 class _Queue extends DownloadQueueNotifier {
@@ -157,10 +178,15 @@ void main() {
     required bool desktop,
     bool spotiflac = false,
     String viewMode = 'list',
+    String filterMode = 'all',
+    bool withPlaylistTracks = false,
+    bool root = false,
     PlaybackController? playback,
   }) async {
     debugDesktopPlatformOverride = desktop;
-    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.physicalSize = desktop
+        ? const Size(1280, 900)
+        : const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final queue = DownloadQueueLookup.fromItems([
@@ -181,10 +207,14 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          settingsProvider.overrideWith(() => _Settings(viewMode)),
+          settingsProvider.overrideWith(
+            () => _Settings(viewMode, filterMode: filterMode),
+          ),
           downloadHistoryProvider.overrideWith(_History.new),
           localLibraryProvider.overrideWith(_Local.new),
-          libraryCollectionsProvider.overrideWith(_Collections.new),
+          libraryCollectionsProvider.overrideWith(
+            () => _Collections(withPlaylistTracks: withPlaylistTracks),
+          ),
           downloadQueueProvider.overrideWith(_Queue.new),
           downloadQueueLookupProvider.overrideWithValue(queue),
           if (playback != null) playbackProvider.overrideWith(() => playback),
@@ -197,7 +227,7 @@ void main() {
           supportedLocales: AppLocalizations.supportedLocales,
           // SpotiFLAC opens Songs as a section page from its Library root.
           home: Scaffold(
-            body: QueueTab(librarySection: spotiflac ? 'all' : null),
+            body: QueueTab(librarySection: spotiflac && !root ? filterMode : null),
           ),
         ),
       ),
@@ -206,18 +236,22 @@ void main() {
   }
 
   for (final spotiflac in [false, true]) {
-    testWidgets(
-      'desktop Songs list is the songs table (spotiflac: $spotiflac)',
-      (tester) async {
-        await pumpLibrary(tester, desktop: true, spotiflac: spotiflac);
-        expect(find.byType(SliverTrackTable), findsOneWidget);
-        expect(find.byType(TrackCard), findsNothing);
-        expect(find.text('Alpha'), findsOneWidget);
-        expect(find.text('Bravo'), findsOneWidget);
-        // No month sections: the table sorts through its header instead.
-        expect(find.text('January 2026'), findsNothing);
-      },
-    );
+    testWidgets('desktop Songs list is the songs table (spotiflac: $spotiflac)', (
+      tester,
+    ) async {
+      await pumpLibrary(tester, desktop: true, spotiflac: spotiflac);
+      expect(find.byType(SliverTrackTable), findsOneWidget);
+      expect(find.byType(TrackCard), findsNothing);
+      expect(find.text('Alpha'), findsOneWidget);
+      expect(find.text('Bravo'), findsOneWidget);
+      // No month sections: the table sorts through its header instead.
+      expect(find.text('January 2026'), findsNothing);
+      final l10n = AppLocalizations.of(tester.element(find.byType(QueueTab)));
+      await tester.tap(find.text(l10n.editMetadataFieldTitle));
+      await _settle(tester);
+      final preferences = await SharedPreferences.getInstance();
+      expect(loadBootstrapSettings(preferences).historySortMode, 'a-z');
+    });
 
     testWidgets('a right-click menu leaves the selection toolbar closed '
         '(spotiflac: $spotiflac)', (tester) async {
@@ -273,4 +307,56 @@ void main() {
     expect(find.byType(TrackCard), findsNWidgets(2));
     expect(find.text('January 2026'), findsOneWidget);
   });
+
+  for (final desktop in [false, true]) {
+    for (final spotiflac in [false, true]) {
+      for (final viewMode in spotiflac ? ['list'] : ['list', 'grid']) {
+        for (final mode in ['all', 'singles']) {
+          testWidgets(
+            'playlist members remain visible '
+            '(desktop: $desktop, spotiflac: $spotiflac, view: $viewMode, mode: $mode)',
+            (tester) async {
+              await pumpLibrary(
+                tester,
+                desktop: desktop,
+                spotiflac: spotiflac,
+                viewMode: viewMode,
+                filterMode: mode,
+                withPlaylistTracks: true,
+              );
+              expect(find.text('2 tracks'), findsWidgets);
+              expect(find.text('Alpha'), findsOneWidget);
+              expect(find.text('Bravo'), findsOneWidget);
+              expect(tester.takeException(), isNull);
+            },
+          );
+        }
+      }
+    }
+  }
+
+  testWidgets(
+    'switching from SpotiFLAC to Material keeps playlist songs visible',
+    (tester) async {
+      await pumpLibrary(
+        tester,
+        desktop: false,
+        spotiflac: true,
+        root: true,
+        withPlaylistTracks: true,
+      );
+      expect(find.byType(SpotiFLACLibraryScreen), findsOneWidget);
+      await pumpLibrary(
+        tester,
+        desktop: false,
+        viewMode: 'grid',
+        withPlaylistTracks: true,
+      );
+      expect(find.byType(SpotiFLACLibraryScreen), findsNothing);
+      expect(find.text('2 tracks'), findsOneWidget);
+      expect(find.text('Alpha'), findsOneWidget);
+      expect(find.text('Bravo'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

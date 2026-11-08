@@ -1,8 +1,7 @@
 import 'dart:collection';
-
 import 'package:flutter_test/flutter_test.dart';
+import 'package:spotiflac/controllers/track_history_snapshot.dart';
 import 'package:spotiflac/models/track.dart';
-import 'package:spotiflac/screens/track_history_snapshot.dart';
 
 class _CountingTracks extends ListBase<Track> {
   final List<Track> values;

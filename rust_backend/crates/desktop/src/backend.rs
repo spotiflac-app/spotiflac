@@ -6,12 +6,12 @@
 use crate::call::{Args, CallError, OrFail};
 use crate::paths::{self, RemoveOnDrop};
 use crate::runtime::Config;
-use serde_json::Value;
-use sha2::{Digest, Sha256};
 use spotiflac_mobile::{
     CancellationDomain, CancellationRegistry, DownloadDirectoryScope, DownloadProgressSubscription,
     ExtensionManager, ExtensionRepository, RequestLease,
 };
+use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};

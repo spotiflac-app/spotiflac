@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:spotiflac/services/app_state_database.dart';
+import 'package:spotiflac/services/cover_store.dart';
 import 'package:spotiflac/utils/logger.dart';
 
 const _maxRecentItems = 20;
@@ -196,7 +196,7 @@ class RecentAccessNotifier extends Notifier<RecentAccessState> {
       RecentAccessItem(
         id: id,
         name: name,
-        imageUrl: imageUrl,
+        imageUrl: durableCoverReference(imageUrl),
         type: RecentAccessType.artist,
         accessedAt: DateTime.now(),
         providerId: providerId,
@@ -216,7 +216,7 @@ class RecentAccessNotifier extends Notifier<RecentAccessState> {
         id: id,
         name: name,
         subtitle: artistName,
-        imageUrl: imageUrl,
+        imageUrl: durableCoverReference(imageUrl),
         type: RecentAccessType.album,
         accessedAt: DateTime.now(),
         providerId: providerId,

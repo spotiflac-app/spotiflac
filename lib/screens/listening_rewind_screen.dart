@@ -1,6 +1,6 @@
 import 'dart:async';
+import 'dart:io' show File;
 import 'dart:math' as math;
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show CustomSemanticsAction;
@@ -24,8 +24,10 @@ import 'package:spotiflac/widgets/app_icon.dart';
 import 'package:spotiflac/widgets/app_icon_button.dart';
 import 'package:spotiflac/widgets/app_loading_indicator.dart';
 import 'package:spotiflac/widgets/app_shape.dart';
+import 'package:spotiflac/widgets/decorative_phase.dart';
 import 'package:spotiflac/widgets/player_artwork.dart';
 import 'package:spotiflac/widgets/settings_group.dart';
+import 'package:spotiflac/widgets/settled_blur.dart';
 
 export 'package:spotiflac/providers/listening_rewind_provider.dart';
 
@@ -348,11 +350,8 @@ class ListeningRewindScreen extends ConsumerWidget {
     final colors = Theme.of(context).colorScheme;
     final background = spotiflac ? Colors.black : colors.surface;
     final foreground = spotiflac ? Colors.white : colors.onSurface;
-    Widget message(String text) => _RewindMessage(
-      text: text,
-      background: background,
-      foreground: foreground,
-    );
+    Widget message(String text) =>
+        _RewindMessage(text: text, foreground: foreground);
     return Scaffold(
       backgroundColor: background,
       body: rewind.when(
@@ -367,14 +366,9 @@ class ListeningRewindScreen extends ConsumerWidget {
 }
 
 class _RewindMessage extends StatelessWidget {
-  const _RewindMessage({
-    required this.text,
-    required this.background,
-    required this.foreground,
-  });
+  const _RewindMessage({required this.text, required this.foreground});
 
   final String text;
-  final Color background;
   final Color foreground;
 
   @override

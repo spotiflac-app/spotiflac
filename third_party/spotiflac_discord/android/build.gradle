@@ -4,7 +4,7 @@ version '1.0'
 apply plugin: 'com.android.library'
 apply plugin: 'kotlin-android'
 
-def discordSdkEnabled = System.getenv('SPOTIFLAC_DISCORD_SDK') == '1'
+def discordSdkEnabled = System.getenv('SPOTIFLAC_DISCORD_SDK') != '0'
 
 android {
     namespace 'com.spotiflac.app.discord'

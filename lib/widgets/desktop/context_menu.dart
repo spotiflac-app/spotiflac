@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:spotiflac/theme/spotiflac_icons.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
 import 'package:spotiflac/utils/desktop_platform.dart';
+import 'package:spotiflac/utils/android_tv.dart';
 import 'package:spotiflac/widgets/app_icon.dart';
 import 'package:spotiflac/widgets/desktop/desktop_selection.dart';
 import 'package:spotiflac/widgets/spotiflac_context_menu.dart';
@@ -62,12 +63,7 @@ Future<bool> showContextMenu(
       context: context,
       // The layout aligns the menu's trailing edge with the anchor's, so a
       // menu-wide anchor puts its leading edge at the pointer.
-      anchor: Rect.fromLTWH(
-        position.dx,
-        position.dy - 8,
-        _spotiflacMenuWidth,
-        0,
-      ),
+      anchor: Rect.fromLTWH(position.dx, position.dy - 8, _spotiflacMenuWidth, 0),
       maxWidth: _spotiflacMenuWidth,
       builder: (menuContext) => SpotiFLACContextMenu(
         dense: true,
@@ -161,7 +157,9 @@ class _DesktopContextMenuRegionState extends State<DesktopContextMenuRegion>
   @override
   Widget build(BuildContext context) {
     final onContextMenu = widget.onContextMenu;
-    if (!isDesktopPlatform || onContextMenu == null) return widget.child;
+    if ((!isDesktopPlatform && !isAndroidTv) || onContextMenu == null) {
+      return widget.child;
+    }
     return Focus(
       canRequestFocus: false,
       skipTraversal: true,

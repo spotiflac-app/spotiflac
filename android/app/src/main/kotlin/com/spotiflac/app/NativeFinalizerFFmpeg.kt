@@ -3,6 +3,7 @@ package com.spotiflac.app
 import android.util.Log
 import com.antonkarpenko.ffmpegkit.FFmpegKit
 import com.antonkarpenko.ffmpegkit.FFmpegKitConfig
+import com.antonkarpenko.ffmpegkit.FFmpegKitFlutterPlugin
 import com.antonkarpenko.ffmpegkit.FFmpegSession
 import com.antonkarpenko.ffmpegkit.LogRedirectionStrategy
 import com.antonkarpenko.ffmpegkit.ReturnCode
@@ -126,6 +127,8 @@ internal fun NativeDownloadFinalizer.runFFmpegArguments(arguments: Array<String>
 }
 
 internal fun NativeDownloadFinalizer.installNativeFFmpegCallbackFilter() {
+    // The plugin registers its callback once, possibly later; wrap it only after that.
+    FFmpegKitFlutterPlugin.ensureGlobalCallbacksRegistered()
     synchronized(ffmpegCompleteCallbackLock) {
         val current = FFmpegKitConfig.getFFmpegSessionCompleteCallback()
         if (current !== nativeFilteringFFmpegCompleteCallback) {
@@ -219,9 +222,8 @@ internal fun NativeDownloadFinalizer.probePrimaryAudioCodec(path: String, should
 /**
  * Returns true when the file on [path] starts with the native FLAC magic
  * bytes (`fLaC`). A file may contain a FLAC audio stream yet live inside
- * an MP4/fMP4 container (e.g. some Amazon Music downloads); native FLAC
- * tag writers require the raw fLaC header, so we must detect that mismatch
- * before skipping the container conversion step.
+ * an MP4/fMP4 container; native FLAC tag writers require the raw fLaC
+ * header, so detect that mismatch before skipping container conversion.
  */
 internal fun NativeDownloadFinalizer.isNativeFlacFile(path: String): Boolean {
     return try {

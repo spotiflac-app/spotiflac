@@ -25,7 +25,14 @@ class DesktopHoverPlayButton extends StatefulWidget {
 
   /// Visible circle; the pointer target is [_target].
   static const double _diameter = 36;
+  static const double _spotiflacDiameter = 30;
   static const double _target = 40;
+
+  /// Dims the artwork behind the SpotiFLAC button.
+  static const Color _spotiflacScrim = Color(0x4D333333);
+
+  /// Corner radius of the SpotiFLAC tiles this button sits on.
+  static const double _spotiflacRadius = 8;
 
   @override
   State<DesktopHoverPlayButton> createState() => _DesktopHoverPlayButtonState();
@@ -43,71 +50,97 @@ class _DesktopHoverPlayButtonState extends State<DesktopHoverPlayButton> {
     final colorScheme = Theme.of(context).colorScheme;
     final spotiflac = context.isSpotiFLAC;
     final visible = _hovered || _focused;
-    // SpotiFLAC follows Apple Music's light disc; Material uses its primary FAB
-    // colors.
+    // SpotiFLAC uses a light disc; Material uses its primary FAB colors.
     final background = spotiflac
         ? Colors.white.withValues(alpha: 0.92)
         : colorScheme.primaryContainer;
-    final foreground = spotiflac
-        ? Colors.black
-        : colorScheme.onPrimaryContainer;
-    return Positioned.fill(
-      child: MouseRegion(
-        opaque: false,
-        hitTestBehavior: HitTestBehavior.translucent,
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
-        child: Align(
-          alignment: AlignmentDirectional.bottomStart,
-          child: Padding(
-            padding: const EdgeInsets.all(6),
-            child: AnimatedOpacity(
-              opacity: visible ? 1 : 0,
-              duration: const Duration(milliseconds: 120),
-              child: IgnorePointer(
-                ignoring: !visible,
-                child: Focus(
-                  canRequestFocus: false,
-                  onFocusChange: (focused) =>
-                      setState(() => _focused = focused),
-                  child: IconButton(
-                    tooltip: widget.tooltip,
-                    onPressed: widget.onPlay,
-                    padding: EdgeInsets.zero,
-                    style: IconButton.styleFrom(
-                      fixedSize: const Size.square(
-                        DesktopHoverPlayButton._target,
-                      ),
-                      minimumSize: const Size.square(
-                        DesktopHoverPlayButton._target,
-                      ),
-                      shape: const CircleBorder(),
-                      backgroundColor: Colors.transparent,
-                    ),
-                    icon: Container(
-                      width: DesktopHoverPlayButton._diameter,
-                      height: DesktopHoverPlayButton._diameter,
-                      decoration: BoxDecoration(
-                        color: background,
-                        shape: BoxShape.circle,
-                        boxShadow: const [
-                          BoxShadow(blurRadius: 6, color: Color(0x33000000)),
-                        ],
-                      ),
-                      child: Icon(
-                        spotiflac
-                            ? spotiflacIconFor(Icons.play_arrow)
-                            : Icons.play_arrow_rounded,
-                        size: 22,
-                        color: foreground,
-                      ),
-                    ),
+    final foreground = spotiflac ? Colors.black : colorScheme.onPrimaryContainer;
+    final diameter = spotiflac
+        ? DesktopHoverPlayButton._spotiflacDiameter
+        : DesktopHoverPlayButton._diameter;
+    final fade = Duration(milliseconds: spotiflac ? 100 : 120);
+    final fadeCurve = spotiflac ? Curves.easeIn : Curves.linear;
+    final button = Align(
+      alignment: AlignmentDirectional.bottomStart,
+      child: Padding(
+        // The visible circle sits 10 from the SpotiFLAC artwork's corner; the
+        // target around it is larger.
+        padding: EdgeInsets.all(spotiflac ? 5 : 6),
+        child: AnimatedOpacity(
+          opacity: visible ? 1 : 0,
+          duration: fade,
+          curve: fadeCurve,
+          child: IgnorePointer(
+            ignoring: !visible,
+            child: Focus(
+              canRequestFocus: false,
+              onFocusChange: (focused) => setState(() => _focused = focused),
+              child: IconButton(
+                tooltip: widget.tooltip,
+                onPressed: widget.onPlay,
+                padding: EdgeInsets.zero,
+                style: IconButton.styleFrom(
+                  fixedSize: const Size.square(DesktopHoverPlayButton._target),
+                  minimumSize: const Size.square(
+                    DesktopHoverPlayButton._target,
+                  ),
+                  shape: const CircleBorder(),
+                  backgroundColor: Colors.transparent,
+                ),
+                icon: Container(
+                  width: diameter,
+                  height: diameter,
+                  decoration: BoxDecoration(
+                    color: background,
+                    shape: BoxShape.circle,
+                    boxShadow: const [
+                      BoxShadow(blurRadius: 6, color: Color(0x33000000)),
+                    ],
+                  ),
+                  child: Icon(
+                    spotiflac
+                        ? spotiflacIconFor(Icons.play_arrow)
+                        : Icons.play_arrow_rounded,
+                    size: spotiflac ? 16 : 22,
+                    color: foreground,
                   ),
                 ),
               ),
             ),
           ),
         ),
+      ),
+    );
+    return Positioned.fill(
+      child: MouseRegion(
+        opaque: false,
+        hitTestBehavior: HitTestBehavior.translucent,
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: !spotiflac
+            ? button
+            : Stack(
+                fit: StackFit.expand,
+                children: [
+                  IgnorePointer(
+                    child: AnimatedOpacity(
+                      key: const ValueKey('desktop-hover-scrim'),
+                      opacity: visible ? 1 : 0,
+                      duration: fade,
+                      curve: fadeCurve,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: DesktopHoverPlayButton._spotiflacScrim,
+                          borderRadius: BorderRadius.circular(
+                            DesktopHoverPlayButton._spotiflacRadius,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  button,
+                ],
+              ),
       ),
     );
   }

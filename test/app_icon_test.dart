@@ -8,11 +8,7 @@ import 'package:spotiflac/theme/spotiflac_theme.dart';
 import 'package:spotiflac/widgets/app_icon.dart';
 import 'package:spotiflac/widgets/app_icon_button.dart';
 
-Widget _host(
-  Widget child, {
-  bool spotiflac = false,
-  bool reduceMotion = false,
-}) {
+Widget _host(Widget child, {bool spotiflac = false, bool reduceMotion = false}) {
   return MaterialApp(
     theme: ThemeData(extensions: [if (spotiflac) const SpotiFLACTheme()]),
     home: MediaQuery(
@@ -37,8 +33,12 @@ void main() {
     ));
     expect(materialSymbolFor(Icons.delete_outline)?.filled, isFalse);
     expect(materialSymbolFor(Icons.home_outlined)?.filled, isFalse);
-    expect(materialSymbolFor(Icons.home_rounded)?.filled, isTrue);
+    expect(materialSymbolFor(Icons.album_rounded)?.filled, isTrue);
     expect(materialSymbolFor(Icons.warning_amber_rounded)?.filled, isFalse);
+    expect(materialSymbolFor(Icons.drive_file_move_outlined), (
+      icon: Symbols.drive_file_move_rounded,
+      filled: false,
+    ));
   });
 
   test('unmapped and non-Material icons have no symbol', () {

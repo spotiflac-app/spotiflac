@@ -507,10 +507,7 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(
-      tester.getSize(find.byType(SpotiFLACTabBar)).height,
-      greaterThan(80),
-    );
+    expect(tester.getSize(find.byType(SpotiFLACTabBar)).height, greaterThan(80));
     expect(tester.takeException(), isNull);
   });
 }

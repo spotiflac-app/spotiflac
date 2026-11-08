@@ -1,6 +1,4 @@
-use spotiflac_core::tags::{
-    embed_flac_metadata, extract_cover, read_audio_tags, rewrite_audio_tags,
-};
+use spotiflac_core::tags::{embed_flac_metadata, extract_cover, read_audio_tags, rewrite_audio_tags};
 use std::collections::BTreeMap;
 use std::io::Cursor;
 
@@ -151,10 +149,9 @@ fn separator_preferences_decode_without_changing_download_names() {
         request.metadata_separators.as_ref().unwrap()["artist"],
         " / "
     );
-    let restored = spotiflac_core::downloads::DownloadRequest::parse(
-        &serde_json::to_string(&request).unwrap(),
-    )
-    .unwrap();
+    let restored =
+        spotiflac_core::downloads::DownloadRequest::parse(&serde_json::to_string(&request).unwrap())
+            .unwrap();
     assert_eq!(restored.metadata_separators, request.metadata_separators);
     assert!(
         spotiflac_core::downloads::DownloadRequest::parse("{}")

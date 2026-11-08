@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui' show ImageFilter;
-
+import 'package:spotiflac/controllers/open_audio_controller.dart';
+import 'package:spotiflac/services/audio_file_open_service.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:spotiflac/widgets/app_alert_dialog.dart';
@@ -11,7 +12,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:spotiflac/l10n/l10n.dart';
 import 'package:spotiflac/services/saf_migration_prompt_store.dart';
 import 'package:spotiflac/providers/download_queue_provider.dart';
+import 'package:spotiflac/providers/extension_provider.dart';
 import 'package:spotiflac/providers/music_player_provider.dart';
+import 'package:spotiflac/providers/network_upload_provider.dart';
 import 'package:spotiflac/providers/settings_provider.dart';
 import 'package:spotiflac/providers/playback_notification_provider.dart';
 import 'package:spotiflac/providers/repo_provider.dart';
@@ -20,12 +23,14 @@ import 'package:spotiflac/providers/track_provider.dart';
 import 'package:spotiflac/providers/user_profile_provider.dart';
 import 'package:spotiflac/providers/preview_player_provider.dart';
 import 'package:spotiflac/screens/home_tab.dart';
+import 'package:spotiflac/screens/library_directory_screen.dart';
 import 'package:spotiflac/screens/library_tracks_folder_screen.dart';
 import 'package:spotiflac/screens/spotiflac_library_screen.dart';
 import 'package:spotiflac/screens/repo_tab.dart';
 import 'package:spotiflac/screens/queue_tab.dart';
 import 'package:spotiflac/screens/settings/profile_settings_page.dart';
 import 'package:spotiflac/screens/settings/settings_tab.dart';
+import 'package:spotiflac/screens/whats_new_screen.dart';
 import 'package:spotiflac/services/platform_bridge.dart';
 import 'package:spotiflac/services/shell_navigation_service.dart';
 import 'package:spotiflac/services/share_intent_service.dart';
@@ -43,25 +48,39 @@ import 'package:spotiflac/widgets/animation_utils.dart';
 import 'package:spotiflac/widgets/nav_destination_icons.dart';
 import 'package:spotiflac/widgets/settings_group.dart';
 import 'package:spotiflac/widgets/mini_player.dart';
+import 'package:spotiflac/widgets/tv_shell.dart';
 import 'package:spotiflac/widgets/lazy_tab_view.dart';
+import 'package:spotiflac/widgets/link/link_actions.dart';
 import 'package:spotiflac/widgets/expressive_navigation_bar.dart';
 import 'package:spotiflac/widgets/spotiflac_bottom_bar.dart';
 import 'package:spotiflac/widgets/app_icon.dart';
 import 'package:spotiflac/widgets/app_loading_indicator.dart';
 import 'package:spotiflac/widgets/spotiflac_chrome.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
+import 'package:spotiflac/theme/player_artwork_theme.dart';
 import 'package:spotiflac/widgets/selection_bottom_bar.dart';
 import 'package:spotiflac/widgets/desktop/desktop_commands.dart';
 import 'package:spotiflac/widgets/desktop/desktop_inspector.dart';
+import 'package:spotiflac/widgets/desktop/desktop_link_transfer_actions.dart';
 import 'package:spotiflac/widgets/desktop/desktop_navigation.dart';
 import 'package:spotiflac/utils/logger.dart';
 import 'package:spotiflac/utils/adaptive_layout.dart';
+import 'package:spotiflac/utils/android_tv.dart';
 import 'package:spotiflac/utils/desktop_platform.dart';
 import 'package:spotiflac/utils/saf_download_tree.dart';
 
 part 'main_shell_startup_prompts.dart';
 
 final _log = AppLogger('MainShell');
+
+/// The badge counts on Library (queued downloads) and Store (extension
+/// updates). Only the navigation chrome watches them, so a finished
+/// download or an update check does not rebuild every tab.
+int _watchQueuedCount(WidgetRef ref) =>
+    ref.watch(downloadQueueProvider.select((s) => s.queuedCount));
+
+int _watchRepoUpdatesCount(WidgetRef ref) =>
+    ref.watch(repoProvider.select((s) => s.updatesAvailableCount));
 
 /// The tab at [index] in a style's destination order.
 @visibleForTesting
@@ -132,6 +151,7 @@ class _MainShellState extends ConsumerState<MainShell>
   bool _safRepairDialogVisible = false;
   bool _usbVolumeWarningShown = false;
   StreamSubscription<String>? _shareSubscription;
+  StreamSubscription<List<OpenAudioFile>>? _audioOpenSubscription;
   DateTime? _lastBackPress;
   final GlobalKey<NavigatorState> _homeTabNavigatorKey =
       ShellNavigationService.homeTabNavigatorKey;
@@ -148,7 +168,7 @@ class _MainShellState extends ConsumerState<MainShell>
   late final _PreviewStopNavigatorObserver _searchPreviewStopObserver;
 
   /// Desktop: whether Library shows its root page, so the SpotiFLAC sidebar
-  /// returns to the Library root's link.
+  /// returns to the Library root's link and the Material rail to Library.
   late final _libraryDepthObserver = _PageDepthObserver(
     onRoot: () => desktopSidebarLink.value = null,
   );
@@ -177,7 +197,7 @@ class _MainShellState extends ConsumerState<MainShell>
           tab,
           spotiflac: spotiflac,
           showStore: showStore,
-          desktop: isDesktopPlatform,
+          desktop: isDesktopPlatform || isAndroidTv,
         ) ??
         0;
     if (index == _currentIndex) return;
@@ -189,11 +209,23 @@ class _MainShellState extends ConsumerState<MainShell>
     });
   }
 
+  /// What the services below were last configured with. Theme and media
+  /// query changes also reach [didChangeDependencies]; the services only
+  /// need a new language.
+  AppLocalizations? _servicesL10n;
+  String? _servicesLanguageTag;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _keepTabAcrossStyles();
     final l10n = context.l10n;
+    final languageTag = Localizations.localeOf(context).toLanguageTag();
+    if (identical(l10n, _servicesL10n) && languageTag == _servicesLanguageTag) {
+      return;
+    }
+    _servicesL10n = l10n;
+    _servicesLanguageTag = languageTag;
     NotificationService().updateStrings(l10n);
     final playback = ref.read(musicPlayerRuntimeProvider);
     playback.updateStrings(
@@ -210,11 +242,7 @@ class _MainShellState extends ConsumerState<MainShell>
     listeningRecorder.setEnabled(settings.listeningStatisticsEnabled);
     // Deezer & co. localize artist/genre names by IP unless told the app's
     // language (issue #480).
-    unawaited(
-      PlatformBridge.setMetadataLanguage(
-        Localizations.localeOf(context).toLanguageTag(),
-      ),
-    );
+    unawaited(PlatformBridge.setMetadataLanguage(languageTag));
   }
 
   @override
@@ -255,14 +283,34 @@ class _MainShellState extends ConsumerState<MainShell>
       );
       _initialSafRepairComplete = true;
       if (!mounted) return;
-      unawaited(ref.read(musicPlayerRuntimeProvider).restoreSession());
+      unawaited(_restorePlayback());
+      // Library menus are built synchronously and offer an upload only once
+      // the writable connections are known.
+      ref.read(networkUploadConnectionsProvider);
       _setupShareListener();
       await _checkSafMigration();
+      if (!mounted) return;
+      await maybeShowWhatsNewDialog(context, ref);
+      if (!mounted) return;
       final updateDialogShown = await _checkForUpdates();
       if (!updateDialogShown) {
         await _checkAppAnnouncement();
       }
     });
+  }
+
+  /// Restores the last session, then its song's cover from the file once
+  /// extensions are ready; the desktop backend reads files only then.
+  Future<void> _restorePlayback() async {
+    final runtime = ref.read(musicPlayerRuntimeProvider);
+    try {
+      await runtime.restoreSession();
+      await ref.read(extensionProvider.notifier).ensureInitialized();
+      if (!mounted) return;
+      await runtime.recoverRestoredArtwork();
+    } on Object catch (error) {
+      _log.w('Could not restore the playing song\'s cover: $error');
+    }
   }
 
   void _onUsbAudioStatusChanged() {
@@ -299,6 +347,11 @@ class _MainShellState extends ConsumerState<MainShell>
   }
 
   void _setupShareListener() {
+    final audio = AudioFileOpenService.instance;
+    _audioOpenSubscription = audio.requests.listen(_openAudioFiles);
+    for (final files in audio.takePending()) {
+      unawaited(_openAudioFiles(files));
+    }
     final pendingUrl = ShareIntentService().consumePendingUrl();
     if (pendingUrl != null) {
       _handleSharedUrl(pendingUrl);
@@ -315,6 +368,14 @@ class _MainShellState extends ConsumerState<MainShell>
     );
   }
 
+  Future<void> _openAudioFiles(List<OpenAudioFile> files) async {
+    try {
+      await ref.read(openAudioControllerProvider.notifier).open(files);
+    } catch (error) {
+      if (mounted) showCannotOpenFileSnackBar(context, error);
+    }
+  }
+
   Future<void> _handleSharedUrl(String url) async {
     if (!mounted) return;
 
@@ -329,9 +390,21 @@ class _MainShellState extends ConsumerState<MainShell>
     if (!mounted) return;
     ref.read(settingsProvider.notifier).setHasSearchedBefore();
     if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(context.l10n.loadingSharedLink)));
+      final linkClient = ref.read(linkPhoneClientProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.l10n.loadingSharedLink),
+          // A paired desktop can take the link instead.
+          action: linkClient == null
+              ? null
+              : SnackBarAction(
+                  label: context.l10n.linkSendToDesktop(
+                    linkDesktopName(linkClient),
+                  ),
+                  onPressed: () => showLinkSharedUrlSheet(context, ref, url),
+                ),
+        ),
+      );
     }
     await ref.read(trackProvider.notifier).fetchFromUrl(url);
     final trackState = ref.read(trackProvider);
@@ -368,6 +441,7 @@ class _MainShellState extends ConsumerState<MainShell>
     usbAudioStatus.removeListener(_onUsbAudioStatusChanged);
     ShellNavigationService.unregisterTabSelectionHandler(this);
     _shareSubscription?.cancel();
+    _audioOpenSubscription?.cancel();
     _pageController.dispose();
     _tabJumpOpacity.dispose();
     _tabJumpTransitionController.dispose();
@@ -389,9 +463,10 @@ class _MainShellState extends ConsumerState<MainShell>
     if (!context.isSpotiFLAC) ref.read(trackProvider.notifier).clear();
   }
 
-  /// SpotiFLAC desktop windows show Settings as a destination after Search, in
-  /// the content pane. Phones and tablets open it as a page instead.
-  bool get _spotiflacSettingsTab => context.isSpotiFLAC && isDesktopPlatform;
+  /// Desktop and TV show Settings after Search in the content pane.
+  /// Phones and tablets open it as a page instead.
+  bool get _spotiflacSettingsTab =>
+      context.isSpotiFLAC && (isDesktopPlatform || isAndroidTv);
 
   int _settingsIndex(bool showStore) =>
       context.isSpotiFLAC ? (showStore ? 4 : 3) : (showStore ? 3 : 2);
@@ -399,9 +474,7 @@ class _MainShellState extends ConsumerState<MainShell>
   void _onShellTabRequested(ShellTab tab) {
     // Picking a destination returns from Now Playing to the content pane.
     if (isDesktopPlatform) desktopNowPlayingOpen.value = false;
-    if (tab == ShellTab.settings &&
-        context.isSpotiFLAC &&
-        !_spotiflacSettingsTab) {
+    if (tab == ShellTab.settings && context.isSpotiFLAC && !_spotiflacSettingsTab) {
       unawaited(_openProfileSettings());
       return;
     }
@@ -441,9 +514,7 @@ class _MainShellState extends ConsumerState<MainShell>
       settingsProvider.select((s) => s.showExtensionStore),
     );
     _spotiflacChrome.expand();
-    if (index == 0 &&
-        resetHome &&
-        (context.isSpotiFLAC || _currentIndex == 0)) {
+    if (index == 0 && resetHome && (context.isSpotiFLAC || _currentIndex == 0)) {
       _resetHomeToMain();
     }
     if (index == 0 && _currentIndex == 0) {
@@ -463,11 +534,11 @@ class _MainShellState extends ConsumerState<MainShell>
         showRepoTab: showStore,
         showSearchTab: context.isSpotiFLAC,
       );
-      FocusManager.instance.primaryFocus?.unfocus();
+      if (!isAndroidTv) FocusManager.instance.primaryFocus?.unfocus();
       // Jump directly when skipping intermediate tabs to avoid
       // sliding through them. For those jumps, keep a short fade-in
       // so the transition still feels intentional.
-      if (context.isSpotiFLAC) {
+      if (context.isSpotiFLAC || isAndroidTv) {
         // The glass pill owns the tab transition. Sliding/fading the whole
         // page at the same time continuously invalidates its live backdrop.
         _tabJumpTransitionController.value = 1;
@@ -501,6 +572,27 @@ class _MainShellState extends ConsumerState<MainShell>
     }
   }
 
+  /// Reads the keyboard inset without depending on it, so keyboard frames
+  /// do not rebuild the shell.
+  bool get _keyboardVisible {
+    final media = context.getInheritedWidgetOfExactType<MediaQuery>()!;
+    return media.data.viewInsets.bottom > 0;
+  }
+
+  /// Whether scrolling may collapse the SpotiFLAC tab bar at [width].
+  bool _canMinimizeChromeAt(double width, TextScaler textScaler) =>
+      !isDesktopPlatform &&
+      context.isSpotiFLAC &&
+      !useNavigationRailForWidth(width) &&
+      textScaler.scale(15) <= 20;
+
+  /// [_canMinimizeChromeAt] for the window now, read without depending on
+  /// its size, so the tab pages' scroll listeners do not rebuild the shell.
+  bool get _canMinimizeChrome {
+    final media = context.getInheritedWidgetOfExactType<MediaQuery>()!.data;
+    return _canMinimizeChromeAt(media.size.width, media.textScaler);
+  }
+
   Future<void> _handleBackPress() async {
     final rootNavigator = Navigator.of(context, rootNavigator: true);
     final handledByRootNavigator = await rootNavigator.maybePop();
@@ -525,8 +617,6 @@ class _MainShellState extends ConsumerState<MainShell>
     final trackState = ref.read(trackProvider);
     final isSearchTab =
         _currentIndex == (context.isSpotiFLAC ? (showStore ? 3 : 2) : 0);
-
-    final isKeyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
 
     if (isSearchTab &&
         trackState.isShowingRecentAccess &&
@@ -558,7 +648,7 @@ class _MainShellState extends ConsumerState<MainShell>
       return;
     }
 
-    if (isSearchTab && isKeyboardVisible) {
+    if (isSearchTab && _keyboardVisible) {
       FocusManager.instance.primaryFocus?.unfocus();
       _lastBackPress = null;
       return;
@@ -571,6 +661,11 @@ class _MainShellState extends ConsumerState<MainShell>
     }
 
     if (isSearchTab && trackState.isLoading) {
+      return;
+    }
+
+    if (isAndroidTv) {
+      await SystemNavigator.pop();
       return;
     }
 
@@ -659,8 +754,8 @@ class _MainShellState extends ConsumerState<MainShell>
     ];
   }
 
-  /// The Library pages under the SpotiFLAC desktop sidebar's Library heading,
-  /// as in Music. Recently Added is the Library root.
+  /// The pages under the SpotiFLAC desktop sidebar's Library heading.
+  /// Recently Added is the Library root.
   List<DesktopSidebarLink> _desktopLibraryLinks({required int queueCount}) {
     final l10n = context.l10n;
     return [
@@ -685,6 +780,11 @@ class _MainShellState extends ConsumerState<MainShell>
         label: l10n.searchSongs,
       ),
       DesktopSidebarLink(
+        id: 'folders',
+        icon: CupertinoIcons.folder,
+        label: l10n.libraryFolders,
+      ),
+      DesktopSidebarLink(
         id: 'downloads',
         icon: CupertinoIcons.arrow_down_circle,
         label: l10n.libraryDownloads,
@@ -693,7 +793,7 @@ class _MainShellState extends ConsumerState<MainShell>
     ];
   }
 
-  /// The page a SpotiFLAC desktop sidebar link opens in the Library tab, or
+  /// The page a desktop sidebar or rail link opens in the Library tab, or
   /// null for the Library root.
   Widget? _desktopLibraryPage(String id) {
     const playlistPrefix = 'playlist:';
@@ -718,6 +818,7 @@ class _MainShellState extends ConsumerState<MainShell>
         ),
       ),
       'songs' => const Scaffold(body: QueueTab(librarySection: 'all')),
+      'folders' => const LibraryDirectoryScreen(),
       'downloads' => const Scaffold(
         body: QueueTab(librarySection: 'downloads'),
       ),
@@ -728,22 +829,37 @@ class _MainShellState extends ConsumerState<MainShell>
     };
   }
 
-  /// Shows a Library page or playlist picked in the SpotiFLAC desktop sidebar
-  /// in the Library tab, in place of the page it showed.
+  /// Shows a Library page or playlist picked in the SpotiFLAC desktop sidebar,
+  /// or a playlist picked in the Material rail, in the Library tab, in place
+  /// of the page it showed.
   void _openDesktopLibraryLink(String id) {
-    _onShellTabRequested(ShellTab.library);
     final page = _desktopLibraryPage(id);
-    // The Library navigator mounts with the tab on its first visit.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final navigator = _libraryTabNavigatorKey.currentState;
-      if (!mounted || navigator == null) return;
+    // A link replaces the Library page at once, as in a source list, so the
+    // Library root never shows on the way from another tab.
+    void show(NavigatorState navigator) {
       navigator.popUntil((route) => route.isFirst);
       if (page != null) {
         unawaited(
-          navigator.push(MaterialPageRoute<void>(builder: (_) => page)),
+          navigator.push(
+            PageRouteBuilder<void>(
+              transitionDuration: Duration.zero,
+              reverseTransitionDuration: Duration.zero,
+              pageBuilder: (_, _, _) => page,
+            ),
+          ),
         );
       }
       desktopSidebarLink.value = page == null ? null : id;
+    }
+
+    final navigator = _libraryTabNavigatorKey.currentState;
+    if (navigator != null) show(navigator);
+    _onShellTabRequested(ShellTab.library);
+    if (navigator != null) return;
+    // The Library navigator mounts with the tab on its first visit.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final navigator = _libraryTabNavigatorKey.currentState;
+      if (mounted && navigator != null) show(navigator);
     });
     WidgetsBinding.instance.ensureVisualUpdate();
   }
@@ -804,6 +920,9 @@ class _MainShellState extends ConsumerState<MainShell>
     ref.listen(settingsProvider, (_, settings) {
       ref.read(musicPlayerRuntimeProvider).configure(settings);
     });
+    ref.listen(activeRemotePlaybackProvider, (_, remote) {
+      unawaited(ref.read(musicPlayerRuntimeProvider).showRemote(remote));
+    });
     ref.listen(settingsProvider.select((s) => s.discordRichPresenceEnabled), (
       _,
       enabled,
@@ -813,9 +932,6 @@ class _MainShellState extends ConsumerState<MainShell>
     ref.listen(
       settingsProvider.select((s) => s.listeningStatisticsEnabled),
       (_, enabled) => listeningRecorder.setEnabled(enabled),
-    );
-    final queueState = ref.watch(
-      downloadQueueProvider.select((s) => s.queuedCount),
     );
     final showStore = ref.watch(
       settingsProvider.select((s) => s.showExtensionStore),
@@ -828,9 +944,6 @@ class _MainShellState extends ConsumerState<MainShell>
       showRepoTab: showStore,
       showSearchTab: context.isSpotiFLAC,
     );
-    final repoUpdatesCount = ref.watch(
-      repoProvider.select((s) => s.updatesAvailableCount),
-    );
 
     final tabs = <Widget>[
       _TabNavigator(
@@ -840,9 +953,7 @@ class _MainShellState extends ConsumerState<MainShell>
         heroAnimationsEnabled: heroAnimationsEnabled,
         child: Builder(
           builder: (context) => HomeTab(
-            mode: context.isSpotiFLAC
-                ? HomeTabMode.browse
-                : HomeTabMode.combined,
+            mode: context.isSpotiFLAC ? HomeTabMode.browse : HomeTabMode.combined,
           ),
         ),
       ),
@@ -873,12 +984,177 @@ class _MainShellState extends ConsumerState<MainShell>
           heroAnimationsEnabled: heroAnimationsEnabled,
           child: const HomeTab(mode: HomeTabMode.search),
         ),
-      if (_spotiflacSettingsTab)
-        const SettingsTab(key: ValueKey('tab-settings')),
+      if (_spotiflacSettingsTab) const SettingsTab(key: ValueKey('tab-settings')),
     ];
 
+    final maxIndex = tabs.length - 1;
+    final selectedDestination = _currentIndex.clamp(0, maxIndex);
+    if (_currentIndex > maxIndex) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() => _currentIndex = maxIndex);
+          if (_pageController.hasClients) {
+            _pageController.jumpToPage(maxIndex);
+          }
+        }
+      });
+    }
+
+    Widget observeScroll(Widget child, int index) =>
+        NotificationListener<ScrollNotification>(
+          onNotification: (notification) {
+            // The chrome stays expanded while the keyboard is up.
+            if (_canMinimizeChrome &&
+                index == _currentIndex &&
+                !_keyboardVisible) {
+              return _spotiflacChrome.handleScroll(notification);
+            }
+            return false;
+          },
+          child: child,
+        );
+
+    final pageView = KeyedSubtree(
+      key: _pageViewKey,
+      child: context.isSpotiFLAC || isAndroidTv
+          ? LazyTabView(
+              index: selectedDestination,
+              preloadKeys: isAndroidTv
+                  ? const {}
+                  : {const ValueKey('tab-search')},
+              children: [
+                for (var index = 0; index < tabs.length; index++)
+                  KeyedSubtree(
+                    key: tabs[index].key,
+                    child: observeScroll(tabs[index], index),
+                  ),
+              ],
+            )
+          : FadeTransition(
+              opacity: _tabJumpOpacity,
+              child: ScaleTransition(
+                scale: _tabJumpScale,
+                child: PageView.builder(
+                  controller: _pageController,
+                  itemCount: tabs.length,
+                  onPageChanged: _onPageChanged,
+                  physics: const NeverScrollableScrollPhysics(),
+                  // TickerMode mutes animations and lets visibility-aware widgets
+                  // (e.g. MotionHeaderBanner) pause when their tab is hidden;
+                  // kept-alive pages otherwise keep running offscreen.
+                  itemBuilder: (context, index) => _KeepAliveTabPage(
+                    key: ValueKey('page-$index'),
+                    child: TickerMode(
+                      enabled: index == _currentIndex,
+                      child: observeScroll(tabs[index], index),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+    );
+
+    // From here only the navigation chrome follows the window size and the
+    // badge counts. It gets the same tab view each time, so none of them
+    // rebuilds the shell or the routes of its tabs; pages read them
+    // themselves.
+    if (isAndroidTv) {
+      return DownloadQueueFeedback(
+        child: BackButtonListener(
+          onBackButtonPressed: () async {
+            await _handleBackPress();
+            return true;
+          },
+          child: Scaffold(
+            body: Consumer(
+              child: SelectionOverlayHost(child: pageView),
+              builder: (context, ref, body) => TvShell(
+                destinations: _navigationDestinations(
+                  queuedCount: _watchQueuedCount(ref),
+                  repoUpdatesCount: _watchRepoUpdatesCount(ref),
+                  showStore: showStore,
+                ),
+                selectedIndex: selectedDestination,
+                onSelected: _onNavTap,
+                child: body!,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (isDesktopPlatform) {
+      // Desktop windows: a rail (Material) or source-list sidebar (SpotiFLAC)
+      // with a persistent player; no bottom tabs or touch gestures.
+      final spotiflac = context.isSpotiFLAC;
+      final selectedTab = _tabForIndex(selectedDestination, showStore);
+      return DownloadQueueFeedback(
+        child: DesktopLinkTransferNotices(
+          child: Scaffold(
+            body: Consumer(
+              // The selection bar floats over the pages, not the sidebar.
+              child: SelectionOverlayHost(child: pageView),
+              builder: (context, ref, body) {
+                final queuedCount = _watchQueuedCount(ref);
+                return DesktopShellLayout(
+                  destinations: _desktopDestinations(
+                    showStore: showStore,
+                    // SpotiFLAC shows the queue on its Downloads link instead.
+                    queueCount: spotiflac ? 0 : queuedCount,
+                    repoUpdatesCount: _watchRepoUpdatesCount(ref),
+                  ),
+                  selected: selectedTab,
+                  onSelected: _onShellTabRequested,
+                  libraryLinks: spotiflac
+                      ? _desktopLibraryLinks(queueCount: queuedCount)
+                      : const [],
+                  // The Material rail opens playlists alone.
+                  onOpenLibraryLink: _openDesktopLibraryLink,
+                  onOpenProfile: spotiflac ? _openDesktopProfile : null,
+                  body: body!,
+                );
+              },
+            ),
+          ),
+        ),
+      );
+    }
+
+    final shell = SelectionOverlayHost(
+      child: BackButtonListener(
+        onBackButtonPressed: () async {
+          await _handleBackPress();
+          return true;
+        },
+        child: Consumer(
+          child: pageView,
+          builder: (context, ref, pageView) => _mobileScaffold(
+            context,
+            ref,
+            pageView: pageView!,
+            destinations: _navigationDestinations(
+              queuedCount: _watchQueuedCount(ref),
+              repoUpdatesCount: _watchRepoUpdatesCount(ref),
+              showStore: showStore,
+            ),
+            selectedDestination: selectedDestination,
+            maxIndex: maxIndex,
+          ),
+        ),
+      ),
+    );
+    return DownloadQueueFeedback(child: shell);
+  }
+
+  /// Phone, tablet and TV destinations, with the download count on Library.
+  List<NavigationDestination> _navigationDestinations({
+    required int queuedCount,
+    required int repoUpdatesCount,
+    required bool showStore,
+  }) {
     final l10n = context.l10n;
-    final destinations = <NavigationDestination>[
+    return <NavigationDestination>[
       NavigationDestination(
         icon: AppIcon(
           context.isSpotiFLAC ? CupertinoIcons.house_fill : Icons.home_outlined,
@@ -890,22 +1166,22 @@ class _MainShellState extends ConsumerState<MainShell>
         icon: context.isSpotiFLAC
             ? SpotiFLACNavigationIcon(
                 icon: CupertinoIcons.square_stack_fill,
-                badgeCount: queueState,
+                badgeCount: queuedCount,
               )
             : AnimatedBadge(
-                count: queueState,
+                count: queuedCount,
                 child: Badge(
-                  isLabelVisible: queueState > 0,
-                  label: Text('$queueState'),
+                  isLabelVisible: queuedCount > 0,
+                  label: Text('$queuedCount'),
                   child: const AppIcon(Icons.library_music_outlined),
                 ),
               ),
         selectedIcon: SlidingIcon(
           child: AnimatedBadge(
-            count: queueState,
+            count: queuedCount,
             child: Badge(
-              isLabelVisible: queueState > 0,
-              label: Text('$queueState'),
+              isLabelVisible: queuedCount > 0,
+              label: Text('$queuedCount'),
               child: const AppIcon(Icons.library_music),
             ),
           ),
@@ -950,21 +1226,24 @@ class _MainShellState extends ConsumerState<MainShell>
           icon: const Icon(CupertinoIcons.search),
           label: l10n.spotiflacSearch,
         ),
+      if (context.isSpotiFLAC && isAndroidTv)
+        NavigationDestination(
+          icon: const Icon(CupertinoIcons.gear_alt),
+          label: l10n.navSettings,
+        ),
     ];
+  }
 
-    final maxIndex = tabs.length - 1;
-    final selectedDestination = _currentIndex.clamp(0, maxIndex);
-    if (_currentIndex > maxIndex) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          setState(() => _currentIndex = maxIndex);
-          if (_pageController.hasClients) {
-            _pageController.jumpToPage(maxIndex);
-          }
-        }
-      });
-    }
-
+  /// The phone and tablet chrome around [pageView]: the bottom bar, or the
+  /// rail in wide windows, and the mini player.
+  Widget _mobileScaffold(
+    BuildContext context,
+    WidgetRef ref, {
+    required Widget pageView,
+    required List<NavigationDestination> destinations,
+    required int selectedDestination,
+    required int maxIndex,
+  }) {
     final screenSize = MediaQuery.sizeOf(context);
     final isTablet = screenSize.shortestSide >= 600;
     // Material follows its expanded window class: landscape tablets get the
@@ -976,236 +1255,164 @@ class _MainShellState extends ConsumerState<MainShell>
         : useMaterialNavigationRailForWidth(screenSize.width);
     final compactSpotiFLACChrome =
         context.isSpotiFLAC && screenSize.width >= expandedLayoutBreakpoint;
-    final canMinimizeChrome =
-        !isDesktopPlatform &&
-        context.isSpotiFLAC &&
-        !useNavigationRail &&
-        MediaQuery.viewInsetsOf(context).bottom == 0 &&
-        MediaQuery.textScalerOf(context).scale(15) <= 20;
+    final canMinimizeChrome = _canMinimizeChromeAt(
+      screenSize.width,
+      MediaQuery.textScalerOf(context),
+    );
 
-    Widget observeScroll(Widget child, int index) =>
-        NotificationListener<ScrollNotification>(
-          onNotification: (notification) {
-            if (canMinimizeChrome && index == _currentIndex) {
-              return _spotiflacChrome.handleScroll(notification);
-            }
-            return false;
-          },
-          child: child,
-        );
-
-    final pageView = KeyedSubtree(
-      key: _pageViewKey,
-      child: context.isSpotiFLAC
-          ? LazyTabView(
-              index: selectedDestination,
-              preloadKeys: {const ValueKey('tab-search')},
+    return Scaffold(
+      extendBody: true,
+      // The tab view keeps one element across the rail<->bar structure
+      // swap via _pageViewKey so rotation doesn't remount tab navigators.
+      body: useNavigationRail
+          ? Row(
               children: [
-                for (var index = 0; index < tabs.length; index++)
-                  KeyedSubtree(
-                    key: tabs[index].key,
-                    child: observeScroll(tabs[index], index),
+                SafeArea(
+                  right: false,
+                  bottom: false,
+                  child: ExpressiveNavigationRail(
+                    selectedIndex: selectedDestination,
+                    onDestinationSelected: _onNavTap,
+                    backgroundColor: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainer,
+                    destinations: destinations,
                   ),
+                ),
+                const VerticalDivider(width: 1),
+                // Width-based layout (centered columns, grids) measures
+                // the space beside the rail rather than the whole screen.
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final mediaQuery = MediaQuery.of(context);
+                      return MediaQuery(
+                        data: mediaQuery
+                            .copyWith(
+                              size: Size(
+                                constraints.maxWidth,
+                                mediaQuery.size.height,
+                              ),
+                            )
+                            .removePadding(removeLeft: true),
+                        child: pageView,
+                      );
+                    },
+                  ),
+                ),
               ],
             )
-          : FadeTransition(
-              opacity: _tabJumpOpacity,
-              child: ScaleTransition(
-                scale: _tabJumpScale,
-                child: PageView.builder(
-                  controller: _pageController,
-                  itemCount: tabs.length,
-                  onPageChanged: _onPageChanged,
-                  physics: const NeverScrollableScrollPhysics(),
-                  // TickerMode mutes animations and lets visibility-aware widgets
-                  // (e.g. MotionHeaderBanner) pause when their tab is hidden —
-                  // kept-alive pages otherwise keep running offscreen.
-                  itemBuilder: (context, index) => _KeepAliveTabPage(
-                    key: ValueKey('page-$index'),
-                    child: TickerMode(
-                      enabled: index == _currentIndex,
-                      child: observeScroll(tabs[index], index),
+          : pageView,
+      bottomNavigationBar: Builder(
+        builder: (context) {
+          if (context.isSpotiFLAC) {
+            return ListenableBuilder(
+              listenable: Listenable.merge([
+                ShellNavigationService.chromeBrightness,
+                ShellNavigationService.chromeSurface,
+              ]),
+              builder: (context, child) => Theme(
+                data: ShellNavigationService.chromeBrightness.value == null
+                    ? Theme.of(context)
+                    : SpotiFLACTheme.fromContext(
+                        context,
+                        brightness:
+                            ShellNavigationService.chromeBrightness.value!,
+                        chromeSurface:
+                            ShellNavigationService.chromeSurface.value,
+                      ),
+                child: child!,
+              ),
+              child: SafeArea(
+                top: false,
+                minimum: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                // iPadOS-style chrome: one compact, centered pill rather
+                // than a bar spread across a landscape tablet.
+                child: Center(
+                  heightFactor: 1,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: compactSpotiFLACChrome ? 600 : double.infinity,
                     ),
+                    child: useNavigationRail
+                        ? const MiniPlayer()
+                        : ValueListenableBuilder<bool>(
+                            valueListenable: _spotiflacChrome,
+                            builder: (context, collapsed, _) => SpotiFLACBottomBar(
+                              collapsed:
+                                  canMinimizeChrome &&
+                                  collapsed &&
+                                  MediaQuery.viewInsetsOf(context).bottom == 0,
+                              destinations: destinations,
+                              selectedIndex: selectedDestination,
+                              onSelected: _onNavTap,
+                              onHome: () => _onNavTap(0),
+                              onSearch: ShellNavigationService.requestSearch,
+                              blurEnabled: ref.watch(spotiflacBlurEnabledProvider),
+                            ),
+                          ),
                   ),
                 ),
               ),
+            );
+          }
+          final blurEnabled = ref.watch(backdropBlurEnabledProvider);
+          // The mini player and the bar read as one surface, so the bar
+          // takes the playing track's artwork scheme too; with nothing
+          // playing both keep the app scheme. Only this scope listens
+          // to the track, so a cover change does not rebuild the shell.
+          return Consumer(
+            builder: (context, ref, child) => PlayerArtworkTheme(
+              artUri: ref.watch(
+                currentMediaItemProvider.select(
+                  (item) => item.value?.artUri?.toString(),
+                ),
+              ),
+              child: child!,
             ),
-    );
-
-    if (isDesktopPlatform) {
-      // Desktop windows: a rail (Material) or source-list sidebar (SpotiFLAC)
-      // with a persistent player; no bottom tabs or touch gestures.
-      final spotiflac = context.isSpotiFLAC;
-      final selectedTab = _tabForIndex(selectedDestination, showStore);
-      final destinations = _desktopDestinations(
-        showStore: showStore,
-        // SpotiFLAC shows the queue on its Downloads link instead.
-        queueCount: spotiflac ? 0 : queueState,
-        repoUpdatesCount: repoUpdatesCount,
-      );
-      return DownloadQueueFeedback(
-        child: Scaffold(
-          body: DesktopShellLayout(
-            destinations: destinations,
-            selected: selectedTab,
-            onSelected: _onShellTabRequested,
-            libraryLinks: spotiflac
-                ? _desktopLibraryLinks(queueCount: queueState)
-                : const [],
-            onOpenLibraryLink: spotiflac ? _openDesktopLibraryLink : null,
-            onOpenProfile: spotiflac ? _openDesktopProfile : null,
-            // The selection bar floats over the pages, not the sidebar.
-            body: SelectionOverlayHost(child: pageView),
-          ),
-        ),
-      );
-    }
-
-    final shell = SelectionOverlayHost(
-      child: BackButtonListener(
-        onBackButtonPressed: () async {
-          await _handleBackPress();
-          return true;
-        },
-        child: Scaffold(
-          extendBody: true,
-          // The tab view keeps one element across the rail<->bar structure
-          // swap via _pageViewKey so rotation doesn't remount tab navigators.
-          body: useNavigationRail
-              ? Row(
+            child: Builder(
+              builder: (context) {
+                final bottomBar = Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    SafeArea(
-                      right: false,
-                      bottom: false,
-                      child: ExpressiveNavigationRail(
-                        selectedIndex: selectedDestination,
+                    const MiniPlayer(),
+                    // The bar's container fill separates it; no divider,
+                    // so the mini player and the bar read as one surface.
+                    if (!useNavigationRail)
+                      ExpressiveNavigationBar(
+                        selectedIndex: _currentIndex.clamp(0, maxIndex),
                         onDestinationSelected: _onNavTap,
-                        backgroundColor: Theme.of(
+                        isTablet: isTablet,
+                        backgroundColor: settingsGroupColor(
                           context,
-                        ).colorScheme.surfaceContainer,
+                        ).withValues(alpha: 0.72),
                         destinations: destinations,
                       ),
-                    ),
-                    const VerticalDivider(width: 1),
-                    // Width-based layout (centered columns, grids) measures
-                    // the space beside the rail rather than the whole screen.
-                    Expanded(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final mediaQuery = MediaQuery.of(context);
-                          return MediaQuery(
-                            data: mediaQuery
-                                .copyWith(
-                                  size: Size(
-                                    constraints.maxWidth,
-                                    mediaQuery.size.height,
-                                  ),
-                                )
-                                .removePadding(removeLeft: true),
-                            child: pageView,
-                          );
-                        },
-                      ),
-                    ),
                   ],
-                )
-              : pageView,
-          bottomNavigationBar: Builder(
-            builder: (context) {
-              if (context.isSpotiFLAC) {
-                return ListenableBuilder(
-                  listenable: Listenable.merge([
-                    ShellNavigationService.chromeBrightness,
-                    ShellNavigationService.chromeSurface,
-                  ]),
-                  builder: (context, child) => Theme(
-                    data: ShellNavigationService.chromeBrightness.value == null
-                        ? Theme.of(context)
-                        : SpotiFLACTheme.fromContext(
-                            context,
-                            brightness:
-                                ShellNavigationService.chromeBrightness.value!,
-                            chromeSurface:
-                                ShellNavigationService.chromeSurface.value,
-                          ),
-                    child: child!,
-                  ),
-                  child: SafeArea(
-                    top: false,
-                    minimum: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                    // iPadOS-style chrome: one compact, centered pill rather
-                    // than a bar spread across a landscape tablet.
-                    child: Center(
-                      heightFactor: 1,
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxWidth: compactSpotiFLACChrome
-                              ? 600
-                              : double.infinity,
-                        ),
-                        child: useNavigationRail
-                            ? const MiniPlayer()
-                            : ValueListenableBuilder<bool>(
-                                valueListenable: _spotiflacChrome,
-                                builder: (context, collapsed, _) =>
-                                    SpotiFLACBottomBar(
-                                      collapsed: canMinimizeChrome && collapsed,
-                                      destinations: destinations,
-                                      selectedIndex: selectedDestination,
-                                      onSelected: _onNavTap,
-                                      onHome: () => _onNavTap(0),
-                                      onSearch:
-                                          ShellNavigationService.requestSearch,
-                                      blurEnabled: ref.watch(
-                                        spotiflacBlurEnabledProvider,
-                                      ),
-                                    ),
-                              ),
-                      ),
-                    ),
+                );
+                // The backdrop blur re-filters everything scrolling
+                // underneath on every frame; low-end devices get an
+                // opaque base instead unless the user forces blur on in
+                // appearance settings.
+                if (!blurEnabled) {
+                  return ColoredBox(
+                    color: settingsGroupColor(context),
+                    child: bottomBar,
+                  );
+                }
+                return ClipRect(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    blendMode: BlendMode.src,
+                    child: bottomBar,
                   ),
                 );
-              }
-              final bottomBar = Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const MiniPlayer(),
-                  // The bar's container fill separates it; no divider, so
-                  // the mini player and the bar read as one surface.
-                  if (!useNavigationRail)
-                    ExpressiveNavigationBar(
-                      selectedIndex: _currentIndex.clamp(0, maxIndex),
-                      onDestinationSelected: _onNavTap,
-                      isTablet: isTablet,
-                      backgroundColor: settingsGroupColor(
-                        context,
-                      ).withValues(alpha: 0.72),
-                      destinations: destinations,
-                    ),
-                ],
-              );
-              // The backdrop blur re-filters everything scrolling underneath on
-              // every frame; low-end devices get an opaque base instead unless
-              // the user forces blur on in appearance settings.
-              if (!ref.watch(backdropBlurEnabledProvider)) {
-                return ColoredBox(
-                  color: settingsGroupColor(context),
-                  child: bottomBar,
-                );
-              }
-              return ClipRect(
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                  blendMode: BlendMode.src,
-                  child: bottomBar,
-                ),
-              );
-            },
-          ),
-        ),
+              },
+            ),
+          );
+        },
       ),
     );
-    return DownloadQueueFeedback(child: shell);
   }
 }
 
@@ -1248,6 +1455,9 @@ class _TabNavigatorState extends State<_TabNavigator> {
   Widget build(BuildContext context) {
     return Navigator(
       key: widget.navigatorKey,
+      routeDirectionalTraversalEdgeBehavior: isAndroidTv
+          ? TraversalEdgeBehavior.parentScope
+          : TraversalEdgeBehavior.stop,
       observers: [
         _chromeObserver,
         if (widget.heroAnimationsEnabled) _heroController,
@@ -1255,7 +1465,10 @@ class _TabNavigatorState extends State<_TabNavigator> {
         ...widget.observers,
       ],
       onGenerateInitialRoutes: (_, _) => [
-        MaterialPageRoute<void>(builder: (_) => widget.child),
+        MaterialPageRoute<void>(
+          requestFocus: !isAndroidTv,
+          builder: (_) => widget.child,
+        ),
       ],
     );
   }

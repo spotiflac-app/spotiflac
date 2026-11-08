@@ -1,5 +1,11 @@
 import 'package:audio_service/audio_service.dart' show MediaItem;
+import 'package:spotiflac/models/download_history.dart';
+import 'package:spotiflac/models/library_database_models.dart';
+import 'package:spotiflac/models/track.dart';
+import 'package:spotiflac/services/cover_store.dart';
 import 'package:spotiflac/services/music_player_runtime.dart';
+import 'package:spotiflac/services/playback_metadata.dart';
+import 'package:spotiflac/utils/file_access.dart' show isContentUri;
 import 'package:spotiflac/utils/int_utils.dart';
 import 'package:spotiflac/utils/ios_container_paths.dart';
 import 'package:spotiflac/utils/string_utils.dart';
@@ -7,6 +13,7 @@ import 'package:spotiflac/utils/string_utils.dart';
 class PlayableMedia {
   final String id;
   final String source;
+  final String? originSource;
   final String title;
   final String artist;
   final String album;
@@ -20,10 +27,12 @@ class PlayableMedia {
   final bool explicit;
   final String? genre;
   final bool autoplay;
+  final Map<String, dynamic> displayMetadata;
 
   const PlayableMedia({
     required this.id,
     required this.source,
+    this.originSource,
     required this.title,
     required this.artist,
     this.album = '',
@@ -37,7 +46,14 @@ class PlayableMedia {
     this.explicit = false,
     this.genre,
     this.autoplay = false,
+    this.displayMetadata = const {},
   });
+
+  /// The `network://` cover the cover store keeps for this song:
+  /// [networkArtworkSource], or [artUri] when it names one, as a cover
+  /// reference listening statistics recorded does.
+  String? get coverReference =>
+      networkArtworkSource ?? (CoverStore.fetches(artUri) ? artUri : null);
 
   bool get isContentUri => source.startsWith('content://');
   bool get isNetwork =>
@@ -46,6 +62,7 @@ class PlayableMedia {
   Map<String, dynamic> toJson() => {
     'id': id,
     'source': source,
+    if (originSource != null) 'originSource': originSource,
     'title': title,
     'artist': artist,
     'album': album,
@@ -61,6 +78,7 @@ class PlayableMedia {
     if (explicit) 'explicit': true,
     if (genre != null) 'genre': genre,
     if (autoplay) 'autoplay': true,
+    if (displayMetadata.isNotEmpty) 'displayMetadata': displayMetadata,
   };
 
   static PlayableMedia? fromJson(
@@ -89,6 +107,7 @@ class PlayableMedia {
     return PlayableMedia(
       id: id,
       source: source,
+      originSource: json['originSource'] as String?,
       title: json['title'] as String? ?? '',
       artist: json['artist'] as String? ?? '',
       album: json['album'] as String? ?? '',
@@ -104,16 +123,31 @@ class PlayableMedia {
       explicit: parseExplicitFlag(json['explicit']) == true,
       genre: json['genre'] as String?,
       autoplay: json['autoplay'] == true,
+      displayMetadata: playbackDisplayMetadata(json['displayMetadata']),
     );
   }
 
+  /// The item players show. A network song shows the file [covers] stored
+  /// for it, the same on every play: the cover from its tags once read,
+  /// else its network cover ([coverReference]), which travels as
+  /// `extras['artworkRef']`, the reference to keep instead of the file. A
+  /// `network://` string is never the item's artUri.
   MediaItem toMediaItem({
     String? resolvedSource,
     String? resolvedArtwork,
     String? unknownTitle,
     String? unknownArtist,
+    CoverStore? covers,
   }) {
-    final artwork = resolvedArtwork ?? artUri;
+    final reference = coverReference;
+    final stored = resolvedArtwork == null
+        ? (covers ?? musicPlayerRuntime.dependencies.coverStore).songCover(
+            source,
+            reference,
+          )
+        : null;
+    final artwork =
+        resolvedArtwork ?? (CoverStore.fetches(artUri) ? null : artUri);
     return MediaItem(
       id: id,
       title: title.isEmpty
@@ -124,13 +158,18 @@ class PlayableMedia {
           : artist,
       album: album.isEmpty ? null : album,
       duration: duration,
-      artUri: (artwork != null && artwork.isNotEmpty)
+      artUri: stored != null
+          ? Uri.file(stored.path)
+          : (artwork != null && artwork.isNotEmpty)
           ? Uri.tryParse(artwork)
           : null,
       extras: {
         'source': source,
+        if (originSource != null) 'originSource': originSource,
+        if (displayMetadata.isNotEmpty) 'displayMetadata': displayMetadata,
         if (resolvedSource != null && resolvedSource.isNotEmpty)
           'resolvedSource': resolvedSource,
+        'artworkRef': ?reference,
         if (bitDepth != null && bitDepth! > 0) 'bit_depth': bitDepth,
         if (sampleRate != null && sampleRate! > 0) 'sample_rate': sampleRate,
         if (bitrate != null && bitrate! > 0) 'bitrate': bitrate,
@@ -141,4 +180,81 @@ class PlayableMedia {
       },
     );
   }
+}
+
+/// A cover path or URL as a media artwork URI.
+String? normalizeArtUri(String cover) {
+  final value = cover.trim();
+  if (value.isEmpty) return null;
+  if (value.startsWith('http') ||
+      CoverStore.fetches(value) ||
+      isContentUri(value) ||
+      value.startsWith('file://')) {
+    return value;
+  }
+  return Uri.file(value).toString();
+}
+
+/// A collection or catalog [track] that plays the file at [path]. A
+/// `network://` cover stays the reference, its [PlayableMedia.coverReference],
+/// while a network [path] plays; a local file shows its own cover instead.
+PlayableMedia playableFromTrack(Track track, String path) {
+  final cover = track.coverUrl ?? '';
+  return PlayableMedia(
+    id: path,
+    source: path,
+    title: track.name,
+    artist: track.artistName,
+    album: track.albumName,
+    artUri: !CoverStore.fetches(cover)
+        ? normalizeArtUri(cover)
+        : path.startsWith('network://')
+        ? cover
+        : null,
+    duration: track.duration > 0 ? Duration(seconds: track.duration) : null,
+    explicit: track.isExplicit,
+  );
+}
+
+PlayableMedia playableFromHistory(DownloadHistoryItem item) {
+  return PlayableMedia(
+    id: item.id,
+    source: item.filePath,
+    originSource: item.originFilePath,
+    title: item.trackName,
+    artist: item.artistName,
+    album: item.albumName,
+    artUri: (item.coverUrl != null && item.coverUrl!.trim().isNotEmpty)
+        ? item.coverUrl
+        : null,
+    duration: (item.duration != null && item.duration! > 0)
+        ? Duration(seconds: item.duration!)
+        : null,
+    bitDepth: item.bitDepth,
+    sampleRate: item.sampleRate,
+    bitrate: item.bitrate,
+    format: item.format,
+    explicit: item.explicit,
+    genre: item.genre,
+  );
+}
+
+PlayableMedia playableFromLocal(LocalLibraryItem item) {
+  return PlayableMedia(
+    id: item.id,
+    source: item.filePath,
+    title: item.trackName,
+    artist: item.artistName,
+    album: item.albumName,
+    artUri: normalizeArtUri(item.coverPath ?? ''),
+    duration: (item.duration != null && item.duration! > 0)
+        ? Duration(seconds: item.duration!)
+        : null,
+    bitDepth: item.bitDepth,
+    sampleRate: item.sampleRate,
+    bitrate: item.bitrate,
+    format: item.format,
+    explicit: item.explicit,
+    genre: item.genre,
+  );
 }

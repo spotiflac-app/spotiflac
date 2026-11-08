@@ -14,10 +14,15 @@ import 'package:spotiflac/widgets/explore_featured_section.dart';
 import 'package:spotiflac/widgets/audio_quality_badges.dart';
 import 'package:spotiflac/l10n/app_localizations.dart';
 
+import 'support/preference_blob_fixture.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('home feed cache ownership', () {
+    late PreferenceBlobFixture blobs;
+    setUp(() async => blobs = await PreferenceBlobFixture.create());
+    tearDown(() => blobs.close());
     const channel = MethodChannel('com.spotiflac.app/backend');
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;

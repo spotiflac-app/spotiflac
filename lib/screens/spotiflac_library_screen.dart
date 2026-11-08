@@ -2,11 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:spotiflac/controllers/clickable_metadata.dart';
 import 'package:spotiflac/l10n/l10n.dart';
 import 'package:spotiflac/providers/download_queue_provider.dart';
 import 'package:spotiflac/providers/library_browse_provider.dart';
 import 'package:spotiflac/providers/settings_provider.dart';
 import 'package:spotiflac/screens/downloaded_album_screen.dart';
+import 'package:spotiflac/screens/library_directory_screen.dart';
 import 'package:spotiflac/screens/listening_rewind_screen.dart';
 import 'package:spotiflac/screens/local_album_screen.dart';
 import 'package:spotiflac/services/album_completeness.dart';
@@ -15,6 +17,8 @@ import 'package:spotiflac/services/library_database.dart';
 import 'package:spotiflac/utils/adaptive_layout.dart';
 import 'package:spotiflac/utils/nav_bar_inset.dart';
 import 'package:spotiflac/widgets/app_bottom_sheet.dart';
+import 'package:spotiflac/widgets/open_audio_button.dart';
+import 'package:spotiflac/widgets/tv_navigation.dart';
 import 'package:spotiflac/widgets/app_refresh_indicator.dart';
 import 'package:spotiflac/widgets/app_search_field.dart';
 import 'package:spotiflac/widgets/app_sliver_header.dart';
@@ -25,6 +29,7 @@ import 'package:spotiflac/widgets/desktop/hover_play_button.dart';
 import 'package:spotiflac/widgets/cached_cover_image.dart';
 import 'package:spotiflac/widgets/local_library_artwork_builder.dart';
 import 'package:spotiflac/widgets/library_search_results.dart';
+import 'package:spotiflac/widgets/sliver_layout_info_builder.dart';
 
 enum SpotiFLACLibraryPage { overview, albums, artists }
 
@@ -45,8 +50,7 @@ class SpotiFLACLibraryScreen extends ConsumerStatefulWidget {
       _SpotiFLACLibraryScreenState();
 }
 
-class _SpotiFLACLibraryScreenState
-    extends ConsumerState<SpotiFLACLibraryScreen> {
+class _SpotiFLACLibraryScreenState extends ConsumerState<SpotiFLACLibraryScreen> {
   final _scroll = ScrollController();
   final _search = TextEditingController();
   Timer? _debounce;
@@ -103,14 +107,13 @@ class _SpotiFLACLibraryScreenState
   }
 
   void _openPage(SpotiFLACLibraryPage page, {String? artist}) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => Scaffold(
-          body: SpotiFLACLibraryScreen(
-            page: page,
-            artist: artist,
-            onOpenSection: widget.onOpenSection,
-          ),
+    pushPage<void>(
+      context,
+      (_) => Scaffold(
+        body: SpotiFLACLibraryScreen(
+          page: page,
+          artist: artist,
+          onOpenSection: widget.onOpenSection,
         ),
       ),
     );
@@ -118,27 +121,25 @@ class _SpotiFLACLibraryScreenState
 
   Future<void> _openAlbum(LibraryBrowseEntry entry) async {
     if (entry.source != 'local') {
-      await Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => DownloadedAlbumScreen(
-            albumName: entry.name,
-            artistName: entry.artist,
-            coverUrl: entry.cover,
-          ),
+      await pushPage<void>(
+        context,
+        (_) => DownloadedAlbumScreen(
+          albumName: entry.name,
+          artistName: entry.artist,
+          coverUrl: entry.cover,
         ),
       );
       return;
     }
     Future<List<LocalLibraryItem>> loadTracks() => _loadLocalAlbum(entry);
 
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => LocalAlbumScreen(
-          albumName: entry.name,
-          artistName: entry.artist,
-          coverPath: entry.cover,
-          loadTracks: loadTracks,
-        ),
+    await pushPage<void>(
+      context,
+      (_) => LocalAlbumScreen(
+        albumName: entry.name,
+        artistName: entry.artist,
+        coverPath: entry.cover,
+        loadTracks: loadTracks,
       ),
     );
   }
@@ -323,6 +324,7 @@ class _SpotiFLACLibraryScreenState
             ? context.l10n.searchArtists
             : context.l10n.searchAlbums);
     final actions = <Widget>[
+      if (_overview) const OpenAudioButton(),
       IconButton(
         tooltip: context.l10n.librarySearchHint,
         icon: const Icon(Icons.search),
@@ -399,6 +401,7 @@ class _SpotiFLACLibraryScreenState
                   autofocus: true,
                   hintText: context.l10n.librarySearchHint,
                   clearTooltip: context.l10n.dialogClear,
+                  samplesBackdrop: false,
                   onChanged: _searchChanged,
                   onClear: () {
                     _search.clear();
@@ -445,6 +448,14 @@ class _SpotiFLACLibraryScreenState
                         Icons.music_note_outlined,
                         context.l10n.searchSongs,
                         () => widget.onOpenSection('all'),
+                      ),
+                      (
+                        Icons.folder_outlined,
+                        context.l10n.libraryFolders,
+                        () => pushPage<void>(
+                          context,
+                          (_) => const LibraryDirectoryScreen(),
+                        ),
                       ),
                     ]) ...[
                       // The desktop shell paints its background without a
@@ -569,16 +580,17 @@ class _SpotiFLACLibraryScreenState
               else
                 SliverPadding(
                   padding: EdgeInsets.symmetric(horizontal: 24 + listInset),
-                  sliver: SliverLayoutBuilder(
-                    builder: (context, constraints) {
+                  sliver: SliverLayoutInfoBuilder(
+                    select: (constraints) => constraints.crossAxisExtent,
+                    builder: (context, crossAxisExtent) {
                       // ~160dp covers: two on phones, more columns rather
                       // than giant covers on tablets.
-                      final columns = (constraints.crossAxisExtent / 160)
-                          .floor()
-                          .clamp(2, 8);
+                      final columns = (crossAxisExtent / 160).floor().clamp(
+                        2,
+                        8,
+                      );
                       final width =
-                          (constraints.crossAxisExtent - 20 * (columns - 1)) /
-                          columns;
+                          (crossAxisExtent - 20 * (columns - 1)) / columns;
                       final textHeight =
                           MediaQuery.textScalerOf(context).scale(16) * 3.2 + 24;
                       return SliverGrid.builder(
@@ -671,7 +683,7 @@ class _SpotiFLACLibraryScreenState
   Widget _buildAlbumTile(LibraryBrowseEntry entry, ColorScheme colors) {
     return Semantics(
       button: true,
-      child: GestureDetector(
+      child: TvTapTarget(
         behavior: HitTestBehavior.opaque,
         onTap: () => _openAlbum(entry),
         child: Column(

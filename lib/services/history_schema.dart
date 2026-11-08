@@ -22,6 +22,7 @@ abstract final class HistorySchema {
         album_artist TEXT,
         cover_url TEXT,
         file_path TEXT NOT NULL,
+        origin_file_path TEXT,
         storage_mode TEXT,
         download_tree_uri TEXT,
         saf_relative_dir TEXT,
@@ -68,18 +69,10 @@ abstract final class HistorySchema {
 
     await db.execute('CREATE INDEX idx_spotify_id ON history(spotify_id)');
     await db.execute('CREATE INDEX idx_isrc ON history(isrc)');
-    await db.execute(
-      'CREATE INDEX idx_downloaded_at ON history(downloaded_at DESC)',
-    );
-    await db.execute(
-      'CREATE INDEX idx_album ON history(album_name, album_artist)',
-    );
-    await db.execute(
-      'CREATE INDEX IF NOT EXISTS idx_history_track_artist ON history(track_name, artist_name)',
-    );
     await _createNormalizedIndexes(db);
     await _createQueueIndexes(db);
     await _createPathKeyTable(db);
+    await _createOriginIndex(db);
     final searchFtsAvailable = await createSearchFts(db);
 
     _log.i('Database schema created with indexes');
@@ -92,6 +85,9 @@ abstract final class HistorySchema {
     int newVersion,
   ) async {
     _log.i('Upgrading database from v$oldVersion to v$newVersion');
+    Future<void> addColumn(String column, String type) =>
+        sqlite.addColumnIfMissing(db, 'history', column, type);
+    const notNullZero = 'INTEGER NOT NULL DEFAULT 0';
     if (oldVersion < 2) {
       await db.execute('ALTER TABLE history ADD COLUMN storage_mode TEXT');
       await db.execute('ALTER TABLE history ADD COLUMN download_tree_uri TEXT');
@@ -102,114 +98,87 @@ abstract final class HistorySchema {
       await db.execute('ALTER TABLE history ADD COLUMN saf_repaired INTEGER');
     }
     if (oldVersion < 4) {
-      final columns = await db.rawQuery('PRAGMA table_info(history)');
-      final hasComposer = columns.any(
-        (row) => (row['name']?.toString().toLowerCase() ?? '') == 'composer',
-      );
-      if (!hasComposer) {
-        await db.execute('ALTER TABLE history ADD COLUMN composer TEXT');
-      }
+      await addColumn('composer', 'TEXT');
     }
     if (oldVersion < 5) {
-      final columns = await db.rawQuery('PRAGMA table_info(history)');
-      final hasTotalTracks = columns.any(
-        (row) =>
-            (row['name']?.toString().toLowerCase() ?? '') == 'total_tracks',
-      );
-      final hasTotalDiscs = columns.any(
-        (row) => (row['name']?.toString().toLowerCase() ?? '') == 'total_discs',
-      );
-      if (!hasTotalTracks) {
-        await db.execute('ALTER TABLE history ADD COLUMN total_tracks INTEGER');
-      }
-      if (!hasTotalDiscs) {
-        await db.execute('ALTER TABLE history ADD COLUMN total_discs INTEGER');
-      }
-    }
-    if (oldVersion < 6) {
-      await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_history_track_artist ON history(track_name, artist_name)',
-      );
+      await addColumn('total_tracks', 'INTEGER');
+      await addColumn('total_discs', 'INTEGER');
     }
     if (oldVersion < 7) {
       await _createPathKeyTable(db);
     }
     if (oldVersion < 8) {
-      await sqlite.addColumnIfMissing(db, 'history', 'spotify_id_norm', 'TEXT');
-      await sqlite.addColumnIfMissing(db, 'history', 'isrc_norm', 'TEXT');
-      await sqlite.addColumnIfMissing(db, 'history', 'match_key', 'TEXT');
+      await addColumn('spotify_id_norm', 'TEXT');
+      await addColumn('isrc_norm', 'TEXT');
+      await addColumn('match_key', 'TEXT');
     }
     if (oldVersion < 9) {
-      await sqlite.addColumnIfMissing(db, 'history', 'bitrate', 'INTEGER');
-      await sqlite.addColumnIfMissing(db, 'history', 'format', 'TEXT');
+      await addColumn('bitrate', 'INTEGER');
+      await addColumn('format', 'TEXT');
     }
     if (oldVersion < 10) {
-      await sqlite.addColumnIfMissing(db, 'history', 'album_key', 'TEXT');
-      await sqlite.addColumnIfMissing(db, 'history', 'search_text', 'TEXT');
+      await addColumn('album_key', 'TEXT');
+      await addColumn('search_text', 'TEXT');
       await _backfillNormalizedColumns(db);
       await _createNormalizedIndexes(db);
     }
     if (oldVersion < 11) {
-      await sqlite.addColumnIfMissing(db, 'history', 'sort_track', 'TEXT');
-      await sqlite.addColumnIfMissing(db, 'history', 'sort_artist', 'TEXT');
-      await sqlite.addColumnIfMissing(db, 'history', 'sort_album', 'TEXT');
-      await sqlite.addColumnIfMissing(
-        db,
-        'history',
-        'sort_album_artist',
-        'TEXT',
-      );
-      await sqlite.addColumnIfMissing(db, 'history', 'sort_genre', 'TEXT');
-      await sqlite.addColumnIfMissing(db, 'history', 'sort_release', 'TEXT');
-      await sqlite.addColumnIfMissing(db, 'history', 'sort_added', 'INTEGER');
+      await addColumn('sort_track', 'TEXT');
+      await addColumn('sort_artist', 'TEXT');
+      await addColumn('sort_album', 'TEXT');
+      await addColumn('sort_album_artist', 'TEXT');
+      await addColumn('sort_genre', 'TEXT');
+      await addColumn('sort_release', 'TEXT');
+      await addColumn('sort_added', 'INTEGER');
       await _backfillQueueSortColumns(db);
       await _createQueueIndexes(db);
       _log.i('Added persisted queue sort columns');
     }
     if (oldVersion < 12) {
-      await sqlite.addColumnIfMissing(
-        db,
-        'history',
-        'explicit',
-        'INTEGER NOT NULL DEFAULT 0',
-      );
+      await addColumn('explicit', notNullZero);
       _log.i('Added explicit-content metadata');
     }
     if (oldVersion < 13) {
-      await sqlite.addColumnIfMissing(
-        db,
-        'history',
-        'has_lyrics',
-        'INTEGER NOT NULL DEFAULT 0',
-      );
-      await sqlite.addColumnIfMissing(
-        db,
-        'history',
-        'lyrics_metadata_scan_version',
-        'INTEGER NOT NULL DEFAULT 0',
-      );
+      await addColumn('has_lyrics', notNullZero);
+      await addColumn('lyrics_metadata_scan_version', notNullZero);
       _log.i('Added indexed lyrics availability metadata');
     }
     if (oldVersion < 14) {
-      await sqlite.addColumnIfMissing(
-        db,
-        'history',
-        'has_replaygain',
-        'INTEGER NOT NULL DEFAULT 0',
-      );
-      await sqlite.addColumnIfMissing(
-        db,
-        'history',
-        'replaygain_metadata_scan_version',
-        'INTEGER NOT NULL DEFAULT 0',
-      );
+      await addColumn('has_replaygain', notNullZero);
+      await addColumn('replaygain_metadata_scan_version', notNullZero);
       _log.i('Added indexed ReplayGain availability metadata');
     }
     if (oldVersion < 15) {
       await sqlite.backfillPathKeys(db, 'history', 'history_path_keys');
       _log.i('Updated history path keys with provider document identities');
     }
+    if (oldVersion < 17) {
+      await sqlite.backfillPathKeys(db, 'history', 'history_path_keys');
+    }
+    if (oldVersion < 16) {
+      // Idempotent: an older build lowers user_version without a downgrade
+      // step, and its native writer recreates the dropped indexes.
+      for (final index in unusedIndexes) {
+        await db.execute('DROP INDEX IF EXISTS $index');
+      }
+      await _createQueueIndexes(db);
+    }
+    if (oldVersion < 18) {
+      await addColumn('origin_file_path', 'TEXT');
+      await _createOriginIndex(db);
+    }
   }
+
+  static Future<void> _createOriginIndex(DatabaseExecutor db) => db.execute(
+    'CREATE INDEX IF NOT EXISTS idx_history_origin ON history(origin_file_path)',
+  );
+
+  /// No query seeks or orders by these. v16 and the native writer drop them.
+  static const unusedIndexes = [
+    'idx_downloaded_at',
+    'idx_album',
+    'idx_history_track_artist',
+  ];
 
   static Future<bool> createSearchFts(DatabaseExecutor db) {
     return sqlite.createTrigramFtsIndex(
@@ -254,26 +223,24 @@ abstract final class HistorySchema {
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_history_queue_release ON history(sort_release, sort_track, id)',
     );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_history_sort_album_artist ON history(sort_album_artist)',
+    );
   }
 
-  static Future<void> _backfillNormalizedColumns(Database db) async {
-    final rows = await db.query(
-      'history',
-      columns: [
-        'id',
-        'spotify_id',
-        'isrc',
-        'track_name',
-        'artist_name',
-        'album_name',
-        'album_artist',
-      ],
-    );
-    final batch = db.batch();
-    for (final row in rows) {
-      batch.update(
+  static Future<void> _backfillNormalizedColumns(Database db) =>
+      sqlite.backfillRows(
+        db,
         'history',
-        HistoryRowMapper.normalizedColumns(
+        const [
+          'spotify_id',
+          'isrc',
+          'track_name',
+          'artist_name',
+          'album_name',
+          'album_artist',
+        ],
+        (row) => HistoryRowMapper.normalizedColumns(
           spotifyId: row['spotify_id'] as String?,
           isrc: row['isrc'] as String?,
           trackName: row['track_name'] as String?,
@@ -281,32 +248,22 @@ abstract final class HistorySchema {
           albumName: row['album_name'] as String?,
           albumArtist: row['album_artist'] as String?,
         ),
-        where: 'id = ?',
-        whereArgs: [row['id']],
       );
-    }
-    await batch.commit(noResult: true);
-  }
 
-  static Future<void> _backfillQueueSortColumns(Database db) async {
-    final rows = await db.query(
-      'history',
-      columns: [
-        'id',
-        'track_name',
-        'artist_name',
-        'album_name',
-        'album_artist',
-        'genre',
-        'release_date',
-        'downloaded_at',
-      ],
-    );
-    final batch = db.batch();
-    for (final row in rows) {
-      batch.update(
+  static Future<void> _backfillQueueSortColumns(Database db) =>
+      sqlite.backfillRows(
+        db,
         'history',
-        HistoryRowMapper.queueSortColumns(
+        const [
+          'track_name',
+          'artist_name',
+          'album_name',
+          'album_artist',
+          'genre',
+          'release_date',
+          'downloaded_at',
+        ],
+        (row) => HistoryRowMapper.queueSortColumns(
           trackName: row['track_name'] as String?,
           artistName: row['artist_name'] as String?,
           albumName: row['album_name'] as String?,
@@ -315,12 +272,7 @@ abstract final class HistorySchema {
           releaseDate: row['release_date'] as String?,
           downloadedAt: row['downloaded_at'],
         ),
-        where: 'id = ?',
-        whereArgs: [row['id']],
       );
-    }
-    await batch.commit(noResult: true);
-  }
 
   static Future<void> _createPathKeyTable(DatabaseExecutor db) =>
       sqlite.createPathKeyTable(db, 'history_path_keys');

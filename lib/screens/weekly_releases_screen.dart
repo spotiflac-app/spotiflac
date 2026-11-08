@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:spotiflac/controllers/clickable_metadata.dart';
 import 'package:spotiflac/l10n/l10n.dart';
 import 'package:spotiflac/providers/weekly_releases_provider.dart';
 import 'package:spotiflac/utils/adaptive_layout.dart';
-import 'package:spotiflac/utils/clickable_metadata.dart';
 import 'package:spotiflac/utils/nav_bar_inset.dart';
 import 'package:spotiflac/widgets/app_loading_indicator.dart';
 import 'package:spotiflac/widgets/app_refresh_indicator.dart';

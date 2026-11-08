@@ -159,7 +159,10 @@ void main() {
               : materialSymbolFor(Icons.check)!.icon;
           for (final (picker, initial, next) in [
             ('Output format', 'MP3', 'Opus'),
-            ('Output quality', '320 kbps', '192 kbps'),
+            ('Output quality', '320 kbps', '160 kbps'),
+            ('Output format', 'Opus', 'FLAC'),
+            ('Maximum bit depth', '16-bit', '24-bit'),
+            ('Maximum sample rate', '48 kHz', '96 kHz'),
             (
               'Concurrent downloads',
               '1 track at a time',
@@ -199,9 +202,13 @@ void main() {
             final settings = container.read(settingsProvider);
             switch (picker) {
               case 'Output format':
-                expect(settings.autoConvertFormat, 'opus');
+                expect(settings.autoConvertFormat, next.toLowerCase());
               case 'Output quality':
-                expect(settings.autoConvertBitrate, '192k');
+                expect(settings.autoConvertBitrate, '160k');
+              case 'Maximum bit depth':
+                expect(settings.autoConvertMaxBitDepth, 24);
+              case 'Maximum sample rate':
+                expect(settings.autoConvertMaxSampleRate, 96000);
               case 'Concurrent downloads':
                 expect(settings.concurrentDownloads, 3);
             }
@@ -535,7 +542,6 @@ void main() {
                       version: '9.0.0',
                       changelog: 'Playback and library improvements.\n' * 8,
                       downloadUrl: 'https://example.com/release',
-                      publishedAt: DateTime(2026),
                       releasesBehind: 3,
                     ),
                     onDisableUpdates: () =>
@@ -558,46 +564,45 @@ void main() {
       });
     }
 
-    testWidgets(
-      'announcement keeps explicit dismissal (SpotiFLAC: $spotiflac)',
-      (tester) async {
-        var dismissals = 0;
-        await tester.pumpWidget(
-          _app(
-            spotiflac ? SpotiFLACTheme.build(Brightness.dark) : ThemeData(),
-            Builder(
-              builder: (context) => Scaffold(
-                body: TextButton(
-                  child: const Text('Open notice'),
-                  onPressed: () => showAppAnnouncementDialog(
-                    context,
-                    announcement: const RemoteAnnouncement(
-                      id: 'notice',
-                      enabled: true,
-                      title: 'Service notice',
-                      message: 'An announcement without an external action.',
-                      dismissible: false,
-                    ),
-                    onDismiss: () => dismissals++,
+    testWidgets('announcement keeps explicit dismissal (SpotiFLAC: $spotiflac)', (
+      tester,
+    ) async {
+      var dismissals = 0;
+      await tester.pumpWidget(
+        _app(
+          spotiflac ? SpotiFLACTheme.build(Brightness.dark) : ThemeData(),
+          Builder(
+            builder: (context) => Scaffold(
+              body: TextButton(
+                child: const Text('Open notice'),
+                onPressed: () => showAppAnnouncementDialog(
+                  context,
+                  announcement: const RemoteAnnouncement(
+                    id: 'notice',
+                    enabled: true,
+                    title: 'Service notice',
+                    message: 'An announcement without an external action.',
+                    dismissible: false,
                   ),
+                  onDismiss: () => dismissals++,
                 ),
               ),
             ),
           ),
-        );
-        await tester.tap(find.text('Open notice'));
-        await tester.pumpAndSettle();
-        await tester.tapAt(const Offset(5, 5));
-        await tester.binding.handlePopRoute();
-        await tester.pumpAndSettle();
-        expect(find.text('Service notice'), findsOneWidget);
-        expect(dismissals, 0);
-        await tester.tap(find.byTooltip('Close'));
-        await tester.pumpAndSettle();
-        expect(find.text('Service notice'), findsNothing);
-        expect(dismissals, 1);
-        expect(tester.takeException(), isNull);
-      },
-    );
+        ),
+      );
+      await tester.tap(find.text('Open notice'));
+      await tester.pumpAndSettle();
+      await tester.tapAt(const Offset(5, 5));
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text('Service notice'), findsOneWidget);
+      expect(dismissals, 0);
+      await tester.tap(find.byTooltip('Close'));
+      await tester.pumpAndSettle();
+      expect(find.text('Service notice'), findsNothing);
+      expect(dismissals, 1);
+      expect(tester.takeException(), isNull);
+    });
   }
 }

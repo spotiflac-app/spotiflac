@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -11,7 +12,6 @@ import 'package:spotiflac/widgets/expressive_button.dart';
 import 'package:spotiflac/theme/spotiflac_icons.dart';
 import 'package:spotiflac/widgets/spotiflac_artist_header.dart';
 import 'package:spotiflac/widgets/spotiflac_chrome.dart';
-import 'package:spotiflac/screens/track_history_snapshot.dart';
 import 'package:spotiflac/widgets/album_detail_header.dart';
 import 'package:spotiflac/theme/cover_palette.dart';
 import 'package:spotiflac/widgets/app_bottom_sheet.dart';
@@ -22,6 +22,7 @@ import 'package:spotiflac/l10n/l10n.dart';
 import 'package:spotiflac/models/track.dart';
 import 'package:spotiflac/models/artist_concert.dart';
 import 'package:spotiflac/widgets/artist_concerts_button.dart';
+import 'package:spotiflac/widgets/artist_featured_album_card.dart';
 import 'package:spotiflac/providers/extension_provider.dart';
 import 'package:spotiflac/providers/track_provider.dart';
 import 'package:spotiflac/providers/settings_provider.dart';
@@ -29,8 +30,10 @@ import 'package:spotiflac/providers/download_queue_provider.dart';
 import 'package:spotiflac/providers/library_collections_provider.dart';
 import 'package:spotiflac/providers/recent_access_provider.dart';
 import 'package:spotiflac/providers/local_library_provider.dart';
+import 'package:spotiflac/providers/music_player_provider.dart';
 import 'package:spotiflac/services/platform_bridge.dart';
 import 'package:spotiflac/utils/string_utils.dart';
+import 'package:spotiflac/utils/artist_album_sort.dart';
 import 'package:spotiflac/utils/adaptive_layout.dart';
 import 'package:spotiflac/utils/nav_bar_inset.dart';
 import 'package:spotiflac/utils/provider_resource_ids.dart';
@@ -38,15 +41,16 @@ import 'package:spotiflac/utils/ttl_cache.dart';
 import 'package:spotiflac/screens/album_screen.dart';
 import 'package:spotiflac/screens/extension_collection_screens.dart'
     show ExtensionAlbumScreen;
+import 'package:spotiflac/controllers/clickable_metadata.dart';
 import 'package:spotiflac/controllers/local_playback.dart';
+import 'package:spotiflac/controllers/selection_mode_mixin.dart';
+import 'package:spotiflac/controllers/track_history_snapshot.dart';
 import 'package:spotiflac/widgets/download_service_picker.dart';
 import 'package:spotiflac/widgets/error_card.dart';
 import 'package:spotiflac/widgets/selection_bottom_bar.dart';
 import 'package:spotiflac/widgets/in_library_badge.dart';
 import 'package:spotiflac/widgets/track_collection_quick_actions.dart';
 import 'package:spotiflac/widgets/animation_utils.dart';
-import 'package:spotiflac/screens/selection_mode_mixin.dart';
-import 'package:spotiflac/utils/clickable_metadata.dart';
 import 'package:spotiflac/widgets/cached_cover_image.dart';
 import 'package:spotiflac/widgets/playlist_picker_sheet.dart';
 import 'package:spotiflac/widgets/motion_header_banner.dart';
@@ -180,7 +184,7 @@ class _ArtistScreenState extends ConsumerState<ArtistScreen>
   int? _monthlyListeners;
   String? _error;
 
-  bool _showTitleInAppBar = false;
+  final _showTitleInAppBar = ValueNotifier(false);
   final ScrollController _scrollController = ScrollController();
   final PageController _popularPageController = PageController();
   final SelectionOverlayController _selectionOverlay =
@@ -237,7 +241,9 @@ class _ArtistScreenState extends ConsumerState<ArtistScreen>
     });
 
     if (widget.extensionId != null) {
-      _albums = widget.albums;
+      _albums = widget.albums == null
+          ? null
+          : sortArtistAlbumsNewestFirst(widget.albums!);
       _topTracks = widget.topTracks;
       _headerImageUrl = widget.headerImageUrl;
       _headerVideoUrl = widget.headerVideoUrl;
@@ -255,7 +261,7 @@ class _ArtistScreenState extends ConsumerState<ArtistScreen>
     final cached = _ArtistCache.get(widget.artistId);
 
     if (widget.albums != null) {
-      _albums = widget.albums;
+      _albums = sortArtistAlbumsNewestFirst(widget.albums!);
       _topTracks = widget.topTracks;
       _headerImageUrl = widget.headerImageUrl;
       _headerVideoUrl = widget.headerVideoUrl;
@@ -267,8 +273,10 @@ class _ArtistScreenState extends ConsumerState<ArtistScreen>
         _fetchDiscography();
       }
     } else if (cached != null) {
-      _albums = cached.albums;
-      _releases = cached.releases;
+      _albums = sortArtistAlbumsNewestFirst(cached.albums);
+      _releases = cached.releases == null
+          ? null
+          : sortArtistAlbumsNewestFirst(cached.releases!);
       _topTracks = cached.topTracks;
       _concerts = cached.concerts;
       _headerImageUrl = cached.headerImageUrl;
@@ -285,18 +293,14 @@ class _ArtistScreenState extends ConsumerState<ArtistScreen>
     }
   }
 
-  void _onScroll() {
-    final shouldShow = _scrollController.offset > 280;
-    if (shouldShow != _showTitleInAppBar) {
-      setState(() => _showTitleInAppBar = shouldShow);
-    }
-  }
+  void _onScroll() => _showTitleInAppBar.value = _scrollController.offset > 280;
 
   @override
   void dispose() {
     _selectionOverlay.dispose();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
+    _showTitleInAppBar.dispose();
     _popularPageController.dispose();
     super.dispose();
   }
@@ -397,6 +401,11 @@ class _ArtistScreenState extends ConsumerState<ArtistScreen>
         }
       }
 
+      albums = sortArtistAlbumsNewestFirst(albums);
+      if (releases != null) {
+        releases = sortArtistAlbumsNewestFirst(releases);
+      }
+
       final finalHeaderImage =
           headerImage ?? _headerImageUrl ?? widget.headerImageUrl;
       final finalHeaderVideo =
@@ -495,7 +504,7 @@ class _ArtistScreenState extends ConsumerState<ArtistScreen>
       }
       final following = info['albums_next'] as String?;
       setState(() {
-        _albums = merged.values.toList();
+        _albums = sortArtistAlbumsNewestFirst(merged.values);
         _albumsNext = following == next ? null : following;
       });
       _ArtistCache.set(
@@ -702,19 +711,41 @@ class _ArtistScreenState extends ConsumerState<ArtistScreen>
                             ),
                           ),
                         if (!_isLoadingDiscography && _error == null) ...[
-                          if (context.isSpotiFLAC &&
-                              albums.isNotEmpty &&
-                              !isSelectionMode)
-                            SliverToBoxAdapter(
-                              child: _buildSpotiFLACFeaturedAlbum(
-                                context,
-                                albums.first,
+                          if (isDesktopPlatform && context.isSpotiFLAC)
+                            if (albums.isNotEmpty ||
+                                (_topTracks?.isNotEmpty ?? false))
+                              SliverToBoxAdapter(
+                                child: _buildSpotiFLACDesktopHighlights(
+                                  context,
+                                  colorScheme,
+                                  isSelectionMode ? null : albums.firstOrNull,
+                                ),
+                              )
+                            else
+                              const SliverToBoxAdapter()
+                          else ...[
+                            if (context.isSpotiFLAC &&
+                                albums.isNotEmpty &&
+                                !isSelectionMode)
+                              SliverToBoxAdapter(
+                                child: ArtistFeaturedAlbumCard(
+                                  album: albums.first,
+                                  onTap: () => _navigateToAlbum(albums.first),
+                                  onDownload: () =>
+                                      _downloadAlbums(context, [albums.first]),
+                                  loadMetadata: _albumMetadataLoader(
+                                    albums.first,
+                                  ),
+                                ),
                               ),
-                            ),
-                          if (_topTracks != null && _topTracks!.isNotEmpty)
-                            SliverToBoxAdapter(
-                              child: _buildPopularSection(context, colorScheme),
-                            ),
+                            if (_topTracks != null && _topTracks!.isNotEmpty)
+                              SliverToBoxAdapter(
+                                child: _buildPopularSection(
+                                  context,
+                                  colorScheme,
+                                ),
+                              ),
+                          ],
                           if (releases.isNotEmpty)
                             SliverToBoxAdapter(
                               key: const ValueKey('artist-releases'),
@@ -827,20 +858,12 @@ class _ArtistScreenState extends ConsumerState<ArtistScreen>
     super.toggleSelection(itemId);
   }
 
-  void _deselectAll() {
-    setState(() {
-      selectedIds.clear();
-    });
-  }
-
   Widget _buildSelectionBar(
     BuildContext context,
     ColorScheme colorScheme,
     List<ArtistAlbum> allAlbums,
     double bottomPadding,
   ) {
-    final allSelected =
-        selectedIds.length == allAlbums.length && allAlbums.isNotEmpty;
     final selectedCount = selectedIds.length;
     final selectedAlbums = allAlbums
         .where((a) => selectedIds.contains(a.id))
@@ -850,13 +873,9 @@ class _ArtistScreenState extends ConsumerState<ArtistScreen>
       (sum, a) => sum + a.totalTracks,
     );
 
-    return SelectionBottomBar(
-      selectedCount: selectedCount,
-      allSelected: allSelected,
-      onClose: exitSelectionMode,
-      onToggleSelectAll: allSelected
-          ? _deselectAll
-          : () => selectAll(allAlbums.map((a) => a.id)),
+    return buildSelectionBar(
+      ids: [for (final album in allAlbums) album.id],
+      onDeselectAll: () => setState(selectedIds.clear),
       bottomPadding: bottomPadding,
       allSelectedLabel: context.l10n.tracksCount(totalTracks),
       tapToSelectLabel: selectedCount > 0

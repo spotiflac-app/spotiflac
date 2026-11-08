@@ -11,10 +11,13 @@ import 'package:spotiflac/models/settings.dart';
 import 'package:spotiflac/providers/explore_provider.dart';
 import 'package:spotiflac/providers/extension_provider.dart';
 import 'package:spotiflac/providers/settings_provider.dart';
+import 'package:spotiflac/services/explore_cache_store.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
 import 'package:spotiflac/widgets/app_snack_bar.dart';
 import 'package:spotiflac/widgets/home_feed_region_setting.dart';
 import 'package:spotiflac/widgets/settings_group.dart';
+
+import 'support/preference_blob_fixture.dart';
 
 const _extension = Extension(
   id: 'example.feed',
@@ -93,8 +96,10 @@ void main() {
   late List<Map<String, dynamic>> writes;
   late bool failSave;
   Completer<String>? pendingFeed;
+  late PreferenceBlobFixture blobs;
 
-  setUp(() {
+  setUp(() async {
+    blobs = await PreferenceBlobFixture.create();
     SharedPreferences.setMockInitialValues({});
     settings = {'market': 'us', 'otherSetting': 'preserved'};
     writes = [];
@@ -120,7 +125,10 @@ void main() {
       return null;
     });
   });
-  tearDown(() => messenger.setMockMethodCallHandler(channel, null));
+  tearDown(() async {
+    messenger.setMockMethodCallHandler(channel, null);
+    await blobs.close();
+  });
 
   ProviderContainer container({bool coldStart = false}) {
     final result = ProviderContainer(
@@ -185,11 +193,14 @@ void main() {
       );
       expect(writes.single, {'market': 'jp', 'otherSetting': 'preserved'});
       final prefs = await SharedPreferences.getInstance();
-      await _until(
-        () =>
-            prefs.getString('explore_home_feed_cache')?.contains('"JP"') ==
-            true,
-      );
+      String? cached;
+      for (var i = 0; i < 100; i++) {
+        cached = (await ExploreCacheStore(prefs).read()).payload;
+        if (cached?.contains('"JP"') == true) break;
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      expect(cached, contains('"JP"'));
+      expect(prefs.containsKey('explore_home_feed_cache'), isFalse);
     },
   );
 
@@ -280,39 +291,36 @@ void main() {
   );
 
   for (final spotiflac in [false, true]) {
-    testWidgets(
-      'country picker saves a country with either theme ($spotiflac)',
-      (tester) async {
-        await tester.pumpWidget(
-          ProviderScope(
-            overrides: [
-              settingsProvider.overrideWith(_Settings.new),
-              extensionProvider.overrideWith(_Extensions.new),
-            ],
-            child: MaterialApp(
-              locale: const Locale('en'),
-              localizationsDelegates: AppLocalizations.localizationsDelegates,
-              supportedLocales: AppLocalizations.supportedLocales,
-              theme: spotiflac
-                  ? SpotiFLACTheme.build(Brightness.dark)
-                  : ThemeData(),
-              builder: (_, child) => AppScaffoldMessenger(child: child!),
-              home: const Scaffold(
-                body: SettingsGroup(children: [HomeFeedRegionSetting()]),
-              ),
+    testWidgets('country picker saves a country with either theme ($spotiflac)', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            settingsProvider.overrideWith(_Settings.new),
+            extensionProvider.overrideWith(_Extensions.new),
+          ],
+          child: MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            theme: spotiflac ? SpotiFLACTheme.build(Brightness.dark) : ThemeData(),
+            builder: (_, child) => AppScaffoldMessenger(child: child!),
+            home: const Scaffold(
+              body: SettingsGroup(children: [HomeFeedRegionSetting()]),
             ),
           ),
-        );
-        await tester.pumpAndSettle();
-        expect(find.text('United States · Example Music'), findsOneWidget);
-        await tester.tap(find.text('Home feed country'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Japan'));
-        await tester.pumpAndSettle();
-        expect(writes.single['market'], 'jp');
-        expect(find.text('Japan · Example Music'), findsOneWidget);
-        expect(tester.takeException(), isNull);
-      },
-    );
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('United States · Example Music'), findsOneWidget);
+      await tester.tap(find.text('Home feed country'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Japan'));
+      await tester.pumpAndSettle();
+      expect(writes.single['market'], 'jp');
+      expect(find.text('Japan · Example Music'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   }
 }

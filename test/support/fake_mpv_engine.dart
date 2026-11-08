@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:spotiflac/services/media_kit_playback_deck.dart';
 
 /// An in-memory libmpv for `MediaKitPlaybackDeck` tests on any host.
-class FakeMpvEngine implements MpvEngine {
+class FakeMpvEngine implements MpvEngine, MpvPlaylistEngine {
   final calls = <List<String>>[];
   final properties = <String, String>{};
   final completedEvents = StreamController<bool>.broadcast();
@@ -17,8 +17,43 @@ class FakeMpvEngine implements MpvEngine {
   /// Duration reported when a source opens, or an error line instead.
   Duration? openDuration = const Duration(seconds: 90);
   MpvLogError? openError;
+  Completer<void>? openBarrier;
   bool rejectFilters = false;
+
+  /// The device refuses exclusive access: a source opened while
+  /// `audio-exclusive` is on reports its duration, then loses its audio.
+  bool refuseExclusive = false;
   bool disposed = false;
+  String? queuedSource;
+  Future<void> Function()? queuedStart;
+  bool failAppend = false;
+
+  @override
+  Future<void> appendNext(
+    String source,
+    Future<void> Function() onStarting,
+  ) async {
+    calls.add(['append', source]);
+    if (failAppend) throw StateError('Playlist rejected');
+    queuedSource = source;
+    queuedStart = onStarting;
+  }
+
+  @override
+  Future<void> clearNext() async {
+    calls.add(['clearNext']);
+    queuedSource = null;
+    queuedStart = null;
+  }
+
+  Future<void> advance() async {
+    final start = queuedStart;
+    queuedStart = null;
+    queuedSource = null;
+    position = Duration.zero;
+    await start?.call();
+    durationEvents.add(openDuration!);
+  }
 
   @override
   Stream<bool> get completed => completedEvents.stream;
@@ -32,11 +67,25 @@ class FakeMpvEngine implements MpvEngine {
   @override
   Future<void> open(String source) async {
     calls.add(['open', source]);
+    if (openBarrier case final barrier?) await barrier.future;
     scheduleMicrotask(() {
       if (openError case final error?) {
         errorEvents.add(error);
       } else if (openDuration case final value?) {
         durationEvents.add(value);
+      }
+      if (refuseExclusive &&
+          (properties['audio-exclusive'] == 'yes' ||
+              (properties['audio-device'] ?? '').startsWith('alsa/'))) {
+        errorEvents
+          ..add((
+            prefix: 'ao',
+            text: "Failed to initialize audio driver 'wasapi'",
+          ))
+          ..add((
+            prefix: 'cplayer',
+            text: 'Could not open/initialize audio device -> no sound.',
+          ));
       }
     });
   }
@@ -71,11 +120,16 @@ class FakeMpvEngine implements MpvEngine {
       if (rejectFilters && value.startsWith('@spotiflac_format')) return -7;
     }
     properties[name] = value;
+    if (name == 'volume') volume = double.parse(value);
     return 0;
   }
 
   @override
   Future<String> getProperty(String name) async => properties[name] ?? '';
+
+  @override
+  Future<void> command(List<String> args) async =>
+      calls.add(['command', ...args]);
 
   @override
   Future<void> dispose() async {

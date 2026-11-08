@@ -7,7 +7,7 @@ import 'package:spotiflac/services/platform_bridge.dart';
 import 'package:spotiflac/utils/logger.dart';
 import 'package:spotiflac/utils/string_utils.dart';
 import 'package:spotiflac/utils/editorial_notes.dart';
-import 'package:spotiflac/utils/extension_auth_launcher.dart';
+import 'package:spotiflac/controllers/extension_auth_launcher.dart';
 import 'package:spotiflac/providers/settings_provider.dart';
 import 'package:spotiflac/providers/extension_provider.dart';
 
@@ -120,7 +120,7 @@ class TrackState {
       hasSearchText: hasSearchText ?? this.hasSearchText,
       isShowingRecentAccess:
           isShowingRecentAccess ?? this.isShowingRecentAccess,
-      searchExtensionId: searchExtensionId,
+      searchExtensionId: searchExtensionId ?? this.searchExtensionId,
       selectedSearchFilter: clearSelectedSearchFilter
           ? null
           : (selectedSearchFilter ?? this.selectedSearchFilter),

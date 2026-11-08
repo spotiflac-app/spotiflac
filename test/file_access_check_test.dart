@@ -1,9 +1,16 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spotiflac/services/file_access_check.dart';
+import 'package:spotiflac/utils/desktop_platform.dart';
 import 'package:spotiflac/utils/file_access.dart';
 
 void main() {
+  test('a computer treats a phone content URI as absent', () async {
+    debugDesktopPlatformOverride = true;
+    addTearDown(() => debugDesktopPlatformOverride = null);
+    expect(await fileExists('content://provider/music/track.flac'), isFalse);
+  });
+
   test('found files retain their size and modification time', () async {
     final stat = FileAccessStat(size: 123, modified: DateTime(2026));
     final result = await checkFileAccess(

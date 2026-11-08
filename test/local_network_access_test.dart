@@ -95,8 +95,58 @@ void main() {
   test('other platforms do not call the Android permission channel', () async {
     final access = LocalNetworkAccess(isAndroid: false);
     await access.ensureAccess(Uri.parse('smb://nas.local/music/'));
+    await access.ensureGranted();
+    expect(await access.isGranted(), isTrue);
     expect(checks, 0);
     expect(requests, 0);
+  });
+
+  test('isGranted reports the Android grant without requesting', () async {
+    final access = LocalNetworkAccess(isAndroid: true);
+    expect(await access.isGranted(), isFalse);
+    granted = true;
+    expect(await access.isGranted(), isTrue);
+    expect(checks, 2);
+    expect(requests, 0);
+  });
+
+  test(
+    'concurrent grant checks share one call and later calls recheck',
+    () async {
+      granted = true;
+      final access = LocalNetworkAccess(isAndroid: true);
+      await Future.wait([
+        for (var i = 0; i < 100; i++)
+          access.ensureAccess(Uri.parse('smb://nas.local/music/')),
+      ]);
+      expect(checks, 1);
+      granted = false;
+      allowRequest = false;
+      await expectLater(
+        access.ensureGranted(),
+        throwsA(isA<LocalNetworkPermissionException>()),
+      );
+      expect(checks, 2);
+    },
+  );
+
+  test('ensureGranted requests without a target and reports denial', () async {
+    final access = LocalNetworkAccess(
+      isAndroid: true,
+      lookup: (_) async => fail('No target to resolve'),
+    );
+    await access.ensureGranted();
+    expect(requests, 1);
+    granted = true;
+    await access.ensureGranted();
+    expect(requests, 1);
+    granted = false;
+    allowRequest = false;
+    await expectLater(
+      access.ensureGranted(),
+      throwsA(isA<LocalNetworkPermissionException>()),
+    );
+    expect(requests, 2);
   });
 
   for (final local in [false, true]) {

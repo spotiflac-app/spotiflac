@@ -14,6 +14,7 @@ import 'package:spotiflac/widgets/app_alert_dialog.dart';
 import 'package:spotiflac/widgets/app_icon_button.dart';
 import 'package:spotiflac/widgets/app_loading_indicator.dart';
 import 'package:spotiflac/widgets/expressive_button.dart';
+import 'package:spotiflac/widgets/extension_icon_image.dart';
 
 class ExtensionDetailsScreen extends ConsumerStatefulWidget {
   final RepoExtension extension;
@@ -120,8 +121,12 @@ class _ExtensionDetailsScreenState
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(24),
                 child: ext.iconUrl != null && ext.iconUrl!.isNotEmpty
-                    ? Image.network(
-                        ext.iconUrl!,
+                    ? Image(
+                        image: ExtensionIconImage(
+                          NetworkImage(ext.iconUrl!),
+                          extent: (100 * MediaQuery.devicePixelRatioOf(context))
+                              .ceil(),
+                        ),
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) =>
                             _buildFallbackIcon(ext, colorScheme, 50),
@@ -137,9 +142,7 @@ class _ExtensionDetailsScreenState
         padding: EdgeInsetsDirectional.only(start: edgeInset),
         child: AppIconButton(
           tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-          icon: Icon(
-            context.isSpotiFLAC ? CupertinoIcons.back : Icons.arrow_back,
-          ),
+          icon: Icon(context.isSpotiFLAC ? CupertinoIcons.back : Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -604,32 +607,18 @@ class _ExtensionDetailsScreenState
   }
 
   Future<void> _uninstallExtension(RepoExtension ext) async {
-    final confirm = await showAppDialog<bool>(
-      context: context,
-      builder: (context) => AppAlertDialog(
-        title: Text(context.l10n.dialogUninstallExtension),
-        content: Text(
-          context.l10n.dialogUninstallExtensionMessage(ext.displayName),
-        ),
-        actions: [
-          AppDialogAction(
-            isDefault: true,
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(context.l10n.dialogCancel),
-          ),
-          AppDialogAction(
-            isDestructive: true,
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(
-              foregroundColor: Theme.of(context).colorScheme.error,
-            ),
-            child: Text(context.l10n.dialogUninstall),
-          ),
-        ],
-      ),
+    final confirm = await showAppConfirmDialog(
+      context,
+      title: context.l10n.dialogUninstallExtension,
+      message: context.l10n.dialogUninstallExtensionMessage(ext.displayName),
+      confirmLabel: context.l10n.dialogUninstall,
+      destructive: true,
+      filled: false,
+      cancelIsDefault: true,
+      errorConfirm: true,
     );
 
-    if (confirm == true) {
+    if (confirm) {
       await ref.read(extensionProvider.notifier).removeExtension(ext.id);
       await ref.read(repoProvider.notifier).refresh();
       if (mounted) {

@@ -189,7 +189,7 @@ extension _TrackMetadataCards on _TrackMetadataScreenState {
         );
       }
 
-      if (source.startsWith('http://') || source.startsWith('https://')) {
+      if (isHttpCoverUrl(source)) {
         return CachedCoverImage(
           imageUrl: source,
           fit: BoxFit.cover,
@@ -200,9 +200,8 @@ extension _TrackMetadataCards on _TrackMetadataScreenState {
         );
       }
 
-      final filePath = source.startsWith('file://')
-          ? Uri.parse(source).toFilePath()
-          : source;
+      final filePath = coverFilePath(source);
+      if (filePath == null) return Container(color: colorScheme.surface);
       return Image.file(
         File(filePath),
         fit: BoxFit.cover,
@@ -450,33 +449,14 @@ extension _TrackMetadataCards on _TrackMetadataScreenState {
       _spotifyId!,
       fallbackService: _service.toLowerCase(),
     );
-    final rawId = _displayServiceTrackId(_spotifyId!);
-
-    String webUrl;
-    Uri? appUri;
-    String serviceName;
-
-    if (openService == MusicServices.deezer) {
-      webUrl = 'https://www.deezer.com/track/$rawId';
-      appUri = Uri.parse('deezer://www.deezer.com/track/$rawId');
-      serviceName = 'Deezer';
-    } else if (openService == MusicServices.amazon) {
-      webUrl = 'https://music.amazon.com/search/$rawId';
-      appUri = Uri.parse('amznm://search/$rawId');
-      serviceName = 'Amazon Music';
-    } else if (openService == MusicServices.tidal) {
-      webUrl = 'https://listen.tidal.com/track/$rawId';
-      appUri = Uri.parse('tidal://track/$rawId');
-      serviceName = 'Tidal';
-    } else if (openService == MusicServices.qobuz) {
-      webUrl = 'https://play.qobuz.com/track/$rawId';
-      appUri = Uri.parse('qobuz://track/$rawId');
-      serviceName = 'Qobuz';
-    } else {
-      webUrl = 'https://open.spotify.com/track/$rawId';
-      appUri = Uri.parse('spotify:track:$rawId');
-      serviceName = 'Spotify';
-    }
+    // Unknown services open as Spotify, as this button always has.
+    final link = ServiceTrackLink(
+      openService,
+      _displayServiceTrackId(_spotifyId!),
+    );
+    final webUrl = link.webUrl;
+    final appUri = link.appUri;
+    final serviceName = link.serviceName;
 
     try {
       final launched = await launchUrl(
@@ -942,9 +922,7 @@ extension _TrackMetadataCards on _TrackMetadataScreenState {
                     ),
                     const SizedBox(width: 8),
                     Icon(
-                      context.isSpotiFLAC
-                          ? CupertinoIcons.doc_on_doc
-                          : Icons.copy,
+                      context.isSpotiFLAC ? CupertinoIcons.doc_on_doc : Icons.copy,
                       size: 18,
                       color: colorScheme.onSurfaceVariant,
                     ),
