@@ -200,3 +200,29 @@ Downloads draft 437551007 in `spotiflac-app/spotiflac-releases` now contains
 archives and unified checksums. It remains unpublished. No billing settings
 or website download links were changed. Physical devices, commercial-provider
 GUI tests and trusted distribution signing remain external work.
+
+### Native startup and dynamically loaded dependencies
+
+On 2026-11-08, clean Ubuntu GUI startup exposed a dependency that ELF
+scanning cannot discover: Flutter dynamically opens `libGLESv2.so.2`.
+Debian packages now explicitly depend on `libgles2` and `libegl1`, and
+recommend Mesa drivers and desktop integration tools. AppImages retain
+their verified bytes and still require the host desktop runtime, including
+GLES/EGL, GTK, libsecret, playback and codec libraries; use the Debian package
+when automatic dependency installation is needed.
+
+[Repack run 42468204499](https://github.com/spotiflac-app/spotiflac/actions/runs/42468204499)
+compares the application bundle byte-for-byte after Debian metadata
+repacking, then installs and starts it under Xvfb on clean Ubuntu 22.04 and
+24.04 containers for both native architectures. The AppImages are copied
+unchanged. Packaging-source commit:
+`a6f8660daf37e0e71676a12b44ef484150caef72`; compiled Linux source remains
+`fa7b65a91bf76e55e273c56cf8efe5ba3c783eda`.
+
+Existing Windows x64/ARM64 portable packages also passed native startup in
+[run 42467371457](https://github.com/spotiflac-app/spotiflac/actions/runs/42467371457).
+The universal macOS DMG passed package/signature integrity, FFmpeg execution
+and native startup on Intel and Apple Silicon in
+[run 42467169533](https://github.com/spotiflac-app/spotiflac/actions/runs/42467169533).
+These checks do not claim hardware playback, real-provider GUI testing or
+trusted distribution signing.

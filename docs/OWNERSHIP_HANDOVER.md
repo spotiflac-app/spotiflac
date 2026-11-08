@@ -83,7 +83,7 @@ The Rust mobile libraries and Android native audio code were compiled locally. T
 
 ## Remaining external work
 
-- Corrected hosted 5.2.6+165 builds have passed for all platforms. Resolve the Linux compatibility issue below, then complete commercial-provider/GUI download and physical Android/iPhone installation/playback tests. Signed Android ARM64 and ARM32 packages are built and audited. The Windows x64 version-change installer test has passed. No authorized phone was connected; an emulator test is not being claimed. Linux, macOS and Windows ARM64 have build/audit results, but native installation and playback were not exercised on this Windows x64 host.
+- Corrected hosted 5.2.6+165 builds have passed for all platforms. Linux ABI and runtime dependencies are resolved, including dynamically loaded GLES/EGL. Native macOS and Windows x64/ARM64 startup passed on their matching GitHub runners. Linux x64/ARM64 installation and visible startup passed under Xvfb on Ubuntu 22.04 and 24.04. Physical Android/iPhone installation/playback, hardware-audio and commercial-provider GUI tests remain outstanding. No phone was connected; an emulator test is not being claimed. The Windows x64 version-change installer test has passed.
 - Trusted Apple distribution/notarization and Windows signing require owner-held certificates or verified service accounts. Available Apple Developer and SignPath pages required sign-in, and no usable certificates were supplied. Self-signed certificates do not establish public distribution trust.
 - The owner approved public source hosting on 2026-11-06. Anonymous access was verified, and the corrected-version release build started on standard free public-repository runners. No payment or spending-limit change was made. Build run: https://github.com/spotiflac-app/spotiflac/actions/runs/42238210013
 - Corrected downloads draft 437551007 is staged in `spotiflac-app/spotiflac-releases`, with 18 verified assets: all platform packages, Android signature sidecars, two matching source archives, the iOS feed and unified checksums. It remains unpublished pending the external checks above. Original build draft 436671583 is explicitly quarantined; retired QA drafts remain unpublished. No GitHub token is embedded in the app.
@@ -98,6 +98,14 @@ third-party notices remain. Dated modifications are recorded. Distribute source
 and notices as required by the existing license when distributing binaries.
 
 See [Release setup](RELEASE_SETUP.md) for operational instructions.
+
+## Additional native validation (2026-11-08)
+
+- [macOS Intel and Apple Silicon](https://github.com/spotiflac-app/spotiflac/actions/runs/42467169533): verified the existing DMG, ad-hoc signature integrity, universal executable/FFmpeg binaries, native tools and 20 seconds of app startup. This is not notarization or hardware playback coverage.
+- [Windows x64 and ARM64](https://github.com/spotiflac-app/spotiflac/actions/runs/42467371457): verified the existing packages, native PE/AOT architectures, product version, FFmpeg execution and 20 seconds of portable-app startup.
+- [Linux metadata repack](https://github.com/spotiflac-app/spotiflac/actions/runs/42468204499): declared dynamically loaded EGL/GLES dependencies, retained AppImages byte-for-byte and compared extracted bundles after rebuilding Debian metadata. Both architectures passed clean installation, native loading and visible startup on Ubuntu 22.04 and 24.04. Screenshots show the first-run onboarding UI.
+- Compiled Linux source remains `fa7b65a91bf76e55e273c56cf8efe5ba3c783eda`; the matching packaging source is `a6f8660daf37e0e71676a12b44ef484150caef72`. Application, assets, Rust, CMake and dependency source trees were checked unchanged before repacking.
+- The installed Windows 5.2.6 UI opened with the preserved synthetic-track queue. The local UI helper could not target its controls, so no additional local playback or provider test is claimed.
 
 
 ## Corrected release build completed
