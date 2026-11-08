@@ -38,7 +38,9 @@ extension _LocalLibraryScan on LocalLibraryNotifier {
         NotificationService.libraryScanWorkKind,
       );
       await _cancelScanPausedNotification();
-      await _showScanFailedNotification(message);
+      if (prefs.getBool(localLibraryActiveScanNotifyKey) ?? true) {
+        await _showScanFailedNotification(message);
+      }
       // Keep the checkpoint marker so enabled auto-scan can resume it. This
       // recovery also runs when auto-scan is off and never deletes tracks.
       await _db.updateSourceState(sourceId, lastScanError: message);
@@ -56,6 +58,7 @@ extension _LocalLibraryScan on LocalLibraryNotifier {
     required void Function(int processed, int errors, String name) onProgress,
   }) async {
     final scanner = NetworkLibraryScanner(
+      storage: _networkStorage,
       readCachedRows: (paths) => _db.readNetworkScanRows(sourceId, paths),
     );
     _networkScanner = scanner;
@@ -181,6 +184,7 @@ extension _LocalLibraryScan on LocalLibraryNotifier {
         }
       }
 
+      _activeScanSourceId = activeSourceId;
       final available = await _isPathAvailable(
         folderPath,
         bookmark: iosBookmark,
@@ -208,6 +212,10 @@ extension _LocalLibraryScan on LocalLibraryNotifier {
           DateTime.now().millisecondsSinceEpoch,
         );
         await prefs.setString(localLibraryActiveScanSourceKey, activeSourceId);
+        await prefs.setBool(
+          localLibraryActiveScanNotifyKey,
+          _scanNotificationsEnabled,
+        );
         await prefs.remove(localLibraryRecoveredScanKey);
       } catch (e) {
         _log.w('Failed to persist active library scan marker: $e');
@@ -320,6 +328,12 @@ extension _LocalLibraryScan on LocalLibraryNotifier {
 
         if (skippedDownloads > 0) {
           _log.i('Skipped $skippedDownloads files already in download history');
+        }
+        if (forceFullScan) {
+          // A forced scan rewrites thumbnails under their existing paths.
+          PaintingBinding.instance.imageCache
+            ..clear()
+            ..clearLiveImages();
         }
 
         await _finishScan(
@@ -561,6 +575,7 @@ extension _LocalLibraryScan on LocalLibraryNotifier {
             activeSourceId) {
           await prefs.remove(localLibraryActiveScanSourceKey);
           await prefs.remove(localLibraryActiveScanStartedAtKey);
+          await prefs.remove(localLibraryActiveScanNotifyKey);
           await prefs.remove(localLibraryRecoveredScanKey);
         }
       } catch (e) {
@@ -754,6 +769,7 @@ extension _LocalLibraryScan on LocalLibraryNotifier {
     required int totalFiles,
     required bool isComplete,
   }) {
+    if (!_scanNotificationsEnabled) return false;
     final now = DateTime.now();
     final percent = progress.round().clamp(0, 100);
     final percentChanged = percent != _lastScanNotificationPercent;
@@ -879,6 +895,7 @@ extension _LocalLibraryScan on LocalLibraryNotifier {
   }
 
   Future<void> _queueScanNotification(Future<void> Function() notify) {
+    if (!_scanNotificationsEnabled) return Future<void>.value();
     final next = _scanNotificationTail.then((_) => notify());
     // A failed notification must not prevent the terminal notice or cleanup.
     _scanNotificationTail = next.catchError((Object _) {});
@@ -914,10 +931,15 @@ extension _LocalLibraryScan on LocalLibraryNotifier {
       if (!ref.mounted || _scanCancelRequested) return;
       final libraryDatabase = await _db.database;
       if (!ref.mounted || _scanCancelRequested) return;
+      // Playlists, favorites, sessions, statistics and history copy cover
+      // paths; their files stay while any of them is named.
+      final referenceColumns = await appLibraryCoverReferenceColumns();
+      if (!ref.mounted || _scanCancelRequested) return;
 
       final deletedCount = await pruneUnreferencedLibraryCovers(
         libraryCoverDir,
         const {},
+        referenceColumns: referenceColumns,
         libraryDatabase: libraryDatabase,
         requestId: _nativeLibraryRequestId,
         canPrune: () => ref.mounted && !_scanCancelRequested,

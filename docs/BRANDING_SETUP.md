@@ -7,7 +7,8 @@ Namespace: `com.spotiflac.app`
 Published product version: `5.2.7+166`
 
 The application, native bindings, platform metadata and installers use the
-SpotiFLAC identity. The About screen and diagnostics identify build 166.
+SpotiFLAC identity. Published 5.2.7 packages identify build 166; development
+source targets 5.3.1 and build 167.
 
 Official mobile and desktop builds check the project-owned downloads repository.
 Announcements use that repository's `config/app.json`; funding is disabled.
@@ -15,9 +16,10 @@ Announcements use that repository's `config/app.json`; funding is disabled.
 value disables requests and cached announcements. No GitHub credential is
 embedded in the app. The iOS source now points to the published unsigned IPA.
 
-Discord and the optional original-operator lyrics backup remain disabled until
-project-owned integrations are configured. Third-party providers retain their
-credits and depend on their respective services.
+Discord and Last.fm integration code is included. Full releases require
+project-owned registrations; see [account integrations](FEATURE_SETUP.md).
+The Apple lyrics backup uses the provider's public endpoint. Third-party
+providers retain their credits and depend on their respective services.
 
 See [release setup](RELEASE_SETUP.md) for signing, building and publishing, and
 [ownership status](OWNERSHIP_HANDOVER.md) for current verification and the blocked

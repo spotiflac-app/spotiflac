@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:spotiflac/theme/spotiflac_icons.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
 import 'package:spotiflac/utils/desktop_platform.dart';
+import 'package:spotiflac/utils/android_tv.dart';
 import 'package:spotiflac/widgets/app_icon.dart';
 import 'package:spotiflac/widgets/desktop/desktop_selection.dart';
 import 'package:spotiflac/widgets/spotiflac_context_menu.dart';
@@ -161,7 +162,9 @@ class _DesktopContextMenuRegionState extends State<DesktopContextMenuRegion>
   @override
   Widget build(BuildContext context) {
     final onContextMenu = widget.onContextMenu;
-    if (!isDesktopPlatform || onContextMenu == null) return widget.child;
+    if ((!isDesktopPlatform && !isAndroidTv) || onContextMenu == null) {
+      return widget.child;
+    }
     return Focus(
       canRequestFocus: false,
       skipTraversal: true,

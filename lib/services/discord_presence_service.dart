@@ -136,7 +136,6 @@ class DiscordPresenceService {
   }
 
   final bool integrationEnabled;
-
   static final instance = DiscordPresenceService();
   static const _tokenKey = 'discord_presence_refresh_token';
   static const _storage = FlutterSecureStorage(

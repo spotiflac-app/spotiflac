@@ -91,6 +91,7 @@ class AudioNative {
   final sourceContents = <String, String>{};
   final preparedContents = <String, String>{};
   final sourceGates = <String, Completer<void>>{};
+  final releases = <String, int>{};
   final sourceFailures = <String>{};
   final resumeFailures = <String>{};
   bool failResumeMethod = false;
@@ -102,7 +103,26 @@ class AudioNative {
   final rates = <String, double>{};
   final ignoredSeeks = <String>{};
   final missingPositions = <String>{};
+  final positionReplies = <String, Completer<int?>>{};
+  final nextPlayers = <String, String>{};
+
+  /// Song lengths in milliseconds by source; a minute otherwise.
+  final durations = <String, int>{};
+
+  /// The position of every playing deck at the moment each deck resumed.
+  final positionsAtResume = <String, Map<String, int>>{};
   bool emitsDuration = true;
+
+  /// Ends [id]'s song the way the forks do: a chained next player starts
+  /// first, then completion is reported.
+  Future<void> complete(String id) async {
+    final next = nextPlayers.remove(id);
+    if (next != null) {
+      playing.add(next);
+      resumedSources.add(sources[next]!);
+    }
+    await event(id, 'audio.onComplete');
+  }
 
   int currentPosition(String id) =>
       (positions[id] ?? 0) +
@@ -137,7 +157,10 @@ class AudioNative {
             );
           case 'setSourceUrl':
             final source = args['url']! as String;
+            final released = releases[id];
             await sourceGates[source]?.future;
+            // A release meanwhile reset the player and its old prepare.
+            if (releases[id] != released) return null;
             if (sourceFailures.contains(source)) {
               unawaited(error(id));
               return null;
@@ -148,13 +171,24 @@ class AudioNative {
               preparedContents[id] = sourceContents[source] ?? source;
             }
             unawaited(event(id, 'audio.onPrepared', true));
-            if (emitsDuration) unawaited(event(id, 'audio.onDuration', 60000));
+            if (emitsDuration) {
+              unawaited(
+                event(id, 'audio.onDuration', durations[source] ?? 60000),
+              );
+            }
           case 'seek':
             if (!ignoredSeeks.contains(id)) {
               positions[id] = args['position']! as int;
               clocks[id]?.reset();
             }
             unawaited(event(id, 'audio.onSeekComplete'));
+          case 'setNextPlayer':
+            final next = args['nextPlayerId'] as String?;
+            if (next == null) {
+              nextPlayers.remove(id);
+            } else {
+              nextPlayers[id] = next;
+            }
           case 'setPlaybackRate':
             positions[id] = currentPosition(id);
             clocks[id]?.reset();
@@ -169,6 +203,9 @@ class AudioNative {
               await error(id);
               return null;
             }
+            positionsAtResume[id] = {
+              for (final other in playing) other: currentPosition(other),
+            };
             playing.add(id);
             resumedSources.add(sources[id]!);
             if (id.startsWith('music-mix-') || id.startsWith('music-effect-')) {
@@ -178,6 +215,8 @@ class AudioNative {
             playing.remove(id);
             clocks[id]?.stop();
           case 'release':
+            nextPlayers.remove(id);
+            releases[id] = (releases[id] ?? 0) + 1;
             playing.remove(id);
             sources.remove(id);
             preparedContents.remove(id);
@@ -185,8 +224,9 @@ class AudioNative {
             playing.remove(id);
             live.remove(id);
           case 'getDuration':
-            return 60000;
+            return durations[sources[id]] ?? 60000;
           case 'getCurrentPosition':
+            if (positionReplies[id] case final reply?) return reply.future;
             if (missingPositions.contains(id)) return null;
             return currentPosition(id);
         }
@@ -206,13 +246,13 @@ class AudioNative {
     );
   }
 
-  Future<void> error(String id) async {
+  Future<void> error(String id, {String details = 'MEDIA_ERROR_SYSTEM'}) async {
     await messenger.handlePlatformMessage(
       'xyz.luan/audioplayers/events/$id',
       const StandardMethodCodec().encodeErrorEnvelope(
         code: 'AndroidAudioError',
         message: 'Audio output failed',
-        details: 'MEDIA_ERROR_SYSTEM',
+        details: details,
       ),
       (_) {},
     );
@@ -282,6 +322,10 @@ void setAutoMixOptions(AutoMixOptions options) => musicPlayerRuntime.configure(
   ),
 );
 
+void setGaplessEnabled(bool enabled) => musicPlayerRuntime.configure(
+  musicPlayerRuntime.settings.copyWith(gaplessPlayback: enabled),
+);
+
 void setUsbBitPerfectEnabled(bool enabled) => musicPlayerRuntime.configure(
   musicPlayerRuntime.settings.copyWith(usbBitPerfect: enabled),
 );
@@ -316,6 +360,8 @@ void _setUpPlayer() {
   );
   setAutoMixEnabled(false);
   setAutoMixOptions(const AutoMixOptions());
+  // Gapless tests opt in; others keep the ordinary transition.
+  setGaplessEnabled(false);
   setUsbBitPerfectEnabled(false);
   setAutoplayEnabled(false);
   native = AudioNative(time.stopwatch)..install();

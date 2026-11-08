@@ -3,17 +3,63 @@ import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spotiflac/l10n/l10n.dart';
+import 'package:spotiflac/providers/music_player_provider.dart';
 import 'package:spotiflac/screens/network_storage_screen.dart';
+import 'package:spotiflac/services/link/link_source_names.dart';
 import 'package:spotiflac/services/local_network_access.dart';
 import 'package:spotiflac/services/network_certificate.dart';
 import 'package:spotiflac/services/network_storage_service.dart';
+import 'package:spotiflac/services/playable_media.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
 import 'package:spotiflac/widgets/app_action_button.dart';
 
 void main() {
+  testWidgets('playing a folder passes its cover image as a reference', (
+    tester,
+  ) async {
+    final service = _CoverFolder();
+    final played = <PlayableMedia>[];
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          musicPlayerControllerProvider.overrideWithValue(
+            _PlayedController(played),
+          ),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: NetworkStorageScreen(
+            service: service,
+            path: 'Album',
+            connection: const NetworkConnection(
+              id: 'nas',
+              name: 'NAS',
+              protocol: NetworkProtocol.webdav,
+              address: 'https://nas.test/music/',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Song.flac'));
+    await tester.pumpAndSettle();
+    // The cover store keeps the cover by its reference; a loopback URL
+    // would name it for this run only.
+    expect(service.resolved, isEmpty);
+    expect(played.single.artUri, isNull);
+    expect(
+      played.single.networkArtworkSource,
+      NetworkStorageService.source('nas', 'Album/cover.jpg'),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   for (final olderFails in [false, true]) {
     testWidgets('latest folder refresh wins (older fails: $olderFails)', (
       tester,
@@ -102,6 +148,61 @@ void main() {
     expect(await service.connections(), isEmpty);
   });
   for (final spotiflac in [false, true]) {
+    for (final failure in ['listing', 'save']) {
+      testWidgets(
+        'HTTP reports $failure failure separately (SpotiFLAC: $spotiflac)',
+        (tester) async {
+          final service = _NetworkFixture();
+          if (failure == 'listing') {
+            service.error = const NetworkListingException();
+          } else {
+            service.saveError = PlatformException(code: 'keystore_unavailable');
+          }
+          await tester.pumpWidget(
+            ProviderScope(
+              child: MaterialApp(
+                theme: spotiflac
+                    ? SpotiFLACTheme.build(Brightness.dark)
+                    : ThemeData(useMaterial3: true),
+                localizationsDelegates: AppLocalizations.localizationsDelegates,
+                supportedLocales: AppLocalizations.supportedLocales,
+                home: NetworkStorageScreen(service: service),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(find.byTooltip('Add connection'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('HTTP(S)').hitTestable());
+          await tester.pumpAndSettle();
+          await tester.enterText(find.byKey(const ValueKey('Name')), 'NAS');
+          await tester.enterText(
+            find.byKey(const ValueKey('Server or audio URL')),
+            'http://nas.test:8080/music/',
+          );
+          final save = find.widgetWithText(AppActionButton, 'Connect and save');
+          await tester.ensureVisible(save);
+          await tester.pumpAndSettle();
+          await tester.tap(save);
+          await tester.pumpAndSettle();
+          expect(
+            find.textContaining(
+              failure == 'listing'
+                  ? 'folder listing could not be read'
+                  : 'device could not save the connection',
+            ),
+            findsOneWidget,
+          );
+          expect(
+            find.textContaining('Could not access the network source.'),
+            findsNothing,
+          );
+          expect(await service.connections(), isEmpty);
+          expect(tester.takeException(), isNull);
+          await tester.pumpWidget(const SizedBox.shrink());
+        },
+      );
+    }
     testWidgets(
       'local permission denial can be retried (SpotiFLAC: $spotiflac)',
       (tester) async {
@@ -255,6 +356,51 @@ void main() {
       },
     );
     testWidgets(
+      'a paired computer shows as SpotiFLAC Link (SpotiFLAC: $spotiflac)',
+      (tester) async {
+        final service = _NetworkFixture();
+        await service.save(
+          const NetworkConnection(
+            id: 'desk',
+            name: 'Studio Mac',
+            protocol: NetworkProtocol.subsonic,
+            address: 'https://192.168.1.20:4533/',
+          ),
+        );
+        await service.save(
+          const NetworkConnection(
+            id: 'nas',
+            name: 'My NAS',
+            protocol: NetworkProtocol.subsonic,
+            address: 'https://nas.test/',
+          ),
+        );
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              linkSourceNamesProvider.overrideWithValue(const {
+                'desk': 'Studio Mac',
+              }),
+            ],
+            child: MaterialApp(
+              theme: spotiflac
+                  ? SpotiFLACTheme.build(Brightness.dark)
+                  : ThemeData(useMaterial3: true),
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: NetworkStorageScreen(service: service),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('SpotiFLAC Link · 192.168.1.20'), findsOneWidget);
+        expect(find.text('Subsonic · nas.test'), findsOneWidget);
+        // Link manages the computer, so only the NAS can be edited here.
+        expect(find.byTooltip('Edit connection'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+    testWidgets(
       'connection form saves in the selected theme (SpotiFLAC: $spotiflac)',
       (tester) async {
         tester.view.physicalSize = const Size(390, 844);
@@ -312,11 +458,50 @@ void main() {
   }
 }
 
+class _CoverFolder extends NetworkStorageService {
+  _CoverFolder() : super(read: () async => null, write: (_) async {});
+  final resolved = <String>[];
+
+  @override
+  Future<List<NetworkEntry>> list(
+    NetworkConnection connection, [
+    String path = '',
+  ]) async => const [
+    NetworkEntry('Album/Song.flac', 'Song.flac'),
+    NetworkEntry('Album/cover.jpg', 'cover.jpg'),
+  ];
+
+  @override
+  Future<String> resolve(String source) async {
+    resolved.add(source);
+    return 'http://127.0.0.1:1/${resolved.length}';
+  }
+}
+
+class _PlayedController extends MusicPlayerController {
+  _PlayedController(this.played);
+
+  final List<PlayableMedia> played;
+
+  @override
+  Future<void> playAll(
+    List<PlayableMedia> items, {
+    int initialIndex = 0,
+  }) async => played.addAll(items);
+}
+
 class _NetworkFixture extends NetworkStorageService {
   _NetworkFixture() : super(read: () async => null, write: (_) async {});
   final paths = <String>[];
   bool fail = false;
   Object? error;
+  Object? saveError;
+  @override
+  Future<void> save(NetworkConnection connection) async {
+    if (saveError != null) throw saveError!;
+    await super.save(connection);
+  }
+
   NetworkConnection? lastAttempt;
   @override
   Future<List<NetworkEntry>> list(

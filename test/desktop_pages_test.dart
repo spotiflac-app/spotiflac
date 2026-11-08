@@ -20,6 +20,7 @@ import 'package:spotiflac/theme/app_theme.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
 import 'package:spotiflac/utils/desktop_platform.dart';
 import 'package:spotiflac/widgets/app_bottom_sheet.dart';
+import 'package:spotiflac/widgets/app_progress_indicator.dart';
 import 'package:spotiflac/widgets/desktop/desktop_commands.dart';
 import 'package:spotiflac/widgets/desktop/desktop_downloads_button.dart';
 import 'package:spotiflac/widgets/desktop/desktop_inspector.dart';
@@ -42,6 +43,9 @@ class _Queue extends DownloadQueueNotifier {
 
   @override
   void cancelItem(String id) => cancelled.add(id);
+
+  void replace(List<DownloadItem> items) =>
+      state = DownloadQueueState(items: items);
 }
 
 DownloadItem _download(
@@ -112,6 +116,34 @@ void main() {
       home: home,
     ),
   );
+
+  test('downloads summary matches the previous count and progress', () {
+    const progress = [-0.2, 0.0, 1 / 3, 0.5, 1.4, 0.71, 0.1];
+    final items = [
+      for (var i = 0; i < 90; i++)
+        _download(
+          '$i',
+          'Song $i',
+          DownloadStatus.values[i * 5 % DownloadStatus.values.length],
+          progress: progress[i % progress.length],
+        ),
+    ];
+    for (var length = 0; length <= items.length; length++) {
+      final active = activeDesktopDownloads(items.sublist(0, length));
+      var total = 0.0;
+      for (final item in active) {
+        total += item.status == DownloadStatus.finalizing
+            ? 1
+            : item.status == DownloadStatus.downloading
+            ? item.progress.clamp(0.0, 1.0)
+            : 0;
+      }
+      expect(desktopDownloadsSummary(items.sublist(0, length)), (
+        count: active.length,
+        progress: active.isEmpty ? 0.0 : total / active.length,
+      ));
+    }
+  });
 
   for (final spotiflac in [false, true]) {
     final style = spotiflac ? 'SpotiFLAC' : 'Material';
@@ -248,7 +280,9 @@ void main() {
         await tester.pumpAndSettle();
       }
 
-      testWidgets('sits beside the content at 1400', (tester) async {
+      testWidgets('sits beside the content at 1400, or floats in SpotiFLAC', (
+        tester,
+      ) async {
         await pumpShell(tester, 1400);
         final lyrics = find.byKey(const ValueKey('desktop-inspector-lyrics'));
         expect(lyrics, findsNothing);
@@ -256,29 +290,58 @@ void main() {
         await tester.tap(find.byKey(const ValueKey('desktop-player-lyrics')));
         await tester.pumpAndSettle();
         expect(lyrics, findsOneWidget);
-        expect(tester.getSize(lyrics).width, desktopInspectorWidth);
-        final content = tester.getRect(find.text('content'));
-        expect(content.right, lessThan(tester.getRect(lyrics).left));
+        expect(
+          tester.getSize(lyrics).width,
+          spotiflac ? spotiflacGlassInspectorWidth : desktopInspectorWidth,
+        );
+        final content = tester.getRect(
+          find.ancestor(
+            of: find.text('content'),
+            matching: find.byType(Center),
+          ),
+        );
+        if (spotiflac) {
+          // The glass runs the window's height over a pane that stays put.
+          expect(content.right, 1400);
+          expect(tester.getRect(lyrics).height, 800);
+        } else {
+          expect(content.right, tester.getRect(lyrics).left);
+        }
 
         await pressShortcut(tester, LogicalKeyboardKey.keyU);
         expect(lyrics, findsNothing);
-        expect(
-          find.byKey(const ValueKey('desktop-inspector-upNext')),
-          findsOneWidget,
-        );
-        // Escape leaves an inspector that sits beside the content open.
+        final upNext = find.byKey(const ValueKey('desktop-inspector-upNext'));
+        expect(upNext, findsOneWidget);
+        // Escape closes a floating inspector and leaves one beside the
+        // content open.
         await tester.sendKeyEvent(LogicalKeyboardKey.escape);
         await tester.pumpAndSettle();
-        expect(
-          find.byKey(const ValueKey('desktop-inspector-upNext')),
-          findsOneWidget,
-        );
+        expect(upNext, spotiflac ? findsNothing : findsOneWidget);
 
-        await tester.tap(find.byKey(const ValueKey('desktop-player-up-next')));
-        await tester.pumpAndSettle();
+        if (!spotiflac) {
+          await tester.tap(
+            find.byKey(const ValueKey('desktop-player-up-next')),
+          );
+          await tester.pumpAndSettle();
+        }
         expect(desktopInspectorPanel.value, isNull);
         expect(tester.takeException(), isNull);
       });
+
+      if (spotiflac) {
+        testWidgets('a full screen window puts the panel beside the content', (
+          tester,
+        ) async {
+          desktopWindowFullScreen.value = true;
+          addTearDown(() => desktopWindowFullScreen.value = false);
+          await pumpShell(tester, 1400);
+          await pressShortcut(tester, LogicalKeyboardKey.keyU);
+          final upNext = find.byKey(const ValueKey('desktop-inspector-upNext'));
+          expect(tester.getSize(upNext).width, desktopInspectorWidth);
+          expect(tester.getRect(upNext).height, 800);
+          expect(tester.takeException(), isNull);
+        });
+      }
 
       testWidgets('floats over the content at 1000', (tester) async {
         await pumpShell(tester, 1000);
@@ -462,6 +525,41 @@ void main() {
       expect(requested, spotiflac ? isEmpty : [ShellTab.library]);
       expect(links, spotiflac ? ['downloads'] : isEmpty);
       expect(popover, findsNothing);
+    });
+
+    testWidgets('$style downloads button rebuilds only for its ring', (
+      tester,
+    ) async {
+      final done = _download('c', 'Done song', DownloadStatus.completed);
+      final queue = _Queue([
+        _download('a', 'Running song', DownloadStatus.downloading),
+        done,
+      ]);
+      await tester.pumpWidget(
+        app(
+          spotiflac: spotiflac,
+          overrides: [downloadQueueProvider.overrideWith(() => queue)],
+          home: const Scaffold(body: Center(child: DesktopDownloadsButton())),
+        ),
+      );
+      final ring = find.byKey(const ValueKey('desktop-downloads-progress'));
+      final idle = tester.widget<AppProgressIndicator>(ring);
+
+      // A failed item changes the queue but not the count or the ring.
+      queue.replace([
+        _download('a', 'Running song', DownloadStatus.downloading),
+        done,
+        _download('d', 'Failed song', DownloadStatus.failed),
+      ]);
+      await tester.pump();
+      expect(identical(tester.widget(ring), idle), isTrue);
+
+      queue.replace([
+        _download('a', 'Running song', DownloadStatus.downloading, progress: 1),
+        done,
+      ]);
+      await tester.pump();
+      expect(tester.widget<AppProgressIndicator>(ring).value, 1);
     });
 
     for (final desktop in [true, false]) {

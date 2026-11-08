@@ -10,6 +10,34 @@ import 'package:spotiflac/providers/theme_provider.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('a stored red moves to blue once, and red picked later stays', () async {
+    SharedPreferences.setMockInitialValues({kSpotiFLACAccentKey: 'red'});
+    final prefs = await SharedPreferences.getInstance();
+    expect(
+      loadBootstrapThemeSettings(prefs).spotiflacAccent,
+      SpotiFLACAccent.blue,
+    );
+    expect(prefs.getString(kSpotiFLACAccentKey), 'blue');
+
+    await prefs.setString(kSpotiFLACAccentKey, 'red');
+    expect(
+      loadBootstrapThemeSettings(prefs).spotiflacAccent,
+      SpotiFLACAccent.red,
+    );
+    expect(prefs.getString(kSpotiFLACAccentKey), 'red');
+  });
+
+  test('the move leaves any other accent alone', () async {
+    SharedPreferences.setMockInitialValues({kSpotiFLACAccentKey: 'pink'});
+    final prefs = await SharedPreferences.getInstance();
+    expect(
+      loadBootstrapThemeSettings(prefs).spotiflacAccent,
+      SpotiFLACAccent.pink,
+    );
+    expect(prefs.getString(kSpotiFLACAccentKey), 'pink');
+    expect(prefs.getBool(kSpotiFLACAccentMovedToBlueKey), isTrue);
+  });
+
   test(
     'early theme edits preserve untouched saved settings and await saving',
     () async {

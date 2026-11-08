@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:spotiflac/services/audio_metadata_mapper.dart';
 import 'package:spotiflac/services/ffmpeg_metadata.dart';
 import 'package:spotiflac/services/ffmpeg_models.dart';
@@ -21,6 +22,9 @@ class _ResolvedLosslessQuality {
 /// Encoding and track splitting depend on inspection, tagging and output
 /// publication directly, without routing through the compatibility facade.
 abstract final class FFmpegConversion {
+  // FFmpeg's balanced FLAC preset keeps PCM unchanged with less encoder work.
+  static const _flacCompressionLevel = '5';
+
   static Future<_ResolvedLosslessQuality> _resolveLosslessQuality({
     required String inputPath,
     required LosslessConversionQuality quality,
@@ -107,7 +111,7 @@ abstract final class FFmpegConversion {
   static Future<String?> convertM4aToFlac(
     String inputPath, {
     String? sourceCodec,
-    Future<FFmpegResult> Function(List<String>)? execute,
+    @visibleForTesting Future<FFmpegResult> Function(List<String>)? execute,
   }) async {
     final plan = await FFmpegOutput.plan(
       inputPath,
@@ -379,8 +383,20 @@ abstract final class FFmpegConversion {
     if (hasCover) arguments.addAll(['-i', coverPath]);
     arguments.addAll(['-map', '0:a']);
     if (hasCover) FFmpegMetadata.appendCoverInputArguments(arguments);
+    if (!hasCover && !isAlac) {
+      arguments.addAll([
+        '-map',
+        '0:v?',
+        '-c:v',
+        'copy',
+        '-disposition:v',
+        'attached_pic',
+      ]);
+    }
     arguments.addAll(['-c:a', codec]);
-    if (!isAlac) arguments.addAll(['-compression_level', '8']);
+    if (!isAlac) {
+      arguments.addAll(['-compression_level', _flacCompressionLevel]);
+    }
     _appendLosslessQuality(
       arguments,
       codec: codec,
@@ -522,6 +538,7 @@ abstract final class FFmpegConversion {
     required Map<String, String> albumMetadata,
     String? coverPath,
     void Function(int current, int total)? onProgress,
+    @visibleForTesting Future<FFmpegResult> Function(List<String>)? execute,
   }) async {
     if (tracks.isEmpty) {
       _log.e('No tracks to split');
@@ -541,7 +558,6 @@ abstract final class FFmpegConversion {
           .trim();
       final outputName =
           '${track.number.toString().padLeft(2, '0')} - $title.$outputExt';
-      final outputPath = '$outputDir${Platform.pathSeparator}$outputName';
       final arguments = <String>[
         '-v',
         'error',
@@ -556,7 +572,7 @@ abstract final class FFmpegConversion {
       }
       arguments.addAll(
         outputExt == 'flac'
-            ? ['-c:a', 'flac', '-compression_level', '8']
+            ? ['-c:a', 'flac', '-compression_level', _flacCompressionLevel]
             : ['-c:a', 'copy'],
       );
       final metadata = <String, String>{
@@ -573,16 +589,39 @@ abstract final class FFmpegConversion {
         'COMPOSER': track.composer,
       }..removeWhere((_, value) => value.isEmpty);
       AudioMetadataMapper.appendMappedMetadataArguments(arguments, metadata);
-      arguments.addAll([outputPath, '-y']);
-      _log.d('CUE split track ${track.number}');
-      final result = await FFmpegExecution.arguments(arguments);
-      if (!result.success) {
-        _log.e('CUE split failed for track ${track.number}: ${result.output}');
-        continue;
+      String? outputPath;
+      try {
+        outputPath = await FFmpegOutput.reserve(
+          '$outputDir${Platform.pathSeparator}$outputName',
+        );
+        arguments.addAll([outputPath, '-y']);
+        _log.d('CUE split track ${track.number}');
+        final result = await (execute ?? FFmpegExecution.arguments)(arguments);
+        if (!result.success) {
+          _log.e(
+            'CUE split failed for track ${track.number}: ${result.output}',
+          );
+          continue;
+        }
+        final finalized = await FFmpegOutput.finalize(
+          plan: FFmpegOutputPlan(
+            workingPath: outputPath,
+            finalPath: outputPath,
+          ),
+          inputPath: audioPath,
+          deleteOriginal: false,
+        );
+        if (finalized == null) continue;
+        outputPaths.add(finalized);
+        outputPath = null;
+        _log.i(
+          'CUE split: track ${track.number} -> ${finalized.split(Platform.pathSeparator).last}',
+        );
+      } catch (error) {
+        _log.e('CUE split failed for track ${track.number}: $error');
+      } finally {
+        if (outputPath != null) await FFmpegOutput.cleanup(outputPath);
       }
-      outputPaths.add(outputPath);
-      FFmpegProbe.invalidate(outputPath);
-      _log.i('CUE split: track ${track.number} -> $outputName');
     }
     if (outputPaths.isEmpty) {
       _log.e('CUE split: no tracks were successfully extracted');

@@ -1,13 +1,32 @@
+import 'dart:io';
+
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:spotiflac/services/playable_media.dart';
 
 import 'support/music_player_automix_harness.dart';
 
-const _tracks = testTracks;
+late List<PlayableMedia> _tracks;
 const _until = waitUntil;
 
 void main() {
   setUpMusicPlayerHarness();
+  setUp(() async {
+    final folder = await Directory.systemTemp.createTemp('playback-errors-');
+    addTearDown(() => folder.delete(recursive: true));
+    _tracks = [
+      for (final track in testTracks)
+        PlayableMedia(
+          id: track.id,
+          source: '${folder.path}/${track.id}.flac',
+          title: track.title,
+          artist: track.artist,
+        ),
+    ];
+    for (final track in _tracks) {
+      await File(track.source).writeAsBytes([0]);
+    }
+  });
 
   group('playback failures', () {
     test('runtime error stays on the song and Play retries it', () async {
@@ -39,13 +58,38 @@ void main() {
       expect(handler.playbackState.value.playing, isTrue);
       expect(handler.playbackState.value.errorMessage, isNull);
       expect(handler.playbackState.value.errorCode, isNull);
-      expect(native.resumedSources, ['/one.flac', '/one.flac']);
+      expect(native.resumedSources, [
+        _tracks.first.source,
+        _tracks.first.source,
+      ]);
       await native.event('music-player', 'audio.onComplete');
       await _until(() => handler.playbackState.value.queueIndex == 1);
     });
 
+    test('a media server crash plays the song again by itself', () async {
+      const died = 'MEDIA_ERROR_SERVER_DIED, MEDIA_ERROR_UNKNOWN {extra:1}';
+      await handler.setQueueAndPlay(_tracks);
+      for (var reload = 1; reload <= 2; reload++) {
+        await native.error('music-player', details: died);
+        await _until(() => native.resumedSources.length == reload + 1);
+        expect(handler.playbackState.value.errorMessage, isNull);
+        expect(handler.playbackState.value.playing, isTrue);
+        expect(handler.mediaItem.value?.id, 'one');
+      }
+
+      // A server that keeps dying fails the song as before.
+      await native.error('music-player', details: died);
+      await _until(
+        () =>
+            handler.playbackState.value.processingState ==
+            AudioProcessingState.error,
+      );
+      expect(handler.playbackState.value.playing, isFalse);
+      expect(native.resumedSources, hasLength(3));
+    });
+
     test('source failure is reported and can be retried', () async {
-      native.sourceFailures.add('/one.flac');
+      native.sourceFailures.add(_tracks.first.source);
       await handler.setQueueAndPlay(_tracks);
       expect(
         handler.playbackState.value.processingState,

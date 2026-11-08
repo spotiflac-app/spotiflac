@@ -4,10 +4,55 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spotiflac/l10n/app_localizations.dart';
 import 'package:spotiflac/models/unified_library_item.dart';
+import 'package:spotiflac/models/library_database_models.dart';
 import 'package:spotiflac/services/batch_track_actions.dart';
+import 'package:spotiflac/theme/spotiflac_theme.dart';
 import 'package:spotiflac/widgets/app_action_button.dart';
 
 void main() {
+  for (final spotiflac in [false, true]) {
+    testWidgets('mixed batch retains the 48 kHz option ($spotiflac)', (
+      tester,
+    ) async {
+      final items = [
+        for (final (depth, rate) in [(16, 44100), (24, 96000)])
+          UnifiedLibraryItem.fromLocalLibrary(
+            LocalLibraryItem(
+              id: '$rate',
+              trackName: 'Track',
+              artistName: 'Artist',
+              albumName: 'Album',
+              filePath: '/music/$rate.flac',
+              format: 'flac',
+              bitDepth: depth,
+              sampleRate: rate,
+              scannedAt: DateTime(2026),
+            ),
+          ),
+      ];
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            theme: spotiflac
+                ? SpotiFLACTheme.build(Brightness.light)
+                : ThemeData(),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: _BatchConvertHarness(items: items),
+          ),
+        ),
+      );
+      await tester.tap(find.byKey(const Key('open-batch-convert')));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('48 kHz'));
+      await tester.tap(find.text('48 kHz'));
+      await tester.pumpAndSettle();
+      expect(find.text('48 kHz'), findsOneWidget);
+      expect(find.text('16-bit'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets(
     'batch conversion keeps a valid context after its launcher is removed',
     (tester) async {
@@ -52,7 +97,9 @@ void main() {
 }
 
 class _BatchConvertHarness extends ConsumerStatefulWidget {
-  const _BatchConvertHarness();
+  const _BatchConvertHarness({this.items});
+
+  final List<UnifiedLibraryItem>? items;
 
   @override
   ConsumerState<_BatchConvertHarness> createState() =>
@@ -72,17 +119,18 @@ class _BatchConvertHarnessState extends ConsumerState<_BatchConvertHarness> {
                 onPressed: () => showBatchConvertSheet(
                   launcherContext,
                   ref,
-                  [
-                    UnifiedLibraryItem(
-                      id: 'track-1',
-                      trackName: 'Track',
-                      artistName: 'Artist',
-                      albumName: 'Album',
-                      filePath: '/music/track.flac',
-                      addedAt: DateTime(2026),
-                      source: LibraryItemSource.local,
-                    ),
-                  ],
+                  widget.items ??
+                      [
+                        UnifiedLibraryItem(
+                          id: 'track-1',
+                          trackName: 'Track',
+                          artistName: 'Artist',
+                          albumName: 'Album',
+                          filePath: '/music/track.flac',
+                          addedAt: DateTime(2026),
+                          source: LibraryItemSource.local,
+                        ),
+                      ],
                   onExitSelectionMode: () {},
                   onSheetOpen: () => setState(() => _showLauncher = false),
                 ),

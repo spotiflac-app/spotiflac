@@ -10,6 +10,11 @@ Updated 2026-11-09.
 
 ## Published application
 
+Development source targets **5.3.1+167** using the stable 5.3.1 feature baseline.
+The currently published packages below remain 5.2.7. A full 5.3.1 release requires
+the project Discord registration/mobile SDK and Last.fm credentials described in
+[account integrations](FEATURE_SETUP.md).
+
 SpotiFLAC 5.2.7 includes ZIP/rustls security patches, semantic prerelease update
 ordering, and verified package publication. Android ARM32/ARM64 APKs, Windows
 x64/ARM64 installers and portable ZIPs, Linux x64/ARM64 AppImages and Debian
@@ -28,8 +33,8 @@ Subsequent documentation and validation changes do not change those binaries.
 
 Official builds use `spotiflac-app/spotiflac-releases` for public release checks
 and `config/app.json`. No GitHub token is embedded in the application.
-Announcements are empty and funding is disabled. Discord and the optional
-built-in Apple lyrics backup require project-owned configuration.
+Announcements are empty and funding is disabled. Development source includes
+Discord and Last.fm configuration, and uses the public Apple lyrics backup.
 
 The stable iOS source is generated from the published IPA:
 https://raw.githubusercontent.com/spotiflac-app/spotiflac-releases/main/apps.json.

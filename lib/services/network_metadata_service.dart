@@ -20,7 +20,9 @@ class NetworkMetadataService {
     NetworkTagReader? reader,
     Future<Directory> Function()? cacheDirectory,
     int maxConcurrentReads = 1,
+    Duration subsonicIdle = NetworkStorageService.timeout,
   }) : _storage = storage ?? NetworkStorageService.instance,
+       _subsonicIdle = subsonicIdle,
        _useNativeReader = reader == null,
        _reader =
            reader ??
@@ -39,9 +41,15 @@ class NetworkMetadataService {
   final Future<Directory> Function() _directory;
   final _cache = <String, ({DateTime time, Map<String, dynamic> value})>{};
   final _pending = <String, Future<Map<String, dynamic>>>{};
+  final _refreshArtwork = <String>{};
   final List<({Future<void> tail, int pending})> _lanes;
   final _requestIds = <String>{};
-  final _subsonicClients = <SubsonicClient>{};
+  final Duration _subsonicIdle;
+  // One client per connection keeps its TLS connections alive across reads;
+  // retired ones close when their last read ends.
+  final _subsonicClients = <String, _SubsonicLease>{};
+  final _subsonicLeases = <_SubsonicLease>{};
+  void Function()? _unsubscribeRemovals;
   bool _stopped = false;
 
   Future<Map<String, dynamic>> read(
@@ -50,6 +58,14 @@ class NetworkMetadataService {
   }) {
     if (_stopped) {
       return Future.error(StateError('Network metadata reader stopped'));
+    }
+    final uri = Uri.tryParse(source);
+    if (uri != null && uri.scheme == 'network') {
+      // Their owner answers its own reads, which may wait for a file to
+      // arrive; they must not hold up the lanes.
+      if (_storage.virtualFor(uri.host) case final virtual?) {
+        return virtual.metadata(uri.host, uri.pathSegments.join('/'));
+      }
     }
     if (forceRefresh) _cache.remove(source);
     final cached = _cache[source];
@@ -85,11 +101,28 @@ class NetworkMetadataService {
     return result;
   }
 
+  /// Retires an in-flight old read too, so it cannot refill the stale cache.
+  Future<void> invalidate(String source, {bool refreshArtwork = false}) async {
+    _cache.remove(source);
+    try {
+      await _pending[source];
+    } catch (_) {
+      // A failed old read must not prevent reading the edited file again.
+    }
+    _cache.remove(source);
+    if (refreshArtwork) {
+      if (_refreshArtwork.length >= 32) {
+        _refreshArtwork.remove(_refreshArtwork.first);
+      }
+      _refreshArtwork.add(source);
+    }
+  }
+
   /// Scan-owned readers can stop their work without cancelling playback reads.
   Future<void> cancelPending() async {
     _stopped = true;
-    for (final client in _subsonicClients.toList()) {
-      client.close();
+    for (final lease in _subsonicLeases.toList()) {
+      _retireSubsonic(lease, force: true);
     }
     await Future.wait([
       for (final id in _requestIds.toList())
@@ -101,8 +134,68 @@ class NetworkMetadataService {
     if (_stopped) throw StateError('Network metadata reader stopped');
   }
 
+  /// A kept client is reused only for the exact saved connection, so an edit
+  /// of its address, credentials or certificate pin opens a new one.
+  _SubsonicLease _leaseSubsonic(NetworkConnection connection) {
+    final identity = jsonEncode(connection.toJson());
+    var lease = _subsonicClients[connection.id];
+    if (lease != null && lease.identity != identity) {
+      _retireSubsonic(lease);
+      lease = null;
+    }
+    if (lease == null) {
+      lease = _SubsonicLease(_storage.openSubsonic(connection), identity);
+      _subsonicClients[connection.id] = lease;
+      _subsonicLeases.add(lease);
+      _unsubscribeRemovals ??= _storage.connectionRemovals.subscribe((
+        id,
+      ) async {
+        if (_subsonicClients[id] case final removed?) _retireSubsonic(removed);
+      });
+    }
+    lease.idle?.cancel();
+    lease.users++;
+    return lease;
+  }
+
+  void _releaseSubsonic(_SubsonicLease lease, {required bool broken}) {
+    if (lease.closed) return;
+    lease.users--;
+    if (broken || lease.retired || _stopped) {
+      _retireSubsonic(lease);
+    } else if (lease.users == 0) {
+      lease.idle = Timer(_subsonicIdle, () => _retireSubsonic(lease));
+    }
+  }
+
+  void _retireSubsonic(_SubsonicLease lease, {bool force = false}) {
+    lease.retired = true;
+    lease.idle?.cancel();
+    final id = lease.client.connection.id;
+    if (_subsonicClients[id] == lease) _subsonicClients.remove(id);
+    if ((lease.users > 0 && !force) || lease.closed) return;
+    lease.closed = true;
+    lease.client.close();
+    _subsonicLeases.remove(lease);
+    if (_subsonicLeases.isEmpty) {
+      _unsubscribeRemovals?.call();
+      _unsubscribeRemovals = null;
+    }
+  }
+
+  /// Answers from the server leave the client usable; anything else (a
+  /// dropped connection, a timeout, a TLS failure) replaces it.
+  static bool _breaksClient(Object error) => switch (error) {
+    SubsonicException() || FileSystemException() => false,
+    HttpException(:final message) => !RegExp(
+      r'^Server returned \d{3}$',
+    ).hasMatch(message),
+    _ => true,
+  };
+
   Future<Map<String, dynamic>> _load(String source, String requestId) async {
     _checkStopped();
+    final refreshArtwork = _refreshArtwork.remove(source);
     final uri = Uri.parse(source);
     if (uri.scheme != 'network') {
       throw const FormatException('Expected a network source');
@@ -110,29 +203,45 @@ class NetworkMetadataService {
     final connection = await _storage.connection(uri.host);
     final path = uri.pathSegments.join('/');
     if (connection.protocol == NetworkProtocol.subsonic) {
-      final client = _storage.openSubsonic(connection);
-      _subsonicClients.add(client);
+      final lease = _leaseSubsonic(connection);
+      final client = lease.client;
+      var broken = false;
       try {
         _checkStopped();
-        final song = await client.song(path);
+        final SubsonicSong song;
+        try {
+          song = await client.song(path);
+        } catch (error) {
+          broken = _breaksClient(error);
+          rethrow;
+        }
         final metadata = Map<String, dynamic>.from(song.metadata);
+        // Asked alongside the cover. Servers without the songLyrics
+        // extension fail it, which leaves the tags as they are.
+        final lyrics = client.lyrics(song).catchError((Object error) {
+          if (_breaksClient(error)) broken = true;
+          return '';
+        });
         try {
           final cover = await client.cachedCover(
             song,
             Directory('${(await _directory()).path}/network_metadata'),
+            refresh: refreshArtwork,
           );
           if (cover != null) {
             metadata['cover_path'] = cover;
             await _trimNetworkMetadataCovers(File(cover).parent);
           }
-        } catch (_) {
+        } catch (error) {
+          if (_breaksClient(error)) broken = true;
           _checkStopped();
         }
+        final text = await lyrics;
+        if (text.trim().isNotEmpty) metadata['lyrics'] = text;
         _checkStopped();
         return _remember(source, metadata);
       } finally {
-        client.close();
-        _subsonicClients.remove(client);
+        _releaseSubsonic(lease, broken: broken);
       }
     }
     var name =
@@ -200,6 +309,16 @@ class NetworkMetadataService {
   }
 }
 
+class _SubsonicLease {
+  _SubsonicLease(this.client, this.identity);
+  final SubsonicClient client;
+  final String identity;
+  int users = 0;
+  bool retired = false;
+  bool closed = false;
+  Timer? idle;
+}
+
 /// Compatibility path keeps cover decoding/hash/directory sorting off the UI
 /// isolate too. Production receives only native file paths and small tags.
 Future<Map<String, dynamic>> _cacheNetworkMetadata(
@@ -215,11 +334,22 @@ Future<Map<String, dynamic>> _cacheNetworkMetadata(
     try {
       final directory = Directory(job['directory'] as String);
       await directory.create(recursive: true);
-      final file = File(
-        '${directory.path}/${sha256.convert(utf8.encode(job['source'] as String))}.image',
-      );
-      await file.writeAsBytes(base64Decode(cover), flush: true);
+      final bytes = base64Decode(cover);
+      final digest = sha256.convert(bytes).toString();
+      final file = File('${directory.path}/network_cover_$digest.image');
+      if (!await file.exists() || await file.length() != bytes.length) {
+        final staged = File(
+          '${file.path}.${NetworkStorageService.newId()}.part',
+        );
+        try {
+          await staged.writeAsBytes(bytes, flush: true);
+          await staged.rename(file.path);
+        } finally {
+          if (await staged.exists()) await staged.delete();
+        }
+      }
       metadata['cover_path'] = file.path;
+      metadata['cover_sha256'] = digest;
       await _trimNetworkMetadataCovers(directory);
     } catch (_) {}
   }
@@ -237,10 +367,19 @@ Future<void> _trimNetworkMetadataCovers(Directory directory) async {
       .toList();
   final dated = <({File file, DateTime time})>[];
   for (final entry in files) {
+    if (entry.path.endsWith('.etag')) continue;
     dated.add((file: entry, time: (await entry.stat()).modified));
   }
   dated.sort((a, b) => b.time.compareTo(a.time));
   for (final old in dated.skip(32)) {
     await old.file.delete();
+  }
+  // A cover's ETag (`<cover>.etag`) goes with the cover.
+  final kept = {for (final entry in dated.take(32)) entry.file.path};
+  for (final entry in files) {
+    if (entry.path.endsWith('.etag') &&
+        !kept.contains(entry.path.substring(0, entry.path.length - 5))) {
+      await entry.delete();
+    }
   }
 }

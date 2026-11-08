@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:spotiflac/l10n/app_localizations.dart';
+import 'package:spotiflac/utils/desktop_platform.dart';
+import 'package:spotiflac/utils/exclusive_output_labels.dart';
 
 /// A control or submenu that can be discovered from the root Settings search.
 ///
@@ -225,10 +227,28 @@ class SettingsSearchCatalog {
           keywords: const ['rescan all'],
         ),
         SettingsSearchEntry(
+          icon: Icons.travel_explore,
+          title: l10n.libraryReEnrichAll,
+          subtitle: l10n.libraryReEnrichAllSubtitle,
+          keywords: const [
+            're-enrich',
+            'reenrich',
+            'metadata',
+            'tags',
+            'retag',
+          ],
+        ),
+        SettingsSearchEntry(
           icon: Icons.cleaning_services_outlined,
           title: l10n.libraryCleanupMissingFiles,
           subtitle: l10n.libraryCleanupMissingFilesSubtitle,
           keywords: const ['remove missing'],
+        ),
+        SettingsSearchEntry(
+          icon: Icons.manage_search,
+          title: l10n.libraryFindMovedDownloads,
+          subtitle: l10n.libraryFindMovedDownloadsSubtitle,
+          keywords: const ['moved files', 'relink', 'resync', 'missing files'],
         ),
         SettingsSearchEntry(
           icon: Icons.delete_outline,
@@ -238,6 +258,13 @@ class SettingsSearchCatalog {
         ),
       ],
       playback = [
+        if (isDesktopPlatform)
+          SettingsSearchEntry(
+            icon: Icons.history_rounded,
+            title: 'Last.fm',
+            subtitle: l10n.lastfmDescription,
+            keywords: const ['lastfm', 'scrobble', 'scrobbling', 'now playing'],
+          ),
         SettingsSearchEntry(
           icon: Icons.equalizer,
           title: l10n.equalizerTitle,
@@ -263,6 +290,12 @@ class SettingsSearchCatalog {
           title: l10n.autoplayPersonalization,
           subtitle: l10n.autoplayPersonalizationDescription,
           keywords: const ['machine learning', 'recommendation', 'personal'],
+        ),
+        SettingsSearchEntry(
+          icon: Icons.multitrack_audio,
+          title: l10n.songAnalysis,
+          subtitle: l10n.songAnalysisDescription,
+          keywords: const ['sound', 'tempo', 'bpm', 'key', 'recommendation'],
         ),
         SettingsSearchEntry(
           icon: Icons.insights_outlined,
@@ -308,6 +341,31 @@ class SettingsSearchCatalog {
           keywords: const ['artwork', 'cover', 'full screen', 'immersive'],
         ),
         SettingsSearchEntry(
+          icon: Icons.splitscreen_outlined,
+          title: l10n.landscapeLyricsArtwork,
+          subtitle: l10n.landscapeLyricsArtworkDescription,
+          keywords: const ['landscape', 'lyrics', 'album art', 'details'],
+        ),
+        if (!isDesktopPlatform)
+          SettingsSearchEntry(
+            icon: Icons.fullscreen,
+            title: l10n.autoHideLyricsControls,
+            subtitle: l10n.autoHideLyricsControlsDescription,
+            keywords: const [
+              'lyrics',
+              'fullscreen',
+              '5 seconds',
+              'controls',
+              'idle',
+            ],
+          ),
+        SettingsSearchEntry(
+          icon: Icons.short_text,
+          title: l10n.compactPlayer,
+          subtitle: l10n.compactPlayerDescription,
+          keywords: const ['lyrics', 'compact', 'controls', 'mini', 'larger'],
+        ),
+        SettingsSearchEntry(
           icon: Icons.vibration,
           title: l10n.musicHaptics,
           subtitle: l10n.musicHapticsDescription,
@@ -324,6 +382,12 @@ class SettingsSearchCatalog {
           title: l10n.playbackOnHeadphonesConnected,
           subtitle: l10n.playbackOnHeadphonesConnectedDescription,
           keywords: const ['earphone', 'headphone', 'bluetooth', 'connect'],
+        ),
+        SettingsSearchEntry(
+          icon: Icons.linear_scale,
+          title: l10n.gaplessPlayback,
+          subtitle: l10n.gaplessPlaybackDescription,
+          keywords: const ['gapless', 'gap', 'silence', 'transition', 'album'],
         ),
         SettingsSearchEntry(
           icon: Icons.compare_arrows,
@@ -354,6 +418,20 @@ class SettingsSearchCatalog {
             targetLabel: l10n.usbBitPerfect,
           ),
         ],
+        if (isDesktopPlatform)
+          SettingsSearchEntry(
+            icon: Icons.speaker_outlined,
+            title: exclusiveOutputLabels(l10n).title,
+            subtitle: exclusiveOutputLabels(l10n).description,
+            keywords: const [
+              'exclusive',
+              'wasapi',
+              'hog mode',
+              'alsa',
+              'bit-perfect',
+              'mixer',
+            ],
+          ),
       ],
       metadata = [
         SettingsSearchEntry(
@@ -416,6 +494,19 @@ class SettingsSearchCatalog {
           title: l10n.lyricsKeepScreenOn,
           subtitle: l10n.lyricsKeepScreenOnSubtitle,
           keywords: const ['screen timeout', 'awake', 'sleep', 'layar'],
+        ),
+        SettingsSearchEntry(
+          icon: Icons.auto_awesome_outlined,
+          title: l10n.lyricsAiTranslation,
+          keywords: const [
+            'translate lyrics',
+            'api key',
+            'openai',
+            'gemini',
+            'claude',
+            'openrouter',
+            'ollama',
+          ],
         ),
         SettingsSearchEntry(
           icon: Icons.subtitles_outlined,
@@ -623,6 +714,17 @@ class SettingsSearchCatalog {
           icon: Icons.group_remove_outlined,
           title: l10n.downloadFilterContributing,
           keywords: const ['featured artist folder'],
+        ),
+        SettingsSearchEntry(
+          icon: Icons.drive_file_move_outlined,
+          title: l10n.reorganizeLibraryTitle,
+          subtitle: l10n.reorganizeLibrarySubtitle,
+          keywords: const [
+            'reorganize library',
+            'move files',
+            'rename files',
+            'existing downloads',
+          ],
         ),
         SettingsSearchEntry(
           icon: Icons.folder_special_outlined,

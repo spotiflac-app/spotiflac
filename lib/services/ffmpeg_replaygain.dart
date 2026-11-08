@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:spotiflac/services/ffmpeg_models.dart';
 import 'package:spotiflac/services/ffmpeg_support.dart';
 import 'package:spotiflac/utils/logger.dart';
@@ -38,6 +39,7 @@ abstract final class FFmpegReplayGain {
     return parseScan(result, onUnsupportedDecoder: onUnsupportedDecoder);
   }
 
+  @visibleForTesting
   static ReplayGainResult? parseScan(
     FFmpegResult result, {
     void Function()? onUnsupportedDecoder,

@@ -4,7 +4,11 @@ version '1.0'
 apply plugin: 'com.android.library'
 apply plugin: 'kotlin-android'
 
-def discordSdkEnabled = System.getenv('SPOTIFLAC_DISCORD_SDK') == '1'
+def discordSdkEnabled = System.getenv('SPOTIFLAC_DISCORD_SDK') != '0'
+def discordApplicationId = System.getenv('SPOTIFLAC_DISCORD_APPLICATION_ID') ?: '0'
+if (!(discordApplicationId ==~ /[0-9]+/)) {
+    throw new GradleException('SPOTIFLAC_DISCORD_APPLICATION_ID must contain decimal digits')
+}
 
 android {
     namespace 'com.spotiflac.app.discord'
@@ -15,7 +19,8 @@ android {
         externalNativeBuild {
             cmake {
                 arguments '-DANDROID_STL=c++_static',
-                    "-DSPOTIFLAC_DISCORD_SDK=${discordSdkEnabled ? 'ON' : 'OFF'}"
+                    "-DSPOTIFLAC_DISCORD_SDK=${discordSdkEnabled ? 'ON' : 'OFF'}",
+                    "-DSPOTIFLAC_DISCORD_APPLICATION_ID=${discordApplicationId}"
             }
         }
     }

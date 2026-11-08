@@ -103,7 +103,6 @@ void main() {
         return call.method == 'initialize' ? true : null;
       });
       final service = DiscordPresenceService(
-        integrationEnabled: true,
         channel: channel,
         requiresLink: false,
         resolveArtwork: (_) async => null,
@@ -145,7 +144,6 @@ void main() {
       return call.method == 'initialize' ? true : null;
     });
     final service = DiscordPresenceService(
-      integrationEnabled: true,
       channel: channel,
       requiresLink: false,
       resolveArtwork: (_) async => null,
@@ -184,7 +182,6 @@ void main() {
         return call.method == 'initialize' ? true : null;
       });
       final service = DiscordPresenceService(
-        integrationEnabled: true,
         channel: channel,
         requiresLink: false,
         now: tester.binding.clock.now,
@@ -244,7 +241,6 @@ void main() {
         return null;
       });
       final service = DiscordPresenceService(
-        integrationEnabled: true,
         channel: channel,
         requiresLink: true,
         resolveArtwork: (_) async => null,
@@ -277,7 +273,6 @@ void main() {
       (_) async => throw PlatformException(code: 'sdk_unavailable'),
     );
     final service = DiscordPresenceService(
-      integrationEnabled: true,
       channel: channel,
       requiresLink: false,
       resolveArtwork: (_) async => null,
@@ -312,7 +307,6 @@ void main() {
       return null;
     });
     final service = DiscordPresenceService(
-      integrationEnabled: true,
       channel: channel,
       requiresLink: true,
       resolveArtwork: (_) async => null,

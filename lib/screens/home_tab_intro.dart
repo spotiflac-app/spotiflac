@@ -2,101 +2,336 @@ part of 'home_tab.dart';
 
 const _homeShelfLimit = 10;
 const _homeShelfCoverSize = 120.0;
+const _homeMixCoverSize = 152.0;
+const _homeDesktopShelfCoverSize = 168.0;
+const _homeDesktopMixCoverSize = 192.0;
+const _homeSpotiFLACShelfGap = 16.0;
+
+/// The pane width from which the Material desktop Home sets Continue
+/// listening and Shortcuts side by side.
+const _homeDesktopColumnsMinWidth = 720.0;
+
+/// Whether Home lays out for a pointer and a wide pane rather than a phone:
+/// the Material desktop app. The SpotiFLAC style keeps its own Home.
+bool _homeDesktop(BuildContext context) =>
+    isDesktopPlatform && !context.isSpotiFLAC;
+
+double _homeShelfCoverSizeOf(BuildContext context) =>
+    _homeDesktop(context) ? _homeDesktopShelfCoverSize : _homeShelfCoverSize;
+
+double _homeMixCoverSizeOf(BuildContext context) =>
+    _homeDesktop(context) ? _homeDesktopMixCoverSize : _homeMixCoverSize;
+
+double _homeShelfRadiusOf(BuildContext context) =>
+    context.isSpotiFLAC ? 10 : 20;
+
+/// Whether Home uses compact SpotiFLAC desktop typography.
+bool _homeCompactText(BuildContext context) =>
+    context.isSpotiFLAC && isDesktopPlatform;
+
+typedef HomeRecentlyAdded = ({List<UnifiedLibraryItem> items, int trackCount});
 
 /// The newest downloaded and scanned tracks, with the Library's track count
-/// for the shortcut at the end of the shelf.
-final _homeRecentlyAddedProvider =
-    FutureProvider.autoDispose<
-      ({List<UnifiedLibraryItem> items, int trackCount})
-    >((ref) async {
-      final includeLocal = ref.watch(
-        settingsProvider.select((s) => s.localLibraryEnabled),
-      );
-      // Reload when a download lands or a scan rebuilds the index.
-      ref.watch(downloadHistoryProvider.select((s) => s.items.length));
-      ref.watch(localLibraryProvider.select((s) => s.loadedIndexVersion));
-      final database = LibraryDatabase.instance;
-      final rows = await database.getQueueTrackPage(
+/// for the shortcut at the end of the shelf. A reload that finds the same
+/// songs keeps the same list, so Home does not rebuild for it.
+final homeRecentlyAddedProvider = FutureProvider.autoDispose<HomeRecentlyAdded>(
+  (ref) async {
+    final includeLocal = ref.watch(
+      settingsProvider.select((s) => s.localLibraryEnabled),
+    );
+    // Reload when a download lands or a scan rebuilds the index. Downloads
+    // in a batch arrive coalesced, at most one revision a second.
+    ref.watch(downloadHistoryProvider.select((s) => s.loadedIndexVersion));
+    if (includeLocal) ref.watch(localLibraryIndexRevisionProvider);
+    final memo = ref.read(_homeShelfMemoProvider);
+    final (rows, counts) = await (
+      LibraryDatabase.instance.getQueueTrackPage(
         QueueLibraryDbQuery(includeLocal: includeLocal, limit: _homeShelfLimit),
-      );
-      final counts = await database.getQueueCounts(
-        QueueLibraryDbQuery(includeLocal: includeLocal),
-      );
-      final items = <UnifiedLibraryItem>[];
-      for (final row in rows) {
-        final json = Map<String, dynamic>.from(row['item'] as Map);
-        switch (row['source']) {
-          case 'local':
-            items.add(
-              UnifiedLibraryItem.fromLocalLibrary(
-                LocalLibraryItem.fromJson(json),
-              ),
-            );
-          case 'downloaded':
-            items.add(
-              UnifiedLibraryItem.fromDownloadHistory(
-                DownloadHistoryItem.fromJson(json),
-              ),
-            );
-        }
+      ),
+      // The Library tab's badges count the same Library; one count serves
+      // both.
+      ref.watch(
+        libraryCountsProvider(
+          LibraryCountsRequest.all(localLibraryEnabled: includeLocal),
+        ).future,
+      ),
+    ).wait;
+    final last = memo.recentlyAdded;
+    if (last != null && _sameQueueRows(last.rows, rows)) {
+      return (items: last.items, trackCount: counts.allTrackCount);
+    }
+    final items = <UnifiedLibraryItem>[];
+    for (final row in rows) {
+      final json = Map<String, dynamic>.from(row['item'] as Map);
+      switch (row['source']) {
+        case 'local':
+          items.add(
+            UnifiedLibraryItem.fromLocalLibrary(
+              LocalLibraryItem.fromJson(json),
+            ),
+          );
+        case 'downloaded':
+          items.add(
+            UnifiedLibraryItem.fromDownloadHistory(
+              DownloadHistoryItem.fromJson(json),
+            ),
+          );
       }
-      return (items: items, trackCount: counts.allTrackCount);
-    });
+    }
+    memo.recentlyAdded = (rows: rows, items: items);
+    return (items: items, trackCount: counts.allTrackCount);
+  },
+);
 
-typedef _HomeRepeatTrack = ({ListeningTrack track, UnifiedLibraryItem? item});
+bool _sameQueueRows(
+  List<Map<String, dynamic>> first,
+  List<Map<String, dynamic>> second,
+) {
+  if (first.length != second.length) return false;
+  for (var index = 0; index < first.length; index++) {
+    final (a, b) = (first[index], second[index]);
+    if (a['source'] != b['source'] ||
+        !mapEquals(a['item'] as Map?, b['item'] as Map?)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+typedef HomeRepeatTrack = ({ListeningTrack track, UnifiedLibraryItem? item});
+
+/// Candidates read from the statistics at a time; most shelves fill from
+/// the first page.
+const _homeRepeatPage = 40;
 
 /// The most played files of the last four weeks, matched to their current
 /// Library entry. Statistics keep the artwork seen at play time, which may
 /// since have been evicted from a cache or rescanned away.
-final _homeOnRepeatProvider =
-    FutureProvider.autoDispose<List<_HomeRepeatTrack>>((ref) async {
-      // A new track means the previous one may have just earned a play.
-      ref.watch(currentMediaItemProvider.select((s) => s.value?.id));
-      // A deleted download or a rescan can remove a track from the shelf.
-      ref.watch(downloadHistoryProvider.select((s) => s.items.length));
-      ref.watch(localLibraryProvider.select((s) => s.loadedIndexVersion));
-      await listeningRecorder.flush();
-      final now = DateTime.now();
-      final summary = await ListeningStatisticsStore.instance.load(
-        DateTime(now.year, now.month, now.day - 27),
-        DateTime(now.year, now.month, now.day + 1),
+final homeOnRepeatProvider = FutureProvider.autoDispose<List<HomeRepeatTrack>>((
+  ref,
+) async {
+  final memo = ref.read(_homeShelfMemoProvider);
+  final tracks = await _homeReplayableTracks(ref, limit: _homeShelfLimit);
+  final last = memo.onRepeat;
+  if (last != null && _sameRepeatTracks(last, tracks)) return last;
+  return memo.onRepeat = tracks;
+});
+
+/// One song per recently played album, ordered by the latest listening day.
+final homeRecentlyPlayedProvider =
+    FutureProvider.autoDispose<List<HomeRepeatTrack>>((ref) async {
+      final memo = ref.read(_homeShelfMemoProvider);
+      final played = await _homeReplayableTracks(
+        ref,
+        limit: _homeShelfLimit * 3,
+        latestFirst: true,
       );
-      final history = ref.read(downloadHistoryProvider.notifier);
-      final database = LibraryDatabase.instance;
-      final tracks = <_HomeRepeatTrack>[];
-      for (final total in summary.tracks) {
-        if (tracks.length == _homeShelfLimit) break;
-        final key = total.track.key;
-        // Remote sources cannot be replayed from their recorded key.
-        if (total.plays <= 0 ||
-            key.startsWith('http://') ||
-            key.startsWith('https://')) {
-          continue;
-        }
-        final downloaded = await history.getByFilePathAsync(key);
-        if (downloaded != null) {
-          tracks.add((
-            track: total.track,
-            item: UnifiedLibraryItem.fromDownloadHistory(downloaded),
-          ));
-          continue;
-        }
-        final ids = await database.getPhysicalFileIds([key]);
-        final row = ids.isEmpty ? null : await database.getById(ids.first);
-        if (row != null) {
-          tracks.add((
-            track: total.track,
-            item: UnifiedLibraryItem.fromLocalLibrary(
-              LocalLibraryItem.fromJson(row),
-            ),
-          ));
-          continue;
-        }
-        // Files played from outside the Library stay while they still exist.
-        if (await fileExists(key)) tracks.add((track: total.track, item: null));
-      }
-      return tracks;
+      final albums = <String>{};
+      final tracks = [
+        for (final entry in played)
+          if (albums.add(
+            entry.track.album.isEmpty
+                ? entry.track.key
+                : '${entry.track.artist}/${entry.track.album}',
+          ))
+            entry,
+      ].take(_homeShelfLimit).toList();
+      final last = memo.recentlyPlayed;
+      if (last != null && _sameRepeatTracks(last, tracks)) return last;
+      return memo.recentlyPlayed = tracks;
     });
+
+/// Up to [limit] played songs of the last four weeks that can be played
+/// again, matched to the Library. Reloads with what changes them.
+Future<List<HomeRepeatTrack>> _homeReplayableTracks(
+  Ref ref, {
+  required int limit,
+  bool latestFirst = false,
+}) async {
+  // A track that ends may have just earned a play. One that starts after
+  // none, such as a restored session's, follows no play.
+  ref.listen(currentMediaItemProvider.select((s) => s.value?.id), (
+    previous,
+    _,
+  ) {
+    if (previous != null) ref.invalidateSelf();
+  });
+  // A deleted download or a rescan can remove a track from the shelf.
+  final historyVersion = ref.watch(
+    downloadHistoryProvider.select((s) => s.loadedIndexVersion),
+  );
+  final localRevision = ref.watch(localLibraryIndexRevisionProvider);
+  final includeLocal = ref.watch(
+    settingsProvider.select((s) => s.localLibraryEnabled),
+  );
+  final history = ref.read(downloadHistoryProvider.notifier);
+  final memo = ref.read(_homeShelfMemoProvider);
+  // Library matches hold until the Library changes, so a new track only
+  // reads the statistics again.
+  final library = (historyVersion, localRevision, includeLocal);
+  if (memo.repeatLibrary != library) {
+    // A new map, so a load still running for the old Library keeps its own.
+    memo
+      ..repeatLibrary = library
+      ..repeatMatches = {};
+  }
+  final matches = memo.repeatMatches;
+  await listeningRecorder.flush();
+  final now = DateTime.now();
+  final start = DateTime(now.year, now.month, now.day - 27);
+  final end = DateTime(now.year, now.month, now.day + 1);
+  final tracks = <HomeRepeatTrack>[];
+  for (var offset = 0; ; offset += _homeRepeatPage) {
+    // Played files and network songs only: remote sources cannot be
+    // replayed from their recorded key.
+    final totals = await ListeningStatisticsStore.instance.loadReplayableTracks(
+      start,
+      end,
+      limit: _homeRepeatPage,
+      offset: offset,
+      latestFirst: latestFirst,
+    );
+    // Matched in rounds of the songs still missing, so no more songs are
+    // looked up than one at a time would.
+    var next = 0;
+    while (tracks.length < limit && next < totals.length) {
+      final round = totals.skip(next).take(limit - tracks.length).toList();
+      next += round.length;
+      tracks.addAll(
+        await _homeRepeatTracks(
+          round,
+          history: history,
+          includeLocal: includeLocal,
+          matches: matches,
+        ),
+      );
+    }
+    if (tracks.length == limit || totals.length < _homeRepeatPage) break;
+  }
+  return tracks;
+}
+
+/// A played key's Library entry: a download or a scanned file, or none.
+/// [hidden] is a scanned file while Local Library is off.
+typedef _HomeRepeatMatch = ({UnifiedLibraryItem? item, bool hidden});
+
+/// [totals] that can still play, in order, matched to their Library entry
+/// as a download first, then as a scanned file. All lookups of a round run
+/// together; [matches] keeps them while the Library stays the same.
+Future<List<HomeRepeatTrack>> _homeRepeatTracks(
+  List<ListeningTotal> totals, {
+  required DownloadHistoryNotifier history,
+  required bool includeLocal,
+  required Map<String, _HomeRepeatMatch> matches,
+}) async {
+  final missing = [
+    for (final total in totals)
+      if (!matches.containsKey(total.track.key)) total.track.key,
+  ];
+  if (missing.isNotEmpty) {
+    final database = LibraryDatabase.instance;
+    final downloads = await Future.wait([
+      for (final key in missing) history.getByFilePathAsync(key),
+    ]);
+    final scannedKeys = [
+      for (final (index, key) in missing.indexed)
+        if (downloads[index] == null) key,
+    ];
+    final scannedIds = await Future.wait([
+      for (final key in scannedKeys) database.getPhysicalFileIds([key]),
+    ]);
+    // With Local Library off its songs stay off Home as well.
+    final rows = includeLocal
+        ? {
+            for (final row in await database.getByIds([
+              for (final ids in scannedIds)
+                if (ids.isNotEmpty) ids.first,
+            ]))
+              row['id']: row,
+          }
+        : const <Object?, Map<String, dynamic>>{};
+    for (final (index, key) in missing.indexed) {
+      if (downloads[index] case final downloaded?) {
+        matches[key] = (
+          item: UnifiedLibraryItem.fromDownloadHistory(downloaded),
+          hidden: false,
+        );
+      }
+    }
+    for (final (index, key) in scannedKeys.indexed) {
+      final ids = scannedIds[index];
+      final row = ids.isEmpty ? null : rows[ids.first];
+      matches[key] = (
+        item: row == null
+            ? null
+            : UnifiedLibraryItem.fromLocalLibrary(
+                LocalLibraryItem.fromJson(row),
+              ),
+        hidden: ids.isNotEmpty && !includeLocal,
+      );
+    }
+  }
+  // Files played from outside the Library stay while they still exist,
+  // checked each time since they can go at any moment.
+  final outside = [
+    for (final total in totals)
+      if (matches[total.track.key] case (item: null, hidden: false))
+        total.track.key,
+  ];
+  final present = await Future.wait(outside.map(fileExists));
+  final exists = {
+    for (final (index, key) in outside.indexed) key: present[index],
+  };
+  return [
+    for (final total in totals)
+      if (matches[total.track.key]! case (
+        :final item,
+        :final hidden,
+      ) when !hidden && (item != null || exists[total.track.key]!))
+        (track: total.track, item: item),
+  ];
+}
+
+bool _sameRepeatTracks(
+  List<HomeRepeatTrack> first,
+  List<HomeRepeatTrack> second,
+) {
+  if (first.length != second.length) return false;
+  for (var index = 0; index < first.length; index++) {
+    final (a, b) = (first[index], second[index]);
+    if (a.track.key != b.track.key ||
+        a.track.title != b.track.title ||
+        a.track.artist != b.track.artist ||
+        a.track.album != b.track.album ||
+        a.track.artwork != b.track.artwork ||
+        !_sameLibraryItem(a.item, b.item)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool _sameLibraryItem(UnifiedLibraryItem? first, UnifiedLibraryItem? second) =>
+    identical(first, second) ||
+    first != null &&
+        second != null &&
+        mapEquals(first.historyItem?.toJson(), second.historyItem?.toJson()) &&
+        mapEquals(first.localItem?.toJson(), second.localItem?.toJson());
+
+/// What the Home shelves read last, kept for the app's lifetime, so a reload
+/// that finds the same songs returns the same value.
+class _HomeShelfMemo {
+  ({List<Map<String, dynamic>> rows, List<UnifiedLibraryItem> items})?
+  recentlyAdded;
+  (int, int, bool)? repeatLibrary;
+  Map<String, _HomeRepeatMatch> repeatMatches = {};
+  List<HomeRepeatTrack>? onRepeat;
+  List<HomeRepeatTrack>? recentlyPlayed;
+}
+
+final _homeShelfMemoProvider = Provider<_HomeShelfMemo>(
+  (ref) => _HomeShelfMemo(),
+);
 
 /// The prompt under the Home greeting, picked again on each launch.
 class _HomeTagline extends StatelessWidget {
@@ -124,24 +359,79 @@ class _HomeSections extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
-    final hasMediaItem = ref.watch(
-      currentMediaItemProvider.select((s) => s.value != null),
+    final showPlayer = ref.watch(playerUiEnabledProvider);
+    final hasMediaItem =
+        showPlayer &&
+        ref.watch(currentMediaItemProvider.select((s) => s.value != null));
+    // Only values: a reload's loading state shows the previous one.
+    final hasResume =
+        showPlayer &&
+        ref.watch(playbackResumeProvider.select((s) => s.value != null));
+    final recentlyAdded = ref.watch(
+      homeRecentlyAddedProvider.select((s) => s.value),
     );
-    final recentlyAdded = ref.watch(_homeRecentlyAddedProvider).value;
-    final onRepeat = ref.watch(_homeOnRepeatProvider).value ?? const [];
+    final onRepeat =
+        ref.watch(homeOnRepeatProvider.select((s) => s.value)) ?? const [];
+    final mixes =
+        ref.watch(libraryMixesProvider.select((s) => s.value)) ?? const [];
 
+    final showContinue = hasMediaItem || hasResume;
+
+    final spotiflac = context.isSpotiFLAC;
+    final recentlyPlayed = spotiflac
+        ? ref.watch(homeRecentlyPlayedProvider.select((s) => s.value)) ??
+              const <HomeRepeatTrack>[]
+        : const <HomeRepeatTrack>[];
+    // The card only stands in once nothing was played: while the shelf
+    // loads, it would show and then give way to Recently Played.
+    final recentlyPlayedLoading =
+        spotiflac &&
+        ref.watch(
+          homeRecentlyPlayedProvider.select((s) => !s.hasValue && !s.hasError),
+        );
+    final hasTopPicks = spotiflac && _HomeTopPicksSection.hasPicks(ref);
     final sections = <Widget>[
-      if (hasMediaItem)
+      if (hasTopPicks) _HomeTopPicksSection(inset: inset),
+      if (_homeDesktop(context))
+        _HomeDesktopTop(inset: inset, showContinue: showContinue)
+      else ...[
+        if (recentlyPlayed.isNotEmpty)
+          _HomeSection(
+            title: l10n.homeRecentlyPlayed,
+            inset: inset,
+            shelf: true,
+            onShowAll: () => pushPage<void>(
+              context,
+              (_) => const ListeningStatisticsScreen(),
+            ),
+            child: _HomeRecentlyPlayedShelf(
+              tracks: recentlyPlayed,
+              inset: inset + 8,
+            ),
+          )
+        else if (showContinue && !recentlyPlayedLoading)
+          _HomeSection(
+            title: l10n.homeContinueListening,
+            inset: inset,
+            child: const _HomeContinueListeningCard(),
+          ),
+        // SpotiFLAC exposes these tools in the player and Settings.
+        if (!spotiflac)
+          _HomeSection(
+            title: l10n.homeShortcuts,
+            inset: inset,
+            child: const _HomeShortcuts(),
+          ),
+      ],
+      // Built after startup settles when nothing is cached: the sections'
+      // size animation opens its space rather than letting it jump in.
+      if (!spotiflac && mixes.isNotEmpty)
         _HomeSection(
-          title: l10n.homeContinueListening,
+          title: l10n.homeMixesForYou,
           inset: inset,
-          child: const _HomeContinueListeningCard(),
+          shelf: true,
+          child: _HomeMixesShelf(mixes: mixes, inset: inset),
         ),
-      _HomeSection(
-        title: l10n.homeShortcuts,
-        inset: inset,
-        child: const _HomeShortcuts(),
-      ),
       if (recentlyAdded != null && recentlyAdded.items.isNotEmpty)
         _HomeSection(
           title: l10n.homeRecentlyAdded,
@@ -150,7 +440,7 @@ class _HomeSections extends ConsumerWidget {
           child: _HomeRecentlyAddedShelf(
             items: recentlyAdded.items,
             trackCount: recentlyAdded.trackCount,
-            inset: inset,
+            inset: spotiflac ? inset + 8 : inset,
           ),
         ),
       if (onRepeat.isNotEmpty)
@@ -158,7 +448,10 @@ class _HomeSections extends ConsumerWidget {
           title: l10n.homeOnRepeat,
           inset: inset,
           shelf: true,
-          child: _HomeOnRepeatShelf(tracks: onRepeat, inset: inset),
+          child: _HomeOnRepeatShelf(
+            tracks: onRepeat,
+            inset: spotiflac ? inset + 8 : inset,
+          ),
         ),
     ];
 
@@ -177,12 +470,93 @@ class _HomeSections extends ConsumerWidget {
   }
 }
 
+/// Continue listening and Shortcuts on the Material desktop Home: side by
+/// side at one height once the pane is wide enough, the shortcuts as a list
+/// beside the player and as one row without it.
+class _HomeDesktopTop extends StatelessWidget {
+  const _HomeDesktopTop({required this.inset, required this.showContinue});
+
+  final double inset;
+  final bool showContinue;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    if (!showContinue) {
+      return _HomeSection(
+        title: l10n.homeShortcuts,
+        inset: inset,
+        child: const _HomeShortcuts(layout: _HomeShortcutsLayout.row),
+      );
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth - 2 * inset < _homeDesktopColumnsMinWidth) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _HomeSection(
+                title: l10n.homeContinueListening,
+                inset: inset,
+                child: const _HomeContinueListeningCard(),
+              ),
+              const SizedBox(height: 28),
+              _HomeSection(
+                title: l10n.homeShortcuts,
+                inset: inset,
+                child: const _HomeShortcuts(layout: _HomeShortcutsLayout.row),
+              ),
+            ],
+          );
+        }
+        // Four shortcut rows of at least 56dp each set the shared height.
+        final textScale = MediaQuery.textScalerOf(context).scale(1);
+        final height = math.max(240.0, 4 * 56 * textScale + 3 * 4);
+        return Padding(
+          padding: EdgeInsets.symmetric(horizontal: inset),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 3,
+                child: _HomeSection(
+                  title: l10n.homeContinueListening,
+                  inset: 0,
+                  child: SizedBox(
+                    height: height,
+                    child: const _HomeContinueListeningCard(hero: true),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 24),
+              Expanded(
+                flex: 2,
+                child: _HomeSection(
+                  title: l10n.homeShortcuts,
+                  inset: 0,
+                  child: SizedBox(
+                    height: height,
+                    child: const _HomeShortcuts(
+                      layout: _HomeShortcutsLayout.list,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _HomeSection extends StatelessWidget {
   const _HomeSection({
     required this.title,
     required this.inset,
     required this.child,
     this.shelf = false,
+    this.onShowAll,
   });
 
   final String title;
@@ -192,9 +566,20 @@ class _HomeSection extends StatelessWidget {
   /// Shelves scroll edge to edge and pad their own items.
   final bool shelf;
 
+  /// Makes the title a navigation action, marked with a chevron.
+  final VoidCallback? onShowAll;
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final heading = Text(
+      title,
+      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+        color: colorScheme.onSurface,
+        fontSize: _homeCompactText(context) ? 15 : null,
+        fontWeight: FontWeight.w600,
+      ),
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -202,13 +587,30 @@ class _HomeSection extends StatelessWidget {
           padding: EdgeInsets.fromLTRB(inset + 8, 0, inset + 8, 12),
           child: Semantics(
             header: true,
-            child: Text(
-              title,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: colorScheme.onSurface,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            child: onShowAll == null
+                ? heading
+                : Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: onShowAll,
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(child: heading),
+                            const SizedBox(width: 4),
+                            Icon(
+                              CupertinoIcons.chevron_forward,
+                              size: 15,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
           ),
         ),
         if (shelf)
@@ -223,128 +625,241 @@ class _HomeSection extends StatelessWidget {
   }
 }
 
-/// The track loaded in the player, with its progress and a play-pause
-/// button.
-class _HomeContinueListeningCard extends ConsumerWidget {
-  const _HomeContinueListeningCard();
+/// The active track or the last dismissed session, with its saved progress.
+class _HomeContinueListeningCard extends ConsumerStatefulWidget {
+  const _HomeContinueListeningCard({this.hero = false});
 
-  static const _coverSize = 96.0;
+  /// The desktop card beside Shortcuts: the cover fills its height, the
+  /// title sits above, and the progress and play button run along the
+  /// bottom.
+  final bool hero;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final mediaItem = ref.watch(currentMediaItemProvider).value;
+  ConsumerState<_HomeContinueListeningCard> createState() =>
+      _HomeContinueListeningCardState();
+}
+
+class _HomeContinueListeningCardState
+    extends ConsumerState<_HomeContinueListeningCard> {
+  static const _coverSize = 96.0;
+  bool _resuming = false;
+
+  void _openPlayer() {
+    if (isDesktopPlatform) {
+      openDesktopNowPlaying();
+    } else {
+      Navigator.of(
+        context,
+        rootNavigator: true,
+      ).push(NowPlayingRoute(child: const NowPlayingScreen()));
+    }
+  }
+
+  Future<void> _resume({bool openPlayer = false}) async {
+    if (_resuming) return;
+    setState(() => _resuming = true);
+    try {
+      final resumed = await ref
+          .read(musicPlayerControllerProvider)
+          .resumeSavedSession();
+      if (!mounted) return;
+      ref.invalidate(playbackResumeProvider);
+      if (resumed && openPlayer) _openPlayer();
+    } finally {
+      if (mounted) setState(() => _resuming = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final current = ref.watch(currentMediaItemProvider).value;
+    final resume = ref.watch(playbackResumeProvider).value;
+    final mediaItem = current ?? resume?.media.toMediaItem();
     if (mediaItem == null) return const SizedBox.shrink();
 
-    final isPlaying = ref.watch(playbackPlayingProvider);
-    final isLoading = ref.watch(playbackLoadingProvider);
+    final isPlaying = current != null && ref.watch(playbackPlayingProvider);
+    final isLoading =
+        _resuming || (current != null && ref.watch(playbackLoadingProvider));
     final controller = ref.read(musicPlayerControllerProvider);
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final artist = mediaItem.artist ?? '';
+    final album = mediaItem.album ?? '';
+    final hero = widget.hero;
+    final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
+    // SpotiFLAC uses a neutral surface for the resume card.
+    final neutral = context.isSpotiFLAC;
+    final onContainer = neutral
+        ? colorScheme.onSurface
+        : colorScheme.onPrimaryContainer;
+    final dimmed = neutral
+        ? colorScheme.onSurfaceVariant
+        : colorScheme.onPrimaryContainer.withValues(alpha: 0.8);
+    final playColor = neutral ? colorScheme.onSurface : colorScheme.primary;
+    final onPlayColor = neutral ? colorScheme.surface : colorScheme.onPrimary;
 
-    return Material(
-      color: colorScheme.primaryContainer,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: isDesktopPlatform
-            ? openDesktopNowPlaying
-            : () => Navigator.of(
-                context,
-                rootNavigator: true,
-              ).push(NowPlayingRoute(child: const NowPlayingScreen())),
-        child: Padding(
-          padding: const EdgeInsetsDirectional.fromSTEB(12, 12, 16, 12),
-          child: Row(
-            children: [
-              ClipRRect(
+    Widget artwork(double extent) => PlayerArtwork(
+      // A network cover not stored yet shows once fetched.
+      artUri:
+          mediaItem.artUri?.toString() ??
+          mediaItem.extras?['artworkRef']?.toString(),
+      colorScheme: colorScheme,
+      cacheWidth: (extent * devicePixelRatio).round(),
+      iconSize: 32,
+    );
+
+    final title = Text(
+      mediaItem.title,
+      maxLines: hero ? 2 : 1,
+      overflow: TextOverflow.ellipsis,
+      style: (hero ? textTheme.headlineSmall : textTheme.titleLarge)?.copyWith(
+        color: onContainer,
+      ),
+    );
+    final artistLine = Text(
+      artist,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: (hero ? textTheme.titleMedium : textTheme.bodyMedium)?.copyWith(
+        color: dimmed,
+      ),
+    );
+    final progress = _HomeContinueListeningProgress(
+      duration: mediaItem.duration ?? Duration.zero,
+      savedPosition: current == null ? resume?.position : null,
+    );
+    final playButton = Tooltip(
+      message: isPlaying ? context.l10n.actionPause : context.l10n.tooltipPlay,
+      child: Semantics(
+        button: true,
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: isLoading
+                ? null
+                : current == null
+                ? _resume
+                : () => controller.togglePlayPause(isPlaying),
+            // Round like the mini player's play button, so the same action
+            // keeps the same shape across screens.
+            child: Ink(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: playColor,
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: isLoading
+                    ? AppLoadingIndicator(size: 24, color: onPlayColor)
+                    : Icon(
+                        isPlaying ? Icons.pause : Icons.play_arrow,
+                        size: 28,
+                        color: onPlayColor,
+                      ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final Widget content;
+    if (hero) {
+      content = Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AspectRatio(
+              aspectRatio: 1,
+              child: ClipRRect(
                 borderRadius: BorderRadius.circular(20),
-                child: SizedBox.square(
-                  dimension: _coverSize,
-                  child: PlayerArtwork(
-                    artUri: mediaItem.artUri?.toString(),
-                    colorScheme: colorScheme,
-                    cacheWidth:
-                        (_coverSize * MediaQuery.devicePixelRatioOf(context))
-                            .round(),
-                    iconSize: 32,
-                  ),
+                child: LayoutBuilder(
+                  builder: (context, constraints) =>
+                      artwork(constraints.maxHeight),
                 ),
               ),
-              const SizedBox(width: 16),
-              Expanded(
+            ),
+            const SizedBox(width: 24),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsetsDirectional.fromSTEB(0, 8, 4, 0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      mediaItem.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: textTheme.titleLarge?.copyWith(
-                        color: colorScheme.onPrimaryContainer,
-                      ),
-                    ),
-                    if (artist.isNotEmpty)
+                    title,
+                    if (artist.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      artistLine,
+                    ],
+                    if (album.isNotEmpty && album != mediaItem.title)
                       Text(
-                        artist,
+                        album,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: textTheme.bodyMedium?.copyWith(
-                          color: colorScheme.onPrimaryContainer.withValues(
-                            alpha: 0.8,
-                          ),
-                        ),
+                        style: textTheme.bodyMedium?.copyWith(color: dimmed),
                       ),
-                    const SizedBox(height: 12),
-                    _HomeContinueListeningProgress(
-                      duration: mediaItem.duration ?? Duration.zero,
+                    const Spacer(),
+                    Row(
+                      children: [
+                        Expanded(child: progress),
+                        const SizedBox(width: 16),
+                        playButton,
+                      ],
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
-              Tooltip(
-                message: isPlaying
-                    ? context.l10n.actionPause
-                    : context.l10n.tooltipPlay,
-                child: Semantics(
-                  button: true,
-                  child: Material(
-                    type: MaterialType.transparency,
-                    child: InkWell(
-                      customBorder: const CircleBorder(),
-                      onTap: isLoading
-                          ? null
-                          : () => controller.togglePlayPause(isPlaying),
-                      // Round like the mini player's play button, so the
-                      // same action keeps the same shape across screens.
-                      child: Ink(
-                        width: 56,
-                        height: 56,
-                        decoration: BoxDecoration(
-                          color: colorScheme.primary,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Center(
-                          child: isLoading
-                              ? AppLoadingIndicator(
-                                  size: 24,
-                                  color: colorScheme.onPrimary,
-                                )
-                              : Icon(
-                                  isPlaying ? Icons.pause : Icons.play_arrow,
-                                  size: 28,
-                                  color: colorScheme.onPrimary,
-                                ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
+      );
+    } else {
+      content = Padding(
+        padding: const EdgeInsetsDirectional.fromSTEB(12, 12, 16, 12),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: SizedBox.square(
+                dimension: _coverSize,
+                child: artwork(_coverSize),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  title,
+                  if (artist.isNotEmpty) artistLine,
+                  const SizedBox(height: 12),
+                  progress,
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            playButton,
+          ],
+        ),
+      );
+    }
+
+    return Material(
+      color: neutral
+          ? colorScheme.surfaceContainerHigh
+          : colorScheme.primaryContainer,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: isLoading
+            ? null
+            : current == null
+            ? () => _resume(openPlayer: true)
+            : _openPlayer,
+        child: content,
       ),
     );
   }
@@ -353,25 +868,37 @@ class _HomeContinueListeningCard extends ConsumerWidget {
 /// Follows position ticks on its own so the card above does not rebuild on
 /// every one.
 class _HomeContinueListeningProgress extends ConsumerWidget {
-  const _HomeContinueListeningProgress({required this.duration});
+  const _HomeContinueListeningProgress({
+    required this.duration,
+    this.savedPosition,
+  });
 
   final Duration duration;
+  final Duration? savedPosition;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
+    final neutral = context.isSpotiFLAC;
     final durationMs = duration.inMilliseconds;
-    final positionMs = ref.watch(playbackPositionProvider).inMilliseconds;
+    final Duration position =
+        savedPosition ?? ref.watch(playbackPositionProvider);
+    final positionMs = position.inMilliseconds;
     final progress = durationMs > 0
         ? (positionMs / durationMs).clamp(0.0, 1.0)
         : 0.0;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(2),
-      child: LinearProgressIndicator(
-        value: progress,
-        minHeight: 4,
-        color: colorScheme.primary,
-        backgroundColor: colorScheme.onPrimaryContainer.withValues(alpha: 0.16),
+    // Repaints on every position tick without repainting the sections.
+    return RepaintBoundary(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(2),
+        child: LinearProgressIndicator(
+          value: progress,
+          minHeight: 4,
+          color: neutral ? colorScheme.onSurface : colorScheme.primary,
+          backgroundColor:
+              (neutral ? colorScheme.onSurface : colorScheme.onPrimaryContainer)
+                  .withValues(alpha: 0.16),
+        ),
       ),
     );
   }
@@ -383,27 +910,61 @@ class _HomeShelf extends StatelessWidget {
     required this.inset,
     required this.itemCount,
     required this.itemBuilder,
+    this.coverSize,
   });
 
   final double inset;
   final int itemCount;
   final IndexedWidgetBuilder itemBuilder;
 
+  /// Null for the platform's shelf cover size.
+  final double? coverSize;
+
   @override
   Widget build(BuildContext context) {
     final textScale = MediaQuery.textScalerOf(context).scale(1);
+    final coverSize = this.coverSize ?? _homeShelfCoverSizeOf(context);
     return SizedBox(
-      height: _homeShelfCoverSize + 52 * textScale,
+      height: coverSize + 52 * textScale,
       child: DesktopScrollArrows(
         builder: (context, controller) => ListView.separated(
           controller: controller,
           scrollDirection: Axis.horizontal,
           padding: EdgeInsets.symmetric(horizontal: inset),
           itemCount: itemCount,
-          separatorBuilder: (_, _) => const SizedBox(width: 12),
+          separatorBuilder: (_, _) => SizedBox(
+            width: context.isSpotiFLAC ? _homeSpotiFLACShelfGap : 12,
+          ),
           itemBuilder: itemBuilder,
         ),
       ),
+    );
+  }
+}
+
+/// Hands [builder] the shelf cover size, fitting about six covers across a
+/// SpotiFLAC desktop pane.
+class _HomeShelfSize extends StatelessWidget {
+  const _HomeShelfSize({required this.inset, required this.builder});
+
+  final double inset;
+  final Widget Function(BuildContext context, double coverSize) builder;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!context.isSpotiFLAC) {
+      return builder(context, _homeShelfCoverSizeOf(context));
+    }
+    if (!isDesktopPlatform) return builder(context, 160);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final content = constraints.maxWidth - 2 * inset;
+        final perPane = (content + _homeSpotiFLACShelfGap) / 6.1;
+        return builder(
+          context,
+          (perPane - _homeSpotiFLACShelfGap).clamp(130.0, 280.0),
+        );
+      },
     );
   }
 }
@@ -415,6 +976,7 @@ class _HomeShelfTile extends StatelessWidget {
     required this.subtitle,
     required this.semanticLabel,
     required this.onTap,
+    this.size,
   });
 
   final Widget cover;
@@ -423,28 +985,31 @@ class _HomeShelfTile extends StatelessWidget {
   final String semanticLabel;
   final VoidCallback onTap;
 
+  /// Null for the platform's shelf cover size.
+  final double? size;
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final size = this.size ?? _homeShelfCoverSizeOf(context);
+    final radius = _homeShelfRadiusOf(context);
+    final compactText = _homeCompactText(context);
     return Semantics(
       button: true,
       label: semanticLabel,
       excludeSemantics: true,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(radius),
         child: SizedBox(
-          width: _homeShelfCoverSize,
+          width: size,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: SizedBox.square(
-                  dimension: _homeShelfCoverSize,
-                  child: cover,
-                ),
+                borderRadius: BorderRadius.circular(radius),
+                child: SizedBox.square(dimension: size, child: cover),
               ),
               const SizedBox(height: 8),
               Text(
@@ -453,6 +1018,8 @@ class _HomeShelfTile extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: textTheme.labelLarge?.copyWith(
                   color: colorScheme.onSurface,
+                  fontSize: compactText ? 13 : null,
+                  fontWeight: compactText ? FontWeight.w400 : null,
                 ),
               ),
               Text(
@@ -461,6 +1028,7 @@ class _HomeShelfTile extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: textTheme.bodySmall?.copyWith(
                   color: colorScheme.onSurfaceVariant,
+                  fontSize: compactText ? 13 : null,
                 ),
               ),
             ],
@@ -485,25 +1053,37 @@ class _HomeRecentlyAddedShelf extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
-    final cacheWidth =
-        (_homeShelfCoverSize * MediaQuery.devicePixelRatioOf(context)).round();
-    return _HomeShelf(
+    return _HomeShelfSize(
       inset: inset,
-      itemCount: items.length + 1,
-      itemBuilder: (context, index) {
-        if (index == items.length) {
-          return _HomeLibraryTile(trackCount: trackCount);
-        }
-        final item = items[index];
-        return _HomeShelfTile(
-          title: item.trackName,
-          subtitle: item.artistName,
-          semanticLabel: context.l10n.a11yOpenTrackByArtist(
-            item.trackName,
-            item.artistName,
-          ),
-          cover: _homeLibraryCover(item, colorScheme, cacheWidth),
-          onTap: () => _play(ref, index),
+      builder: (context, coverSize) {
+        final cacheWidth = (coverSize * MediaQuery.devicePixelRatioOf(context))
+            .round();
+        return _HomeShelf(
+          inset: inset,
+          coverSize: coverSize,
+          itemCount: items.length + 1,
+          itemBuilder: (context, index) {
+            if (index == items.length) {
+              return _HomeLibraryTile(trackCount: trackCount, size: coverSize);
+            }
+            final item = items[index];
+            return _HomeShelfTile(
+              size: coverSize,
+              title: item.trackName,
+              subtitle: item.artistName,
+              semanticLabel: context.l10n.a11yOpenTrackByArtist(
+                item.trackName,
+                item.artistName,
+              ),
+              cover: _homeLibraryCover(
+                item,
+                colorScheme,
+                coverSize,
+                cacheWidth,
+              ),
+              onTap: () => _play(ref, index),
+            );
+          },
         );
       },
     );
@@ -530,6 +1110,7 @@ class _HomeRecentlyAddedShelf extends ConsumerWidget {
 Widget _homeLibraryCover(
   UnifiedLibraryItem item,
   ColorScheme colorScheme,
+  double size,
   int cacheWidth,
 ) {
   final history = item.historyItem;
@@ -537,8 +1118,8 @@ Widget _homeLibraryCover(
     return _DownloadedOrRemoteCover(
       downloadedFilePath: history.filePath,
       imageUrl: history.coverUrl,
-      width: _homeShelfCoverSize,
-      height: _homeShelfCoverSize,
+      width: size,
+      height: size,
       borderRadius: BorderRadius.zero,
       fallbackIcon: Icons.music_note,
       fallbackIconSize: 32,
@@ -564,9 +1145,10 @@ PlayableMedia? _homePlayableFromLibrary(UnifiedLibraryItem item) =>
 
 /// Ends the Recently added shelf with a way into the whole Library.
 class _HomeLibraryTile extends StatelessWidget {
-  const _HomeLibraryTile({required this.trackCount});
+  const _HomeLibraryTile({required this.trackCount, required this.size});
 
   final int trackCount;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
@@ -575,11 +1157,11 @@ class _HomeLibraryTile extends StatelessWidget {
     return Align(
       alignment: Alignment.topCenter,
       child: SizedBox.square(
-        dimension: _homeShelfCoverSize,
+        dimension: size,
         child: Material(
           color: colorScheme.surfaceContainerHigh,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(_homeShelfRadiusOf(context)),
           ),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
@@ -629,104 +1211,391 @@ class _HomeLibraryTile extends StatelessWidget {
 class _HomeOnRepeatShelf extends ConsumerWidget {
   const _HomeOnRepeatShelf({required this.tracks, required this.inset});
 
-  final List<_HomeRepeatTrack> tracks;
+  final List<HomeRepeatTrack> tracks;
   final double inset;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
-    final cacheWidth =
-        (_homeShelfCoverSize * MediaQuery.devicePixelRatioOf(context)).round();
-    return _HomeShelf(
+    return _HomeShelfSize(
       inset: inset,
-      itemCount: tracks.length,
-      itemBuilder: (context, index) {
-        final (:track, :item) = tracks[index];
-        return _HomeShelfTile(
-          title: track.title,
-          subtitle: track.artist,
-          semanticLabel: context.l10n.a11yOpenTrackByArtist(
-            track.title,
-            track.artist,
-          ),
-          cover: item != null
-              ? _homeLibraryCover(item, colorScheme, cacheWidth)
-              : PlayerArtwork(
-                  artUri: track.artwork,
-                  colorScheme: colorScheme,
-                  cacheWidth: cacheWidth,
-                  iconSize: 32,
-                ),
-          onTap: () => ref.read(musicPlayerControllerProvider).playAll([
-            for (final (:track, :item) in tracks)
-              (item == null ? null : _homePlayableFromLibrary(item)) ??
-                  PlayableMedia(
-                    id: track.key,
-                    source: track.key,
-                    title: track.title,
-                    artist: track.artist,
-                    album: track.album,
-                    artUri: track.artwork,
-                  ),
-          ], initialIndex: index),
+      builder: (context, coverSize) {
+        final cacheWidth = (coverSize * MediaQuery.devicePixelRatioOf(context))
+            .round();
+        return _HomeShelf(
+          inset: inset,
+          coverSize: coverSize,
+          itemCount: tracks.length,
+          itemBuilder: (context, index) {
+            final (:track, :item) = tracks[index];
+            return _HomeShelfTile(
+              size: coverSize,
+              title: track.title,
+              subtitle: track.artist,
+              semanticLabel: context.l10n.a11yOpenTrackByArtist(
+                track.title,
+                track.artist,
+              ),
+              cover: item != null
+                  ? _homeLibraryCover(item, colorScheme, coverSize, cacheWidth)
+                  : PlayerArtwork(
+                      artUri: track.artwork,
+                      colorScheme: colorScheme,
+                      cacheWidth: cacheWidth,
+                      iconSize: 32,
+                    ),
+              onTap: () => _homePlayRepeatTracks(ref, tracks, index),
+            );
+          },
         );
       },
     );
   }
 }
 
+/// Recently played tracks displayed as large covers named by album.
+/// Choosing one plays from that song.
+class _HomeRecentlyPlayedShelf extends ConsumerWidget {
+  const _HomeRecentlyPlayedShelf({required this.tracks, required this.inset});
+
+  final List<HomeRepeatTrack> tracks;
+  final double inset;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return _HomeShelfSize(
+      inset: inset,
+      builder: (context, coverSize) {
+        final cacheWidth = (coverSize * MediaQuery.devicePixelRatioOf(context))
+            .round();
+        return _HomeShelf(
+          inset: inset,
+          coverSize: coverSize,
+          itemCount: tracks.length,
+          itemBuilder: (context, index) {
+            final (:track, :item) = tracks[index];
+            final title = track.album.isEmpty ? track.title : track.album;
+            return _HomeShelfTile(
+              size: coverSize,
+              title: title,
+              subtitle: track.artist,
+              semanticLabel: context.l10n.a11yOpenTrackByArtist(
+                title,
+                track.artist,
+              ),
+              cover: item != null
+                  ? _homeLibraryCover(item, colorScheme, coverSize, cacheWidth)
+                  : PlayerArtwork(
+                      artUri: track.artwork,
+                      colorScheme: colorScheme,
+                      cacheWidth: cacheWidth,
+                      iconSize: 32,
+                    ),
+              onTap: () => _homePlayRepeatTracks(ref, tracks, index),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+void _homePlayRepeatTracks(
+  WidgetRef ref,
+  List<HomeRepeatTrack> tracks,
+  int index,
+) => ref.read(musicPlayerControllerProvider).playAll([
+  for (final (:track, :item) in tracks)
+    (item == null ? null : _homePlayableFromLibrary(item)) ??
+        PlayableMedia(
+          id: track.key,
+          source: track.key,
+          title: track.title,
+          artist: track.artist,
+          album: track.album,
+          artUri: track.artwork,
+        ),
+], initialIndex: index);
+
+/// The day's mixes of the Library's own songs, larger than the other
+/// shelves' covers so the four-album collages stay legible.
+class _HomeMixesShelf extends StatelessWidget {
+  const _HomeMixesShelf({required this.mixes, required this.inset});
+
+  final List<LibraryMixView> mixes;
+  final double inset;
+
+  @override
+  Widget build(BuildContext context) {
+    final coverSize = _homeMixCoverSizeOf(context);
+    return _HomeShelf(
+      inset: inset,
+      coverSize: coverSize,
+      itemCount: mixes.length,
+      itemBuilder: (context, index) {
+        final view = mixes[index];
+        final title = libraryMixTitle(context.l10n, view.mix);
+        final subtitle = libraryMixSubtitle(context.l10n, view.mix);
+        return _HomeShelfTile(
+          size: coverSize,
+          title: title,
+          subtitle: subtitle,
+          semanticLabel: subtitle.isEmpty ? title : '$title, $subtitle',
+          cover: LibraryMixCover(items: view.items, size: coverSize),
+          onTap: () =>
+              pushPage<void>(context, (_) => LibraryMixScreen(view: view)),
+        );
+      },
+    );
+  }
+}
+
+/// SpotiFLAC's first shelf: the day's mixes as tall banners, a little over three
+/// to the pane on desktop and one with its neighbor peeking on phones.
+class _HomeTopPicksShelf extends StatelessWidget {
+  const _HomeTopPicksShelf({
+    required this.mixes,
+    required this.playlists,
+    required this.inset,
+  });
+
+  static const _gap = 16.0;
+
+  final List<LibraryMixView> mixes;
+  final List<ExploreItem> playlists;
+  final double inset;
+
+  /// One card: mixes and playlists share the banner, so the whole shelf reads
+  /// as SpotiFLAC's own whichever service a playlist came from.
+  Widget _card({
+    required int seed,
+    required String title,
+    required String eyebrow,
+    required String subtitle,
+    required double width,
+    required VoidCallback onTap,
+  }) {
+    return Semantics(
+      button: true,
+      label: subtitle.isEmpty ? title : '$title, $subtitle',
+      excludeSemantics: true,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Stack(
+          children: [
+            SpotiFLACMixBanner(
+              seed: seed,
+              title: title,
+              eyebrow: eyebrow,
+              subtitle: subtitle,
+              width: width,
+            ),
+            Positioned.fill(
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(onTap: onTap),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final seeds = spotiflacBannerSeeds([
+      for (final view in mixes) '${view.mix.kind.name}/${view.mix.key}',
+      for (final item in playlists) 'playlist/${item.providerId}/${item.id}',
+    ]);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final content = constraints.maxWidth - 2 * inset;
+        final width = isDesktopPlatform
+            ? ((content + _gap) / 4.6 - _gap).clamp(180.0, 320.0)
+            : math.min(content - 44, 280.0);
+        return SizedBox(
+          height: width / SpotiFLACMixBanner.aspectRatio,
+          child: DesktopScrollArrows(
+            builder: (context, controller) => ListView.separated(
+              controller: controller,
+              scrollDirection: Axis.horizontal,
+              padding: EdgeInsets.symmetric(horizontal: inset),
+              itemCount: mixes.length + playlists.length,
+              separatorBuilder: (_, _) => const SizedBox(width: _gap),
+              itemBuilder: (context, index) {
+                if (index >= mixes.length) {
+                  final item = playlists[index - mixes.length];
+                  return _card(
+                    seed: seeds[index],
+                    title: item.name,
+                    eyebrow: l10n.collectionPlaylist,
+                    subtitle: item.artists.isNotEmpty
+                        ? item.artists
+                        : item.description ?? '',
+                    width: width,
+                    onTap: () => pushPage<void>(
+                      context,
+                      (_) => ExtensionPlaylistScreen(
+                        extensionId: item.providerId ?? '',
+                        playlistId: item.id,
+                        playlistName: item.name,
+                        coverUrl: item.coverUrl,
+                      ),
+                    ),
+                  );
+                }
+                final view = mixes[index];
+                return _card(
+                  seed: seeds[index],
+                  title: libraryMixTitle(l10n, view.mix),
+                  eyebrow: l10n.homeMadeForYou,
+                  subtitle: libraryMixSubtitle(l10n, view.mix),
+                  width: width,
+                  onTap: () => pushPage<void>(
+                    context,
+                    (_) => LibraryMixScreen(view: view),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// SpotiFLAC's first section: the day's mixes, then random extension playlists.
+class _HomeTopPicksSection extends ConsumerWidget {
+  const _HomeTopPicksSection({required this.inset});
+
+  final double inset;
+
+  static bool hasPicks(WidgetRef ref) =>
+      ref.watch(
+        libraryMixesProvider.select((s) => s.value?.isNotEmpty ?? false),
+      ) ||
+      ref.watch(
+        homeTopPicksProvider.select((s) => s.value?.isNotEmpty ?? false),
+      );
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => _HomeSection(
+    title: context.l10n.homeTopPicks,
+    inset: inset,
+    shelf: true,
+    child: _HomeTopPicksShelf(
+      mixes: ref.watch(libraryMixesProvider.select((s) => s.value)) ?? const [],
+      playlists:
+          ref.watch(homeTopPicksProvider.select((s) => s.value)) ?? const [],
+      inset: inset + 8,
+    ),
+  );
+}
+
+enum _HomeShortcutsLayout {
+  /// Two columns of tall tiles, on phones and tablets.
+  grid,
+
+  /// One connected list that fills the height it is given, beside the
+  /// desktop Continue listening card.
+  list,
+
+  /// One row of short tiles across the desktop pane.
+  row,
+}
+
 /// Quick ways into player tools that otherwise sit a few screens deep.
 class _HomeShortcuts extends ConsumerWidget {
-  const _HomeShortcuts();
+  const _HomeShortcuts({this.layout = _HomeShortcutsLayout.grid});
+
+  final _HomeShortcutsLayout layout;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
     final colorScheme = Theme.of(context).colorScheme;
-    void open(Widget screen) => Navigator.of(
-      context,
-    ).push(MaterialPageRoute<void>(builder: (_) => screen));
+    void open(Widget screen) => pushPage<void>(context, (_) => screen);
 
     // Shuffle is the one emphasized action; the other tools share a neutral
-    // tile so color marks importance rather than varying per tile.
-    final tiles = [
-      _HomeShortcutTile(
+    // tile so color marks importance rather than varying per tile. SpotiFLAC
+    // keeps all shortcut tiles neutral.
+    final emphasized = context.isSpotiFLAC ? -1 : 0;
+    final shortcuts = <({String label, IconData icon, VoidCallback onTap})>[
+      (
         label: l10n.nowPlayingShuffleLibrary,
         icon: Icons.shuffle,
-        container: colorScheme.primaryContainer,
-        onContainer: colorScheme.onPrimaryContainer,
-        badge: colorScheme.primary,
-        onBadge: colorScheme.onPrimary,
         onTap: () => _shuffle(context, ref),
       ),
-      _HomeShortcutTile(
+      (
         label: l10n.equalizerTitle,
         icon: Icons.graphic_eq,
-        container: colorScheme.surfaceContainerHigh,
-        onContainer: colorScheme.onSurface,
-        badge: colorScheme.secondaryContainer,
-        onBadge: colorScheme.onSecondaryContainer,
         onTap: () => open(const EqualizerScreen()),
       ),
-      _HomeShortcutTile(
+      (
         label: l10n.listeningStats,
         icon: Icons.insights,
-        container: colorScheme.surfaceContainerHigh,
-        onContainer: colorScheme.onSurface,
-        badge: colorScheme.secondaryContainer,
-        onBadge: colorScheme.onSecondaryContainer,
         onTap: () => open(const ListeningStatisticsScreen()),
       ),
-      _HomeShortcutTile(
+      (
         label: l10n.networkStorage,
         icon: Icons.lan_outlined,
-        container: colorScheme.surfaceContainerHigh,
-        onContainer: colorScheme.onSurface,
-        badge: colorScheme.secondaryContainer,
-        onBadge: colorScheme.onSecondaryContainer,
         onTap: () => open(const NetworkStorageScreen()),
       ),
     ];
+    final tiles = [
+      for (final (index, shortcut) in shortcuts.indexed)
+        _HomeShortcutTile(
+          label: shortcut.label,
+          icon: shortcut.icon,
+          container: index == emphasized
+              ? colorScheme.primaryContainer
+              : colorScheme.surfaceContainerHigh,
+          onContainer: index == emphasized
+              ? colorScheme.onPrimaryContainer
+              : colorScheme.onSurface,
+          badge: index == emphasized
+              ? colorScheme.primary
+              : colorScheme.secondaryContainer,
+          onBadge: index == emphasized
+              ? colorScheme.onPrimary
+              : colorScheme.onSecondaryContainer,
+          onTap: shortcut.onTap,
+          layout: layout,
+          position: (index: index, count: shortcuts.length),
+        ),
+    ];
+
+    switch (layout) {
+      case _HomeShortcutsLayout.list:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final (index, tile) in tiles.indexed) ...[
+              if (index > 0) const SizedBox(height: 4),
+              Expanded(child: tile),
+            ],
+          ],
+        );
+      case _HomeShortcutsLayout.row:
+        // A label that wraps keeps its neighbors the same height.
+        return IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final (index, tile) in tiles.indexed) ...[
+                if (index > 0) const SizedBox(width: 8),
+                Expanded(child: tile),
+              ],
+            ],
+          ),
+        );
+      case _HomeShortcutsLayout.grid:
+        break;
+    }
 
     return Column(
       children: [
@@ -768,6 +1637,8 @@ class _HomeShortcutTile extends StatelessWidget {
     required this.badge,
     required this.onBadge,
     required this.onTap,
+    required this.layout,
+    required this.position,
   });
 
   final String label;
@@ -777,34 +1648,82 @@ class _HomeShortcutTile extends StatelessWidget {
   final Color badge;
   final Color onBadge;
   final VoidCallback onTap;
+  final _HomeShortcutsLayout layout;
+
+  /// Where the tile sits among the shortcuts, for the list's corners.
+  final ({int index, int count}) position;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: container,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
+    final badgeWidget = _HomeIconBadge(
+      icon: icon,
+      color: badge,
+      onColor: onBadge,
+    );
+    final text = Text(
+      label,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: Theme.of(
+        context,
+      ).textTheme.titleSmall?.copyWith(color: onContainer),
+    );
+    final BorderRadius radius;
+    final Widget content;
+    switch (layout) {
+      case _HomeShortcutsLayout.grid:
+        radius = BorderRadius.circular(24);
+        content = Padding(
           padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            children: [badgeWidget, const SizedBox(height: 16), text],
+          ),
+        );
+      case _HomeShortcutsLayout.list:
+        // One connected group: large outer corners, small inner ones.
+        const outer = Radius.circular(24);
+        const inner = Radius.circular(6);
+        final first = position.index == 0;
+        final last = position.index == position.count - 1;
+        radius = BorderRadius.vertical(
+          top: first ? outer : inner,
+          bottom: last ? outer : inner,
+        );
+        content = Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(12, 8, 16, 8),
+          child: Row(
             children: [
-              _HomeIconBadge(icon: icon, color: badge, onColor: onBadge),
-              const SizedBox(height: 16),
-              Text(
-                label,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleSmall?.copyWith(color: onContainer),
+              badgeWidget,
+              const SizedBox(width: 16),
+              Expanded(child: text),
+              const SizedBox(width: 8),
+              AppIcon.adaptive(
+                Icons.chevron_right,
+                size: 20,
+                color: onContainer.withValues(alpha: 0.7),
               ),
             ],
           ),
-        ),
-      ),
+        );
+      case _HomeShortcutsLayout.row:
+        radius = BorderRadius.circular(24);
+        content = Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              badgeWidget,
+              const SizedBox(width: 12),
+              Expanded(child: text),
+            ],
+          ),
+        );
+    }
+    return Material(
+      color: container,
+      shape: RoundedRectangleBorder(borderRadius: radius),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(onTap: onTap, child: content),
     );
   }
 }

@@ -1,12 +1,15 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:spotiflac/widgets/decorative_phase.dart';
 
 /// Three equalizer bars that mark the current track in a list.
 ///
 /// The bars move while [playing] and freeze where they are once playback
-/// pauses. Reduced motion keeps them still, and the ticker stops while a
-/// disabled [TickerMode] hides the glyph, such as on a covered route.
+/// pauses. Reduced motion keeps them still, and the motion stops while a
+/// disabled [TickerMode] hides the glyph, such as on a covered route, or
+/// while the app's window is not active.
 ///
 /// The glyph is decorative: the row it sits in carries the label, so it
 /// adds nothing to the semantics tree.
@@ -33,12 +36,25 @@ class NowPlayingIndicator extends StatefulWidget {
 }
 
 class _NowPlayingIndicatorState extends State<NowPlayingIndicator>
-    with SingleTickerProviderStateMixin {
-  late final _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 2400),
-  );
+    with WidgetsBindingObserver {
+  final _phase = DecorativePhase(const Duration(milliseconds: 2400));
   bool _motionEnabled = false;
+  bool _appActive = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    _appActive = lifecycle == null || lifecycle == AppLifecycleState.resumed;
+  }
+
+  // A window in the background keeps the glyph but not its animation.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _appActive = state == AppLifecycleState.resumed;
+    _syncAnimation();
+  }
 
   @override
   void didChangeDependencies() {
@@ -56,16 +72,17 @@ class _NowPlayingIndicatorState extends State<NowPlayingIndicator>
   }
 
   void _syncAnimation() {
-    if (_motionEnabled && widget.playing) {
-      if (!_controller.isAnimating) _controller.repeat();
+    if (_motionEnabled && _appActive && widget.playing) {
+      _phase.start();
     } else {
-      _controller.stop();
+      _phase.stop();
     }
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    _phase.dispose();
     super.dispose();
   }
 
@@ -77,7 +94,7 @@ class _NowPlayingIndicatorState extends State<NowPlayingIndicator>
       child: RepaintBoundary(
         child: CustomPaint(
           size: Size.square(widget.size),
-          painter: _EqualizerPainter(progress: _controller, color: color),
+          painter: _EqualizerPainter(progress: _phase, color: color),
         ),
       ),
     );
@@ -88,7 +105,7 @@ class _EqualizerPainter extends CustomPainter {
   _EqualizerPainter({required this.progress, required this.color})
     : super(repaint: progress);
 
-  final Animation<double> progress;
+  final ValueListenable<double> progress;
   final Color color;
 
   /// Two waves per bar, each a whole number of cycles per loop so the loop

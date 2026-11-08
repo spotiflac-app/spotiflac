@@ -5,6 +5,33 @@ import 'package:spotiflac/models/theme_settings.dart';
 import 'package:spotiflac/utils/artist_utils.dart';
 
 void main() {
+  test('AI translation defaults to Fast and remembers either mode', () {
+    expect(const AppSettings().lyricsAiWordSync, isFalse);
+    expect(AppSettings.fromJson({}).lyricsAiWordSync, isFalse);
+    for (final wordSync in [false, true]) {
+      final settings = const AppSettings().copyWith(lyricsAiWordSync: wordSync);
+      final restored = AppSettings.fromJson(settings.toJson());
+      expect(restored.lyricsAiWordSync, wordSync);
+      expect(restored.copyWith(locale: 'id').lyricsAiWordSync, wordSync);
+    }
+  });
+
+  test('Library sort restores every choice and tolerates old settings', () {
+    expect(AppSettings.fromJson({}).historySortMode, 'latest');
+    for (final invalid in [null, '', 'unsupported', 42]) {
+      expect(
+        AppSettings.fromJson({'historySortMode': invalid}).historySortMode,
+        'latest',
+      );
+    }
+    for (final sort in librarySortModes) {
+      final settings = const AppSettings().copyWith(historySortMode: sort);
+      final restored = AppSettings.fromJson(settings.toJson());
+      expect(restored.historySortMode, sort);
+      expect(restored.copyWith(historyViewMode: 'list').historySortMode, sort);
+    }
+  });
+
   test(
     'retired quality conversion settings do not enable automatic conversion',
     () {
@@ -54,13 +81,15 @@ void main() {
       expect(settings.autoConvertDownloads, isFalse);
       expect(settings.autoConvertFormat, 'mp3');
       expect(settings.autoConvertBitrate, '320k');
+      expect(settings.autoConvertMaxBitDepth, 16);
+      expect(settings.autoConvertMaxSampleRate, 48000);
       expect(
         settings.libraryQualityLabelMode,
         AppSettings.libraryQualityLabelBitDepthOnly,
       );
     });
 
-    test('deduplicates saved lyrics providers while preserving priority', () {
+    test('normalizes the old lyrics provider without duplicating it', () {
       final settings = AppSettings.fromJson({
         'lyricsProviders': [
           'lrclib',
@@ -137,6 +166,8 @@ void main() {
         autoConvertDownloads: true,
         autoConvertFormat: 'opus',
         autoConvertBitrate: '192k',
+        autoConvertMaxBitDepth: 24,
+        autoConvertMaxSampleRate: 96000,
         libraryQualityLabelMode: AppSettings.libraryQualityLabelBitDepthOnly,
         embeddedCoverMaxDimension: 1500,
       );
@@ -168,6 +199,8 @@ void main() {
       expect(decoded.autoConvertDownloads, isTrue);
       expect(decoded.autoConvertFormat, 'opus');
       expect(decoded.autoConvertBitrate, '192k');
+      expect(decoded.autoConvertMaxBitDepth, 24);
+      expect(decoded.autoConvertMaxSampleRate, 96000);
       expect(decoded.embeddedCoverMaxDimension, 1500);
     });
   });
@@ -198,12 +231,17 @@ void main() {
       expect(decoded.useSystemFont, isTrue);
       expect(copied.useSystemFont, isTrue);
       expect(ThemeSettings.fromJson({}).useSystemFont, isFalse);
-      expect(ThemeSettings.fromJson({}).spotiflacAccent, SpotiFLACAccent.red);
+      expect(ThemeSettings.fromJson({}).spotiflacAccent, SpotiFLACAccent.blue);
       expect(
         ThemeSettings.fromJson({
           kSpotiFLACAccentKey: 'unknown',
         }).spotiflacAccent,
+        SpotiFLACAccent.blue,
+      );
+      expect(
+        ThemeSettings.fromJson({kSpotiFLACAccentKey: 'red'}).spotiflacAccent,
         SpotiFLACAccent.red,
+        reason: 'a saved choice stays',
       );
       expect(
         ThemeSettings.fromJson({'theme_mode': 'invalid'}).themeMode,

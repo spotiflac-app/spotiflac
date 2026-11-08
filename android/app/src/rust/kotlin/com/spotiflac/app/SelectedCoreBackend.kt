@@ -264,43 +264,41 @@ internal object RustCoreBackend : CoreBackend {
         com.spotiflac.backend.checkHiresAuthenticity(path, optionsJson, null)
 
     override fun readAudioMetadata(path: String, hint: String, cacheKey: String): String {
+        if (path.startsWith("/proc/self/fd/") && path.removePrefix("/proc/self/fd/").toIntOrNull() != null) {
+            return readAudioMetadataObject(path, hint, cacheKey).toString()
+        }
+        return withMediaFiles(listOf(path)) {
+            it.readAudioMetadata(File(path).canonicalPath, hint, cacheKey, null)
+        }
+    }
+
+    override fun readAudioMetadataObject(path: String, hint: String, cacheKey: String): JSONObject {
         val descriptor = path.removePrefix("/proc/self/fd/").toIntOrNull()
         if (path.startsWith("/proc/self/fd/") && descriptor != null) {
             val directory = libraryCoverDirectory
             // Never key artwork by the descriptor number: Android reuses it.
             val key = cacheKey.trim().takeIf { it.isNotEmpty() }
-            val hash = key?.codePoints()?.reduce(5381) { hash, codePoint -> hash * 33 + codePoint }
-                ?.toUInt()?.toString(16)
-            val cached = if (directory != null && hash != null) {
-                listOf(File(directory, "cover_$hash.jpg"), File(directory, "cover_$hash.png"))
-                    .firstOrNull { it.isFile }
+            val slot = if (directory != null && key != null) {
+                com.spotiflac.backend.libraryCoverSlot(directory.path, key)
             } else null
+            val cached = slot?.cached?.let { File(it) }?.takeIf { it.length() > 0 }
             val result = com.spotiflac.backend.readLibraryMetadataFromDescriptor(
                 descriptor, hint, java.time.Instant.now().toString(),
-                directory != null && hash != null && cached == null, null,
+                slot != null && cached == null, null,
             )
             val metadata = JSONObject(result.metadataJson)
             var cover = cached
-            if (directory != null && hash != null && result.coverBytes.isNotEmpty()) {
+            if (directory != null && slot != null) {
                 try {
-                    val extension = if (result.coverMime.contains("png")) "png" else "jpg"
-                    val output = File(directory, "cover_$hash.$extension")
-                    val staged = File.createTempFile("cover_", ".tmp", directory)
-                    try {
-                        staged.writeBytes(result.coverBytes)
-                        check(staged.renameTo(output)) { "Could not publish library artwork" }
-                        cover = output
-                    } finally { staged.delete() }
+                    cover = AndroidLibraryCovers.cache(directory, cached, result.coverBytes, result.coverMime)
                 } catch (error: Exception) {
                     android.util.Log.w("SpotiFLAC", "Could not cache document artwork", error)
                 }
             }
             cover?.let { metadata.put("coverPath", it.path) }
-            return metadata.toString()
+            return metadata
         }
-        return withMediaFiles(listOf(path)) {
-            it.readAudioMetadata(File(path).canonicalPath, hint, cacheKey, null)
-        }
+        return JSONObject(readAudioMetadata(path, hint, cacheKey))
     }
 
     // Native callers have already selected/resolved these files through app or
@@ -388,7 +386,7 @@ internal object RustCoreBackend : CoreBackend {
             // Artwork remains optional, as in the filesystem CUE scanner.
             // A cover extraction failure must not discard valid CUE rows.
             val coverPath = try {
-                JSONObject(readAudioMetadata("/proc/self/fd/$descriptor", audioName, cacheKey)).optString("coverPath", "")
+                readAudioMetadataObject("/proc/self/fd/$descriptor", audioName, cacheKey).optString("coverPath", "")
             } catch (error: Exception) {
                 if (error is java.util.concurrent.CancellationException) throw error
                 android.util.Log.w("SpotiFLAC", "Could not read CUE artwork", error)

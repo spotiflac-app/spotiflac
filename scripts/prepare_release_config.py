@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate public, non-secret app endpoints for an independently hosted release."""
+"""Generate release endpoints and optional account integration definitions."""
 import argparse
 import json
 import os
@@ -26,6 +26,18 @@ def main() -> None:
         config = release_config(args.repository)
     except ValueError as error:
         parser.error(str(error))
+    lastfm_key = os.environ.get('LASTFM_API_KEY', '')
+    lastfm_secret = os.environ.get('LASTFM_API_SECRET', '')
+    if bool(lastfm_key) != bool(lastfm_secret):
+        parser.error('Last.fm requires both LASTFM_API_KEY and LASTFM_API_SECRET')
+    if lastfm_key:
+        config.update(LASTFM_API_KEY=lastfm_key, LASTFM_API_SECRET=lastfm_secret)
+    for name in ('SPOTIFLAC_TELEGRAM_CHANNEL_URL', 'SPOTIFLAC_TELEGRAM_CHAT_URL'):
+        value = os.environ.get(name, '')
+        if value:
+            if not re.fullmatch(r'https://(?:t\.me|telegram\.me)/\S+', value):
+                parser.error(f'{name} must be an HTTPS Telegram URL')
+            config[name] = value
     args.output.write_text(json.dumps(config, indent=2) + '\n', encoding='utf-8')
     print(f'Prepared public release endpoints for {args.repository}')
 

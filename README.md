@@ -2,6 +2,7 @@
 
 <p><b>SpotiFLAC 5.2.7 is available for Android, iOS, Windows, macOS and Linux.</b></p>
 <p><a href="https://github.com/spotiflac-app/spotiflac-releases/releases/tag/v5.2.7">Download v5.2.7 and verify its SHA-256 checksums</a></p>
+<p>Development source targets 5.3.1. Full release setup is described in <a href="docs/FEATURE_SETUP.md">account integrations</a>.</p>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/brand/logo/svg/spotiflac-lockup-horizontal-dark.svg">
@@ -27,6 +28,8 @@
 </p>
 
 Project setup: [release and signing instructions](docs/RELEASE_SETUP.md) · [ownership status](docs/OWNERSHIP_HANDOVER.md).
+
+Account integrations: [Discord and Last.fm setup](docs/FEATURE_SETUP.md).
 
 ## <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/sections/section-screenshots-dark.svg"><img src="assets/readme/sections/section-screenshots-light.svg" height="32" align="top" alt=""></picture> Screenshots
 

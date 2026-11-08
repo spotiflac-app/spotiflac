@@ -77,7 +77,7 @@ extension _TrackMetadataLyricsAndSaving on _TrackMetadataScreenState {
                     ),
                     ExpressiveButton(
                       text: true,
-                      onPressed: _fetchOnlineLyrics,
+                      onPressed: _fetchLyrics,
                       child: Text(context.l10n.dialogRetry),
                     ),
                   ],
@@ -136,7 +136,7 @@ extension _TrackMetadataLyricsAndSaving on _TrackMetadataScreenState {
                       ),
                     ),
                   ),
-                  if (!_lyricsEmbedded && _fileExists && !_isNetworkItem) ...[
+                  if (!_lyricsEmbedded && _canEditMetadataFile) ...[
                     const SizedBox(height: 16),
                     Center(
                       child: ExpressiveButton(
@@ -182,7 +182,7 @@ extension _TrackMetadataLyricsAndSaving on _TrackMetadataScreenState {
                   Center(
                     child: ExpressiveButton(
                       tonal: true,
-                      onPressed: _fetchOnlineLyrics,
+                      onPressed: _fetchLyrics,
                       icon: const Icon(Icons.cloud_download_outlined),
                       child: Text(context.l10n.trackFetchOnlineLyrics),
                     ),
@@ -193,7 +193,7 @@ extension _TrackMetadataLyricsAndSaving on _TrackMetadataScreenState {
               Center(
                 child: ExpressiveButton(
                   tonal: true,
-                  onPressed: _fetchLyrics,
+                  onPressed: () => _fetchLyrics(checkEmbedded: true),
                   icon: const Icon(Icons.download),
                   child: Text(context.l10n.trackLoadLyrics),
                 ),
@@ -293,8 +293,10 @@ extension _TrackMetadataLyricsAndSaving on _TrackMetadataScreenState {
     }
   }
 
-  /// Fetch lyrics from online providers. Only called by user action.
-  Future<void> _fetchOnlineLyrics() async {
+  /// Fetches lyrics from online providers. Only called by user action.
+  /// With [checkEmbedded], lyrics embedded in an existing file win; the
+  /// "Load Lyrics" button uses that.
+  Future<void> _fetchLyrics({bool checkEmbedded = false}) async {
     if (_lyricsLoading) return;
 
     _setState(() {
@@ -307,83 +309,7 @@ extension _TrackMetadataLyricsAndSaving on _TrackMetadataScreenState {
     try {
       final durationMs = (duration ?? 0) * 1000;
 
-      final result = await PlatformBridge.getLyricsLRCWithSource(
-        _spotifyId ?? '',
-        trackName,
-        artistName,
-        filePath: null,
-        durationMs: durationMs,
-      ).timeout(const Duration(seconds: 20));
-
-      final lrcText = result['lyrics']?.toString() ?? '';
-      final source = result['source']?.toString() ?? '';
-      final instrumental =
-          (result['instrumental'] as bool? ?? false) ||
-          isInstrumentalLyricsMarker(lrcText);
-      final cleanLyrics = cleanLyricsForDisplay(lrcText);
-
-      if (mounted) {
-        if (instrumental) {
-          _setState(() {
-            _lyrics = null;
-            _rawLyrics = null;
-            _isInstrumental = true;
-            _lyricsSource = source.isNotEmpty ? source : null;
-            _lyricsEmbedded = false;
-            _lyricsLoading = false;
-          });
-        } else if (cleanLyrics.isEmpty) {
-          _setState(() {
-            _lyrics = null;
-            _rawLyrics = null;
-            _lyricsSource = null;
-            _lyricsEmbedded = false;
-            _lyricsError = context.l10n.trackLyricsNotAvailable;
-            _lyricsLoading = false;
-          });
-        } else {
-          _setState(() {
-            _lyrics = cleanLyrics;
-            _rawLyrics = lrcText;
-            _lyricsSource = source.isNotEmpty ? source : null;
-            _lyricsEmbedded = false;
-            _lyricsLoading = false;
-          });
-        }
-      }
-    } on TimeoutException {
-      if (mounted) {
-        _setState(() {
-          _lyricsError = context.l10n.trackLyricsTimeout;
-          _lyricsLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        _setState(() {
-          _lyricsError = context.l10n.trackLyricsLoadFailed;
-          _lyricsLoading = false;
-        });
-      }
-    }
-  }
-
-  /// Full lyrics fetch: check embedded first, then online.
-  /// Used by the "Load Lyrics" button when file doesn't exist (non-local items).
-  Future<void> _fetchLyrics() async {
-    if (_lyricsLoading) return;
-
-    _setState(() {
-      _lyricsLoading = true;
-      _lyricsError = null;
-      _isInstrumental = false;
-      _lyricsSource = null;
-    });
-
-    try {
-      final durationMs = (duration ?? 0) * 1000;
-
-      if (_fileExists) {
+      if (checkEmbedded && _fileExists) {
         final embeddedResult = await _readLocalLyrics(cleanFilePath);
 
         final embeddedLyrics = embeddedResult['lyrics']?.toString() ?? '';
@@ -472,6 +398,10 @@ extension _TrackMetadataLyricsAndSaving on _TrackMetadataScreenState {
 
   Future<void> _embedLyrics() async {
     if (_isEmbedding || _rawLyrics == null || !_fileExists) return;
+    if (_isNetworkItem) {
+      await _embedNetworkLyrics();
+      return;
+    }
 
     _setState(() => _isEmbedding = true);
 
@@ -564,19 +494,19 @@ extension _TrackMetadataLyricsAndSaving on _TrackMetadataScreenState {
         );
         String? ffmpegResult;
         if (isMp3) {
-          ffmpegResult = await FFmpegService.embedMetadataToMp3(
+          ffmpegResult = await FFmpegMetadata.embedMetadataToMp3(
             mp3Path: workingPath,
             coverPath: coverPath,
             metadata: metadata,
           );
         } else if (isM4A) {
-          ffmpegResult = await FFmpegService.embedMetadataToM4a(
+          ffmpegResult = await FFmpegMetadata.embedMetadataToM4a(
             m4aPath: workingPath,
             coverPath: coverPath,
             metadata: metadata,
           );
         } else {
-          ffmpegResult = await FFmpegService.embedMetadataToOpus(
+          ffmpegResult = await FFmpegMetadata.embedMetadataToOpus(
             opusPath: workingPath,
             coverPath: coverPath,
             metadata: metadata,
@@ -643,6 +573,67 @@ extension _TrackMetadataLyricsAndSaving on _TrackMetadataScreenState {
     }
   }
 
+  Future<void> _embedNetworkLyrics() async {
+    if (!_canEditMetadataFile) return;
+    final sourcePath = cleanFilePath;
+    final lyrics = _rawLyrics!;
+    final artistTagMode = artistTagModeForExistingTags(
+      ref.read(settingsProvider).artistTagMode,
+    );
+    final covers = MetadataCoverResources();
+    _setState(() => _isEmbedding = true);
+    try {
+      final current = await readPlaybackFileMetadataWithRetry(sourcePath);
+      if (!mounted || cleanFilePath != sourcePath) return;
+      final fields = _metadataEditorValues(current)..['lyrics'] = lyrics;
+      fields['track_total'] = fields.remove('total_tracks')!;
+      fields['disc_total'] = fields.remove('total_discs')!;
+      fields['compilation'] =
+          fields['album_type']?.toLowerCase() == 'compilation' ? '1' : '0';
+      final saved = await MetadataPersistenceService(covers: covers).save(
+        MetadataSaveRequest(
+          filePath: sourcePath,
+          metadata: fields,
+          artistTagMode: artistTagMode,
+        ),
+      );
+      if (saved.failure != null) {
+        throw saved.error ??
+            StateError('Could not save lyrics to network storage');
+      }
+      final refreshed = await readPlaybackFileMetadataWithRetry(sourcePath);
+      if (!mounted || cleanFilePath != sourcePath) return;
+      _setState(() {
+        _editedMetadata = refreshed;
+        _rawLyrics = lyrics;
+        _lyrics = cleanLyricsForDisplay(lyrics);
+        _lyricsEmbedded = true;
+        _embeddedLyricsChecked = true;
+      });
+      await _syncNetworkLibraryMetadata(refreshed);
+      if (!mounted || cleanFilePath != sourcePath) return;
+      _markMetadataChanged();
+      showAppSnackBar(context, content: Text(context.l10n.trackLyricsEmbedded));
+    } catch (error) {
+      if (mounted && cleanFilePath == sourcePath) {
+        showAppSnackBar(
+          context,
+          content: Text(
+            context.friendlyError(
+              error,
+              fallback: context.l10n.snackbarFailedToEmbedLyrics,
+            ),
+          ),
+        );
+      }
+    } finally {
+      await covers.dispose();
+      if (mounted && cleanFilePath == sourcePath) {
+        _setState(() => _isEmbedding = false);
+      }
+    }
+  }
+
   String _sanitizeFileNameSegment(String value) {
     var sanitized = value
         .replaceAll(_TrackMetadataScreenState._invalidFileNameChars, '_')
@@ -683,7 +674,8 @@ extension _TrackMetadataLyricsAndSaving on _TrackMetadataScreenState {
   /// `writeTo` renders the file at the given path and returns the bridge
   /// result, or null when it has already told the user why nothing was
   /// written. SAF tracks are rendered into a temp directory and published to
-  /// the download tree; local tracks are written next to the audio file.
+  /// the download tree or the scanned audio document's parent; filesystem
+  /// tracks are written next to the audio file.
   /// Exceptions propagate to the caller.
   Future<void> _publishSidecarFile({
     required String baseName,
@@ -705,57 +697,49 @@ extension _TrackMetadataLyricsAndSaving on _TrackMetadataScreenState {
     final fileName = '$baseName.$extension';
 
     if (_isSafFile) {
-      final tempDir = await Directory.systemTemp.createTemp(tempDirPrefix);
-      final tempOutput = '${tempDir.path}${Platform.pathSeparator}$fileName';
-
-      final result = await writeTo(tempOutput);
-      if (result == null) {
-        return;
-      }
-
-      if (result['error'] != null) {
-        if (mounted) {
-          showMessage(
-            context.l10n.trackSaveFailed(
-              context.friendlyError(result['error']),
-            ),
-          );
-        }
-        try {
-          await Directory(tempDir.path).delete(recursive: true);
-        } catch (_) {}
-        return;
-      }
-
+      final audioUri = cleanFilePath;
       final treeUri = _downloadItem?.downloadTreeUri;
       final relativeDir = _downloadItem?.safRelativeDir ?? '';
-      if (treeUri != null && treeUri.isNotEmpty) {
-        final safUri = await PlatformBridge.createSafFileFromPath(
-          treeUri: treeUri,
-          relativeDir: relativeDir,
-          fileName: fileName,
-          mimeType: mimeType,
-          srcPath: tempOutput,
-        );
-        try {
-          await Directory(tempDir.path).delete(recursive: true);
-        } catch (_) {}
-        if (mounted) {
-          if (safUri != null) {
-            showMessage(successMessage());
-          } else {
+      final tempDir = await Directory.systemTemp.createTemp(tempDirPrefix);
+      final tempOutput = '${tempDir.path}${Platform.pathSeparator}$fileName';
+      try {
+        final result = await writeTo(tempOutput);
+        if (result == null) return;
+        if (result['error'] != null) {
+          if (mounted) {
             showMessage(
-              context.l10n.trackSaveFailed('Failed to write to storage'),
+              context.l10n.trackSaveFailed(
+                context.friendlyError(result['error']),
+              ),
             );
           }
+          return;
         }
-      } else {
-        try {
-          await Directory(tempDir.path).delete(recursive: true);
-        } catch (_) {}
+        final safUri = treeUri != null && treeUri.isNotEmpty
+            ? await PlatformBridge.createSafFileFromPath(
+                treeUri: treeUri,
+                relativeDir: relativeDir,
+                fileName: fileName,
+                mimeType: mimeType,
+                srcPath: tempOutput,
+              )
+            : await PlatformBridge.writeSafSidecarFromPath(
+                audioUri: audioUri,
+                fileName: fileName,
+                mimeType: mimeType,
+                srcPath: tempOutput,
+              );
         if (mounted) {
-          showMessage(context.l10n.trackSaveFailed('No storage access'));
+          showMessage(
+            safUri != null && safUri.isNotEmpty
+                ? successMessage()
+                : context.l10n.trackSaveFailed('No storage access'),
+          );
         }
+      } finally {
+        try {
+          await tempDir.delete(recursive: true);
+        } catch (_) {}
       }
       return;
     }
@@ -782,6 +766,10 @@ extension _TrackMetadataLyricsAndSaving on _TrackMetadataScreenState {
   Future<void> _saveCoverArt() async {
     try {
       final baseName = _buildSaveBaseName();
+      final audioPath = cleanFilePath;
+      final coverUrl = _coverUrl;
+      final cachedCover = _embeddedCoverPreviewPath ?? _localCoverPath;
+      final hasFile = _fileExists;
 
       await _publishSidecarFile(
         baseName: baseName,
@@ -792,24 +780,23 @@ extension _TrackMetadataLyricsAndSaving on _TrackMetadataScreenState {
         hideCurrentSnackBar: false,
         writeTo: (outputPath) async {
           Map<String, dynamic> result;
-          if (_fileExists) {
-            // Prefer extracting cover from the already-downloaded file to
-            // avoid a redundant network request.
+          if (hasFile) {
+            // Imported files carry their own embedded artwork as well.
             result = await PlatformBridge.extractCoverToFile(
-              cleanFilePath,
+              audioPath,
               outputPath,
             );
             if (result['error'] != null &&
-                _coverUrl != null &&
-                _coverUrl!.isNotEmpty) {
+                coverUrl != null &&
+                coverUrl.isNotEmpty) {
               result = await PlatformBridge.downloadCoverToFile(
-                _coverUrl!,
+                coverUrl,
                 outputPath,
               );
             }
-          } else if (_coverUrl != null && _coverUrl!.isNotEmpty) {
+          } else if (coverUrl != null && coverUrl.isNotEmpty) {
             result = await PlatformBridge.downloadCoverToFile(
-              _coverUrl!,
+              coverUrl,
               outputPath,
             );
           } else {
@@ -819,6 +806,18 @@ extension _TrackMetadataLyricsAndSaving on _TrackMetadataScreenState {
               );
             }
             return null;
+          }
+          if (result['error'] != null && cachedCover != null) {
+            final uri = Uri.tryParse(cachedCover);
+            final file = uri?.scheme == 'file'
+                ? File.fromUri(uri!)
+                : File(cachedCover);
+            if (await file.exists() && await file.length() > 0) {
+              if (file.absolute.path != File(outputPath).absolute.path) {
+                await file.copy(outputPath);
+              }
+              return {'success': true};
+            }
           }
           return result;
         },
@@ -883,6 +882,7 @@ extension _TrackMetadataLyricsAndSaving on _TrackMetadataScreenState {
     if (!_fileExists) return;
 
     try {
+      final container = ProviderScope.containerOf(context, listen: false);
       final settings = ref.read(settingsProvider);
       final artistTagMode = settings.artistTagMode;
       final messenger = ScaffoldMessenger.of(context);
@@ -956,6 +956,12 @@ extension _TrackMetadataLyricsAndSaving on _TrackMetadataScreenState {
           audioFilePath: cleanFilePath,
           reEnrichResult: result,
         );
+        await saveReEnrichedMotionArtwork(
+          container,
+          metadata: enriched ?? const {},
+          albumName: albumName,
+          artistName: artistName,
+        );
         await _refreshEmbeddedCoverPreview(force: true);
         _markMetadataChanged();
         await _syncDownloadHistoryMetadata(
@@ -1010,21 +1016,21 @@ extension _TrackMetadataLyricsAndSaving on _TrackMetadataScreenState {
 
           String? ffmpegResult;
           if (lower.endsWith('.mp3')) {
-            ffmpegResult = await FFmpegService.embedMetadataToMp3(
+            ffmpegResult = await FFmpegMetadata.embedMetadataToMp3(
               mp3Path: ffmpegTarget,
               coverPath: effectiveCoverPath,
               metadata: metadata,
               artistTagMode: artistTagMode,
             );
           } else if (lower.endsWith('.m4a') || lower.endsWith('.aac')) {
-            ffmpegResult = await FFmpegService.embedMetadataToM4a(
+            ffmpegResult = await FFmpegMetadata.embedMetadataToM4a(
               m4aPath: ffmpegTarget,
               coverPath: effectiveCoverPath,
               metadata: metadata,
               artistTagMode: artistTagMode,
             );
           } else if (lower.endsWith('.opus') || lower.endsWith('.ogg')) {
-            ffmpegResult = await FFmpegService.embedMetadataToOpus(
+            ffmpegResult = await FFmpegMetadata.embedMetadataToOpus(
               opusPath: ffmpegTarget,
               coverPath: effectiveCoverPath,
               metadata: metadata,
@@ -1059,6 +1065,12 @@ extension _TrackMetadataLyricsAndSaving on _TrackMetadataScreenState {
             await writeReEnrichSidecarLrc(
               audioFilePath: cleanFilePath,
               reEnrichResult: result,
+            );
+            await saveReEnrichedMotionArtwork(
+              container,
+              metadata: enriched ?? const {},
+              albumName: albumName,
+              artistName: artistName,
             );
             await _refreshEmbeddedCoverPreview(force: true);
             _markMetadataChanged();

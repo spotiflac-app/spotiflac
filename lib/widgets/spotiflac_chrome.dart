@@ -1,4 +1,4 @@
-import 'dart:ui' show ImageFilter;
+import 'dart:ui' show ImageFilter, lerpDouble;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +6,7 @@ import 'package:liquid_glass_easy/liquid_glass_easy.dart';
 import 'package:spotiflac/providers/runtime_profile_provider.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
 import 'package:spotiflac/utils/desktop_platform.dart';
+import 'package:spotiflac/widgets/spotiflac_glass_press.dart';
 import 'package:spotiflac/widgets/spotiflac_selection_pill.dart';
 import 'package:spotiflac/widgets/spotiflac_liquid_backdrop.dart';
 import 'package:spotiflac/widgets/spotiflac_squircle_border.dart';
@@ -17,50 +18,63 @@ class SpotiFLACSegmentedControl extends ConsumerWidget {
     required this.labels,
     required this.selectedIndex,
     required this.onChanged,
+    this.samplesBackdrop = true,
+    this.compact = false,
   });
 
   final List<String> labels;
   final int selectedIndex;
   final ValueChanged<int> onChanged;
 
+  /// See [SpotiFLACGlass.samplesBackdrop].
+  final bool samplesBackdrop;
+
+  /// A pointer-sized control for a desktop toolbar, 36 tall.
+  final bool compact;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final scaler = MediaQuery.textScalerOf(context);
     // At least 56 so each segment keeps a 48 dp target inside the pill inset.
-    final height = (MediaQuery.textScalerOf(context).scale(15) + 36).clamp(
-      56.0,
-      double.infinity,
-    );
+    final height = compact
+        ? scaler.scale(36)
+        : (scaler.scale(15) + 36).clamp(56.0, double.infinity);
     final contrastBlocked = ref.watch(
       spotiflacGlassContrastBlockedProvider(MediaQuery.highContrastOf(context)),
     );
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: EdgeInsets.symmetric(vertical: compact ? 0 : 8),
       child: SizedBox(
         height: height,
-        child: SpotiFLACGlass.navigation(
-          blurEnabled: ref.watch(spotiflacBlurEnabledProvider),
+        child: SpotiFLACGlassPress(
           radius: height / 2,
-          child: SpotiFLACSelectionPill(
-            contrastBlocked: contrastBlocked,
-            // The held lens follows a finger. A click never holds it, and over
-            // an opaque toolbar it only refracts a flat fill, so desktop skips
-            // it.
-            liquidInteraction:
-                !isDesktopPlatform &&
-                ref.watch(spotiflacLiquidGlassProvider) &&
-                SpotiFLACTheme.glassClarityOf(context) > 0.2,
-            labels: labels,
-            selectedIndex: selectedIndex,
-            onChanged: onChanged,
-            itemBuilder: (context, index, selected) => Center(
-              child: Text(
-                labels[index],
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurface,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+          child: SpotiFLACGlass.navigation(
+            blurEnabled: ref.watch(spotiflacBlurEnabledProvider),
+            radius: height / 2,
+            samplesBackdrop: samplesBackdrop,
+            child: SpotiFLACSelectionPill(
+              contrastBlocked: contrastBlocked,
+              // The held lens follows a finger. A click never holds it, and
+              // over an opaque toolbar it only refracts a flat fill, so desktop
+              // skips it.
+              liquidInteraction:
+                  !isDesktopPlatform &&
+                  ref.watch(spotiflacLiquidGlassProvider) &&
+                  SpotiFLACTheme.glassClarityOf(context) > 0.2,
+              labels: labels,
+              selectedIndex: selectedIndex,
+              onChanged: onChanged,
+              padding: EdgeInsets.all(compact ? 3 : 4),
+              itemBuilder: (context, index, selected) => Center(
+                child: Text(
+                  labels[index],
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurface,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                  ),
                 ),
               ),
             ),
@@ -83,11 +97,12 @@ class SpotiFLACGlassPanel extends ConsumerWidget {
     this.tintOpacity,
     this.tintColor,
     this.blurEnabled = true,
+    this.samplesBackdrop = true,
     this.highlightBorder = false,
     this.smoothCorners = false,
     this.highlightIntensity = 1,
     this.glassProgress = 1,
-  }) : _composedBackdrop = false;
+  });
 
   const SpotiFLACGlassPanel.overlay({
     super.key,
@@ -98,12 +113,12 @@ class SpotiFLACGlassPanel extends ConsumerWidget {
     this.tintOpacity = 0.78,
     this.tintColor,
     this.blurEnabled = true,
+    this.samplesBackdrop = true,
     this.highlightBorder = false,
     this.smoothCorners = false,
     this.highlightIntensity = 1,
     this.glassProgress = 1,
-  }) : strongTint = true,
-       _composedBackdrop = true;
+  }) : strongTint = true;
 
   final Widget child;
   final double radius;
@@ -113,15 +128,17 @@ class SpotiFLACGlassPanel extends ConsumerWidget {
   final double? tintOpacity;
   final Color? tintColor;
   final bool blurEnabled;
+
+  /// See [SpotiFLACGlass.samplesBackdrop].
+  final bool samplesBackdrop;
   final bool highlightBorder;
   final bool smoothCorners;
   final double highlightIntensity;
   final double glassProgress;
-  final bool _composedBackdrop;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final glass = SpotiFLACGlass.navigation(
+    return SpotiFLACGlass.navigation(
       radius: radius,
       firstInGroup: firstInGroup,
       lastInGroup: lastInGroup,
@@ -129,6 +146,7 @@ class SpotiFLACGlassPanel extends ConsumerWidget {
       tintOpacity: tintOpacity,
       tintColor: tintColor,
       blurEnabled: blurEnabled && ref.watch(spotiflacBlurEnabledProvider),
+      samplesBackdrop: samplesBackdrop,
       highlightBorder: highlightBorder,
       smoothCorners: smoothCorners,
       highlightIntensity: highlightIntensity,
@@ -136,33 +154,12 @@ class SpotiFLACGlassPanel extends ConsumerWidget {
       // Tile ink must paint above the glass tint rather than beneath it.
       child: Material(type: MaterialType.transparency, child: child),
     );
-    // One overlay gets its own key: the package composes blur and refraction
-    // into one backdrop read, including while the route moves. Sharing that
-    // key with the page or another overlapping menu would lose their glass.
-    return _composedBackdrop ? LiquidGlassBatch(child: glass) : glass;
   }
 }
 
 /// Bounded glass: Impeller lenses refract a blurred backdrop, while frosted
 /// surfaces share ordinary blur passes. Foreground content stays above glass.
 class SpotiFLACGlass extends ConsumerWidget {
-  const SpotiFLACGlass({
-    super.key,
-    required this.child,
-    required this.blurEnabled,
-    this.radius = 32,
-    this.strongTint = false,
-    this.tintOpacity,
-    this.tintColor,
-    this.highlightBorder = false,
-    this.refractionDepth = 0.30,
-    this.smoothCorners = false,
-    this.highlightIntensity = 1,
-    this.glassProgress = 1,
-  }) : firstInGroup = true,
-       lastInGroup = true,
-       samplesBackdrop = true;
-
   const SpotiFLACGlass.navigation({
     super.key,
     required this.child,
@@ -188,6 +185,10 @@ class SpotiFLACGlass extends ConsumerWidget {
     for (final sigma in _blurSigmas)
       ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
   ];
+
+  /// Host tests cannot run shader filters; this lets them build the lens.
+  @visibleForTesting
+  static bool? debugShaderFilterSupport;
 
   final Widget child;
   final bool blurEnabled;
@@ -232,45 +233,46 @@ class SpotiFLACGlass extends ConsumerWidget {
       top: firstInGroup ? Radius.circular(radius) : Radius.zero,
       bottom: lastInGroup ? Radius.circular(radius) : Radius.zero,
     );
-    final artworkTint = Theme.of(
-      context,
-    ).extension<SpotiFLACTheme>()?.chromeSurface;
-    var tintSource =
-        tintColor ?? (dark ? scheme.surfaceContainerHigh : Colors.white);
-    var opacity = tintOpacity ?? (strongTint ? 0.80 : 0.60);
-    if (tintColor == null && artworkTint != null) {
-      // The artwork color is already known; retain its hue with a richer tint
-      // instead of a saturation filter over changing page content.
-      final hsl = HSLColor.fromColor(scheme.surfaceContainerHigh);
-      final coverTint = hsl
-          .withSaturation((hsl.saturation * 1.6).clamp(0, 1))
-          .toColor();
-      tintSource = dark
-          ? coverTint
-          : Color.lerp(Colors.white, coverTint, 0.15)!;
-      opacity = opacity.clamp(0.60, 1.0);
-    }
-    // Light glass needs a white veil over saturated or dark artwork.
-    // Keep this in the existing fill so whitening adds no backdrop pass.
-    var baseTint = tintSource.withValues(
-      alpha: dark ? opacity * 0.82 : (opacity * 0.88).clamp(0.50, 1.0),
-    );
-    if (dark) {
-      // Bound bright artwork with paint instead of filtering backdrop luma.
-      baseTint = Color.alphaBlend(
+    var tint = scheme.surfaceContainerHigh;
+    if (translucent) {
+      final artworkTint = Theme.of(
+        context,
+      ).extension<SpotiFLACTheme>()?.chromeSurface;
+      var tintSource =
+          tintColor ?? (dark ? scheme.surfaceContainerHigh : Colors.white);
+      var opacity = tintOpacity ?? (strongTint ? 0.80 : 0.60);
+      if (tintColor == null && artworkTint != null) {
+        // The artwork color is already known; retain its hue with a richer
+        // tint instead of a saturation filter over changing page content.
+        final hsl = HSLColor.fromColor(scheme.surfaceContainerHigh);
+        final coverTint = hsl
+            .withSaturation((hsl.saturation * 1.6).clamp(0, 1))
+            .toColor();
+        tintSource = dark
+            ? coverTint
+            : Color.lerp(Colors.white, coverTint, 0.15)!;
+        opacity = opacity.clamp(0.60, 1.0);
+      }
+      // Light glass needs a white veil over saturated or dark artwork.
+      // Keep this in the existing fill so whitening adds no backdrop pass.
+      var baseTint = tintSource.withValues(
+        alpha: dark ? opacity * 0.82 : (opacity * 0.88).clamp(0.50, 1.0),
+      );
+      if (dark) {
+        // Bound bright artwork with paint instead of filtering backdrop luma.
+        baseTint = Color.alphaBlend(
+          baseTint,
+          Colors.black.withValues(alpha: 0.35),
+        );
+      }
+      // Let the upper end of the clarity slider reveal more of the page. Keep
+      // the tinted endpoint opaque and the single-pass blur budget unchanged.
+      final tintStrength = (1 - clarity) * (1 - clarity);
+      tint = Color.alphaBlend(
+        scheme.surfaceContainerHigh.withValues(alpha: tintStrength),
         baseTint,
-        Colors.black.withValues(alpha: 0.35),
       );
     }
-    // Let the upper end of the clarity slider reveal more of the page. Keep
-    // the tinted endpoint opaque and the single-pass blur budget unchanged.
-    final tintStrength = (1 - clarity) * (1 - clarity);
-    final tint = translucent
-        ? Color.alphaBlend(
-            scheme.surfaceContainerHigh.withValues(alpha: tintStrength),
-            baseTint,
-          )
-        : scheme.surfaceContainerHigh;
     final insideGlass =
         context.dependOnInheritedWidgetOfExactType<_GlassBackdropScope>() !=
         null;
@@ -287,7 +289,7 @@ class SpotiFLACGlass extends ConsumerWidget {
         firstInGroup &&
         lastInGroup &&
         level == SpotiFLACGlassLevel.liquid &&
-        ImageFilter.isShaderFilterSupported;
+        (debugShaderFilterSupport ?? ImageFilter.isShaderFilterSupported);
     // Clear glass softens the backdrop less. Keep the mid-range fallback at
     // its small blur budget, and reuse these filters in the lens renderer too.
     final filterIndex = level == SpotiFLACGlassLevel.frosted
@@ -324,7 +326,7 @@ class SpotiFLACGlass extends ConsumerWidget {
             ),
           ]
         : null;
-    final backdrop = useLens
+    final lens = useLens
         ? SpotiFLACLiquidBackdrop(
             borderRadius: shape,
             clarity: clarity,
@@ -334,6 +336,14 @@ class SpotiFLACGlass extends ConsumerWidget {
             highlightIntensity: highlightIntensity * reveal,
             child: surface,
           )
+        : null;
+    // A batched lens composes blur and refraction into one backdrop read.
+    // Outside a batch it takes a key of its own: sharing one with the page or
+    // an overlapping menu would lose their glass.
+    final backdrop = lens != null
+        ? LiquidGlassBatch.backdropIdOf(context) == null
+              ? LiquidGlassBatch(child: lens)
+              : lens
         : sampleBackdrop
         ? BackdropFilter.grouped(filter: _blurs[filterIndex], child: surface)
         : surface;
@@ -479,16 +489,14 @@ class _SpotiFLACGlassRim extends CustomPainter {
       dark != oldDelegate.dark;
 }
 
-/// A searchable category uses the same material as the navigation capsule.
-class SpotiFLACFilterChip extends ConsumerWidget {
+/// A searchable category chip; callers supply any glass around it.
+class SpotiFLACFilterChip extends StatelessWidget {
   const SpotiFLACFilterChip({
     super.key,
     required this.label,
     required this.selected,
     required this.onTap,
     this.icon,
-    this.blurEnabled = true,
-    this.glass = true,
     this.tonal = true,
   });
 
@@ -496,24 +504,20 @@ class SpotiFLACFilterChip extends ConsumerWidget {
   final bool selected;
   final VoidCallback? onTap;
   final IconData? icon;
-  final bool blurEnabled;
-  final bool glass;
   final bool tonal;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final content = Semantics(
       button: true,
       selected: selected,
       enabled: onTap != null,
       child: Material(
-        color: !glass && !tonal
+        color: !tonal
             ? Colors.transparent
             : selected
             ? scheme.primary.withValues(alpha: 0.12)
-            : glass
-            ? Colors.transparent
             : SpotiFLACTheme.controlFill(context, enabled: onTap != null),
         child: InkWell(
           onTap: onTap,
@@ -539,13 +543,10 @@ class SpotiFLACFilterChip extends ConsumerWidget {
         ),
       ),
     );
-    if (!glass) {
-      return ClipRRect(borderRadius: BorderRadius.circular(24), child: content);
-    }
-    return SpotiFLACGlass.navigation(
+    return SpotiFLACGlassPress(
       radius: 24,
-      blurEnabled: blurEnabled && ref.watch(spotiflacBlurEnabledProvider),
-      child: content,
+      enabled: onTap != null,
+      child: ClipRRect(borderRadius: BorderRadius.circular(24), child: content),
     );
   }
 }
@@ -581,7 +582,11 @@ class SpotiFLACTabBar extends ConsumerWidget {
     this.liquidGlass = true,
     this.hiddenIconIndices = const {},
     this.contentOpacity = const AlwaysStoppedAnimation(1),
+    this.fold = const AlwaysStoppedAnimation(0),
   });
+
+  /// Side of the circle the glass folds into.
+  static const double foldedSize = 52;
 
   final List<NavigationDestination> destinations;
   final int selectedIndex;
@@ -592,6 +597,10 @@ class SpotiFLACTabBar extends ConsumerWidget {
 
   /// Fade only the foreground so the backdrop can keep sampling the page.
   final Animation<double> contentOpacity;
+
+  /// From 0, the full bar, to 1, the glass narrowed into a leading circle of
+  /// [foldedSize]. It may overshoot, which makes the shape wobble as it lands.
+  final Animation<double> fold;
 
   /// The floating layout also supplies the coordinates for collapsing icons.
   static bool usesLiquidGlass(
@@ -642,12 +651,38 @@ class SpotiFLACTabBar extends ConsumerWidget {
               child: Transform.scale(
                 scaleX: 1 + 0.025 * progress,
                 scaleY: 1 + 0.06 * progress,
-                child: SpotiFLACGlass.navigation(
-                  blurEnabled: blurEnabled,
-                  strongTint: true,
-                  tintOpacity: SpotiFLACTheme.navigationOpacity(context),
-                  refractionDepth: 0.45 + 0.15 * progress,
-                  child: const SizedBox.expand(),
+                child: LayoutBuilder(
+                  builder: (context, constraints) => AnimatedBuilder(
+                    animation: fold,
+                    builder: (context, _) {
+                      final amount = fold.value;
+                      return Align(
+                        alignment: AlignmentDirectional.bottomStart,
+                        child: SizedBox(
+                          width: lerpDouble(
+                            constraints.maxWidth,
+                            foldedSize,
+                            amount,
+                          ),
+                          height: lerpDouble(
+                            constraints.maxHeight,
+                            foldedSize,
+                            amount,
+                          ),
+                          child: SpotiFLACGlass.navigation(
+                            blurEnabled: blurEnabled,
+                            strongTint: true,
+                            tintOpacity: SpotiFLACTheme.navigationOpacity(
+                              context,
+                            ),
+                            refractionDepth: 0.45 + 0.15 * progress,
+                            radius: lerpDouble(32, foldedSize / 2, amount)!,
+                            child: const SizedBox.expand(),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
             ),

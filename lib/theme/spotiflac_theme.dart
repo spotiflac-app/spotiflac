@@ -11,7 +11,7 @@ import 'package:spotiflac/theme/app_tokens.dart';
 class SpotiFLACTheme extends ThemeExtension<SpotiFLACTheme> {
   const SpotiFLACTheme({
     this.chromeSurface,
-    this.accent = SpotiFLACAccent.red,
+    this.accent = SpotiFLACAccent.blue,
     this.useSystemFont = false,
     this.fontFamily,
     this.glassClarity = kDefaultSpotiFLACGlassClarity,
@@ -87,6 +87,8 @@ class SpotiFLACTheme extends ThemeExtension<SpotiFLACTheme> {
     if (!dark && accent == SpotiFLACAccent.green) {
       return const Color(0xff24863d);
     }
+    // The system high contrast blue reads navy; this one still clears 4.5:1.
+    if (!dark && accent == SpotiFLACAccent.blue) return const Color(0xff0071e3);
     return dark ? color.darkColor : color.highContrastColor;
   }
 
@@ -127,11 +129,12 @@ class SpotiFLACTheme extends ThemeExtension<SpotiFLACTheme> {
         (TargetPlatform, Brightness, Color?, SpotiFLACAccent, bool, String?),
         ThemeData
       >{};
+  static final _glassVariants = Expando<ThemeData>();
 
   static ThemeData build(
     Brightness brightness, {
     Color? chromeSurface,
-    SpotiFLACAccent accent = SpotiFLACAccent.red,
+    SpotiFLACAccent accent = SpotiFLACAccent.blue,
     bool useSystemFont = false,
     String? fontFamily,
     double glassClarity = kDefaultSpotiFLACGlassClarity,
@@ -145,18 +148,24 @@ class SpotiFLACTheme extends ThemeExtension<SpotiFLACTheme> {
       useSystemFont,
       fontFamily,
     );
-    final cached = _themeCache.remove(key);
-    if (cached != null) {
-      _themeCache[key] = cached;
-      return _withGlassPreferences(cached, glassClarity, glassOutlines);
-    }
-    final theme = _build(
-      brightness,
-      chromeSurface: chromeSurface,
-      selectedAccent: accent,
-      useSystemFont: useSystemFont,
-      fontFamily: fontFamily,
-    );
+    var theme = _themeCache.remove(key);
+    // Artwork chrome only tints a few roles, so derive it from the base theme.
+    theme ??= chromeSurface == null
+        ? _build(
+            brightness,
+            selectedAccent: accent,
+            useSystemFont: useSystemFont,
+            fontFamily: fontFamily,
+          )
+        : _withChromeSurface(
+            build(
+              brightness,
+              accent: accent,
+              useSystemFont: useSystemFont,
+              fontFamily: fontFamily,
+            ),
+            chromeSurface,
+          );
     if (_themeCache.length >= 16) {
       _themeCache.remove(_themeCache.keys.first);
     }
@@ -164,20 +173,45 @@ class SpotiFLACTheme extends ThemeExtension<SpotiFLACTheme> {
     return _withGlassPreferences(theme, glassClarity, glassOutlines);
   }
 
+  static ThemeData _withChromeSurface(ThemeData theme, Color chromeSurface) {
+    final scheme = theme.colorScheme.copyWith(
+      surfaceContainerHigh: Color.lerp(chromeSurface, Colors.black, 0.16),
+    );
+    return theme.copyWith(
+      colorScheme: scheme,
+      buttonTheme: theme.buttonTheme.copyWith(colorScheme: scheme),
+      snackBarTheme: theme.snackBarTheme.copyWith(
+        backgroundColor: scheme.surfaceContainerHigh,
+      ),
+      extensions: [
+        for (final extension in theme.extensions.values)
+          if (extension is SpotiFLACTheme)
+            extension.copyWith(chromeSurface: chromeSurface)
+          else
+            extension,
+      ],
+    );
+  }
+
   // Moving the clarity slider only changes the material, not typography or
-  // seeded colors. Keep the expensive base theme cached independently.
+  // seeded colors. Keep the expensive base theme cached independently, and
+  // reuse the last variant so equal preferences keep the same theme identity.
   static ThemeData _withGlassPreferences(
     ThemeData theme,
     double value,
     bool outlines,
   ) {
     final clarity = normalizeSpotiFLACGlassClarity(value);
-    final preferences = theme.extension<SpotiFLACTheme>()!;
-    if (preferences.glassClarity == clarity &&
-        preferences.glassOutlines == outlines) {
-      return theme;
+    bool matches(ThemeData? candidate) {
+      final preferences = candidate?.extension<SpotiFLACTheme>();
+      return preferences?.glassClarity == clarity &&
+          preferences?.glassOutlines == outlines;
     }
-    return theme.copyWith(
+
+    if (matches(theme)) return theme;
+    final variant = _glassVariants[theme];
+    if (matches(variant)) return variant!;
+    return _glassVariants[theme] = theme.copyWith(
       extensions: [
         for (final extension in theme.extensions.values)
           if (extension is SpotiFLACTheme)
@@ -199,7 +233,7 @@ class SpotiFLACTheme extends ThemeExtension<SpotiFLACTheme> {
     return build(
       brightness ?? theme.brightness,
       chromeSurface: chromeSurface,
-      accent: preferences?.accent ?? SpotiFLACAccent.red,
+      accent: preferences?.accent ?? SpotiFLACAccent.blue,
       useSystemFont: preferences?.useSystemFont ?? false,
       fontFamily: preferences?.fontFamily,
       glassClarity: preferences?.glassClarity ?? kDefaultSpotiFLACGlassClarity,
@@ -209,7 +243,6 @@ class SpotiFLACTheme extends ThemeExtension<SpotiFLACTheme> {
 
   static ThemeData _build(
     Brightness brightness, {
-    Color? chromeSurface,
     required SpotiFLACAccent selectedAccent,
     required bool useSystemFont,
     String? fontFamily,
@@ -240,9 +273,7 @@ class SpotiFLACTheme extends ThemeExtension<SpotiFLACTheme> {
           surfaceContainerLowest: surface,
           surfaceContainerLow: grouped,
           surfaceContainer: grouped,
-          surfaceContainerHigh: chromeSurface == null
-              ? (dark ? const Color(0xff2c2c2e) : grouped)
-              : Color.lerp(chromeSurface, Colors.black, 0.16),
+          surfaceContainerHigh: dark ? const Color(0xff2c2c2e) : grouped,
           surfaceContainerHighest: dark
               ? const Color(0xff3a3a3c)
               : const Color(0xffe5e5ea),
@@ -324,7 +355,6 @@ class SpotiFLACTheme extends ThemeExtension<SpotiFLACTheme> {
       splashFactory: NoSplash.splashFactory,
       extensions: <ThemeExtension<dynamic>>[
         SpotiFLACTheme(
-          chromeSurface: chromeSurface,
           accent: selectedAccent,
           useSystemFont: useSystemFont,
           fontFamily: fontFamily,
@@ -452,6 +482,26 @@ class SpotiFLACTheme extends ThemeExtension<SpotiFLACTheme> {
             ? glassOutlines
             : other?.glassOutlines ?? glassOutlines,
       );
+
+  @override
+  bool operator ==(Object other) =>
+      other is SpotiFLACTheme &&
+      other.chromeSurface == chromeSurface &&
+      other.accent == accent &&
+      other.useSystemFont == useSystemFont &&
+      other.fontFamily == fontFamily &&
+      other.glassClarity == glassClarity &&
+      other.glassOutlines == glassOutlines;
+
+  @override
+  int get hashCode => Object.hash(
+    chromeSurface,
+    accent,
+    useSystemFont,
+    fontFamily,
+    glassClarity,
+    glassOutlines,
+  );
 }
 
 extension SpotiFLACThemeContext on BuildContext {
@@ -465,6 +515,9 @@ class SpotiFLACSettingsTheme extends StatelessWidget {
 
   final Widget child;
 
+  // Reusing the derived theme keeps rebuilds from notifying the whole page.
+  static final _themes = Expando<ThemeData>();
+
   @override
   Widget build(BuildContext context) {
     if (!context.isSpotiFLAC) return child;
@@ -473,7 +526,7 @@ class SpotiFLACSettingsTheme extends StatelessWidget {
     final background = dark ? Colors.black : const Color(0xfff2f2f7);
     final group = dark ? const Color(0xff1c1c1e) : Colors.white;
     return Theme(
-      data: theme.copyWith(
+      data: _themes[theme] ??= theme.copyWith(
         scaffoldBackgroundColor: background,
         extensions: [
           for (final extension in theme.extensions.values)

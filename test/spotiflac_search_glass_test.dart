@@ -23,7 +23,6 @@ void main() {
                         child: SpotiFLACFilterChip(
                           label: 'Albums',
                           selected: selected,
-                          glass: false,
                           tonal: selected,
                           onTap: () => setState(() => selected = !selected),
                         ),

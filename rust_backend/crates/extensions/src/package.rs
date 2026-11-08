@@ -32,7 +32,7 @@ fn io_error(message: &str, cause: impl std::fmt::Display) -> PackageError {
 
 pub fn is_package_path(path: &Path) -> bool {
     let name = lowercase(&path.to_string_lossy());
-    name.ends_with(".spotiflac-ext") || name.ends_with(".sflx")
+    name.ends_with(".spotiflac-ext") || name.ends_with(".spotiflac-ext") || name.ends_with(".sflx")
 }
 
 struct Entry {

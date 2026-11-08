@@ -34,7 +34,7 @@ std::string utf8(JNIEnv* env, jstring value) {
 }
 #endif
 
-#define JNI_METHOD(name) Java_com_spotiflac_app_discord_DiscordPresencePlugin_##name
+#define JNI_METHOD(name) Java_com_zarz_spotiflac_discord_DiscordPresencePlugin_##name
 
 extern "C" JNIEXPORT jboolean JNICALL JNI_METHOD(nativeStart)(JNIEnv*, jobject) {
 #ifdef SPOTIFLAC_DISCORD_SDK

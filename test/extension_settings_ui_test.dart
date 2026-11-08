@@ -10,8 +10,11 @@ import 'package:spotiflac/l10n/app_localizations.dart';
 import 'package:spotiflac/providers/extension_provider.dart';
 import 'package:spotiflac/providers/settings_provider.dart';
 import 'package:spotiflac/screens/settings/extension_detail_page.dart';
+import 'package:spotiflac/screens/settings/extensions_page.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
+import 'package:spotiflac/widgets/spotiflac_chrome.dart';
 import 'package:spotiflac/widgets/settings_group.dart';
+import 'package:spotiflac/widgets/extension_icon_image.dart';
 
 import 'support/fixed_settings.dart';
 
@@ -53,12 +56,60 @@ class _Extensions extends ExtensionNotifier {
   );
 }
 
+class _IconExtensions extends _Extensions {
+  @override
+  ExtensionState build() {
+    final initial = super.build();
+    return initial.copyWith(
+      extensions: [
+        initial.extensions.single.copyWith(iconPath: '/example-icon.png'),
+      ],
+    );
+  }
+}
+
 void main() {
   const channel = MethodChannel('com.spotiflac.app/backend');
   setUp(() => SharedPreferences.setMockInitialValues({}));
   tearDown(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
+  });
+
+  testWidgets('extension detail icon decode follows display density', (
+    tester,
+  ) async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          channel,
+          (call) async => call.method == 'getExtensionSettings' ? '{}' : null,
+        );
+    for (final density in [1.0, 3.0]) {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            settingsProvider.overrideWith(FixedSettingsNotifier.new),
+            extensionProvider.overrideWith(_IconExtensions.new),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(devicePixelRatio: density),
+              child: child!,
+            ),
+            home: const ExtensionDetailPage(extensionId: 'example.account'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final image = tester.widget<Image>(find.byType(Image));
+      expect(image.image, isA<ExtensionIconImage>());
+      final fitted = image.image as ExtensionIconImage;
+      expect(fitted.extent, (56 * density).ceil());
+      expect(tester.getSize(find.byType(Image)), const Size(56, 56));
+      expect(tester.takeException(), isNull);
+    }
   });
 
   for (final spotiflac in [false, true]) {
@@ -167,5 +218,54 @@ void main() {
         expect(tester.takeException(), isNull);
       },
     );
+  }
+
+  for (final page in [
+    const ExtensionDetailPage(extensionId: 'example.account'),
+    const ExtensionsPage(),
+  ]) {
+    testWidgets('${page.runtimeType} glass skips the plain page backdrop', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+            channel,
+            (call) async => call.method == 'getExtensionSettings' ? '{}' : null,
+          );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            settingsProvider.overrideWith(FixedSettingsNotifier.new),
+            extensionProvider.overrideWith(_Extensions.new),
+          ],
+          child: MaterialApp(
+            theme: SpotiFLACTheme.build(Brightness.dark),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: page,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final glass = find.ancestor(
+        of: find.text(
+          page is ExtensionsPage
+              ? 'Install Extension'
+              : 'Music with optional personal account access.',
+        ),
+        matching: find.byType(SpotiFLACGlass),
+      );
+      expect(glass, findsOneWidget);
+      expect(tester.widget<SpotiFLACGlass>(glass).samplesBackdrop, isFalse);
+      expect(
+        find.descendant(of: glass, matching: find.byType(BackdropFilter)),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+    });
   }
 }

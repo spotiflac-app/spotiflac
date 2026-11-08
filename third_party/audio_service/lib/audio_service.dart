@@ -13,6 +13,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:rxdart/rxdart.dart';
 
+import 'src/android_queue_window.dart';
+
 AudioServicePlatform _platform = AudioServicePlatform.instance;
 
 /// The buttons on a headset.
@@ -962,6 +964,9 @@ class AudioService {
 
   static late AudioServiceConfig _config;
   static late AudioHandler _handler;
+  static PlaybackState? _synchronizedPlaybackState;
+  static final _playbackStateWaiters =
+      Map<PlaybackState, List<Completer<void>>>.identity();
 
   /// The current configuration.
   static AudioServiceConfig get config => _config;
@@ -1110,17 +1115,52 @@ class AudioService {
   }
 
   static Future<void> _observeQueue() async {
-    await for (var queue in _handler.queue) {
+    const queueIndexKey = 'com.ryanheise.audio_service.queueIndex';
+    final window = AndroidQueueWindow<MediaItem>();
+    var pendingQueue = false;
+    var sendingQueue = false;
+
+    Future<void> sendQueue() async {
+      pendingQueue = true;
+      if (sendingQueue) return;
+      sendingQueue = true;
+      while (pendingQueue) {
+        pendingQueue = false;
+        final start = window.start;
+        try {
+          final items = window.items;
+          await _platform.setQueue(SetQueueRequest(queue: [
+            for (var i = 0; i < items.length; i++)
+              if (start == 0 &&
+                  !(items[i].extras?.containsKey(queueIndexKey) ?? false))
+                items[i]._toMessage()
+              else
+                items[i].copyWith(extras: {
+                  ...?items[i].extras,
+                  queueIndexKey: start + i,
+                })._toMessage(),
+          ]));
+        } catch (e) {
+          _asyncError.add(e);
+        }
+      }
+      sendingQueue = false;
+    }
+
+    _handler.queue.listen((queue) {
       if (_config.preloadArtwork) {
         _loadAllArtwork(queue);
       }
-      try {
-        await _platform.setQueue(SetQueueRequest(
-            queue: queue.map((item) => item._toMessage()).toList()));
-      } catch (e) {
-        _asyncError.add(e);
-      }
-    }
+      // Only the Android plugin reads the queue; the darwin and web plugins
+      // and the desktop sessions ignore it.
+      if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+      window.updateQueue(queue, _handler.playbackState.value.queueIndex);
+      sendQueue();
+    });
+    _handler.playbackState.listen((state) {
+      if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+      if (window.moveTo(state.queueIndex)) sendQueue();
+    });
   }
 
   static Future<void> _observePlaybackState() async {
@@ -1129,13 +1169,41 @@ class AudioService {
       try {
         await _platform
             .setState(SetStateRequest(state: playbackState._toMessage()));
+        _synchronizedPlaybackState = playbackState;
+        for (final waiter in _playbackStateWaiters.remove(playbackState) ??
+            <Completer<void>>[]) {
+          waiter.complete();
+        }
         if (playbackState.processingState == AudioProcessingState.idle &&
             previousState?.processingState != AudioProcessingState.idle) {
           await AudioService._stop();
         }
         previousState = playbackState;
-      } catch (e) {
+      } catch (e, stackTrace) {
+        for (final waiter in _playbackStateWaiters.remove(playbackState) ??
+            <Completer<void>>[]) {
+          waiter.completeError(e, stackTrace);
+        }
         _asyncError.add(e);
+      }
+    }
+  }
+
+  /// Waits until the native service acknowledges the current playback state.
+  /// On Android, use this after publishing a playing state and before requesting
+  /// audio focus from the background, so foreground promotion has completed.
+  static Future<void> synchronizePlaybackState() async {
+    final state = _handler.playbackState.value;
+    if (identical(state, _synchronizedPlaybackState)) return;
+    final waiter = Completer<void>();
+    final waiters = _playbackStateWaiters.putIfAbsent(state, () => []);
+    waiters.add(waiter);
+    try {
+      await waiter.future.timeout(const Duration(seconds: 5));
+    } finally {
+      waiters.remove(waiter);
+      if (waiters.isEmpty && identical(_playbackStateWaiters[state], waiters)) {
+        _playbackStateWaiters.remove(state);
       }
     }
   }

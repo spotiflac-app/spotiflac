@@ -3,9 +3,9 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:spotiflac/models/library_database_models.dart';
 import 'package:spotiflac/services/library_file_sizes.dart';
 import 'package:spotiflac/services/library_queue_store.dart';
-import 'package:spotiflac/services/library_database_models.dart';
 
 import 'support/library_paging_fixture.dart';
 import 'support/sqlite_process_database.dart';

@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
-
 import 'package:spotiflac/models/automix_options.dart';
 
 /// A local beat grid, measured in seconds within the decoded audio window.

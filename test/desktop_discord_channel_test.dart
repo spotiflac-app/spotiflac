@@ -61,7 +61,6 @@ void main() {
     final statuses = StreamController<String>.broadcast();
     addTearDown(statuses.close);
     final service = DiscordPresenceService(
-      integrationEnabled: true,
       channel: DesktopDiscordChannel(
         invoke: (method, _) async {
           methods.add(method);

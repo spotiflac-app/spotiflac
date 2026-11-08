@@ -4,7 +4,7 @@ part of 'download_queue_provider.dart';
 extension _DownloadQueueConnectivity on DownloadQueueNotifier {
   void _startConnectivityMonitoring() {
     _connectivitySub?.cancel();
-    _connectivitySub = Connectivity().onConnectivityChanged.listen(
+    _connectivitySub = ConnectivityMonitor.instance.changes.listen(
       _handleConnectivityResults,
       onError: (Object error, StackTrace stackTrace) {
         _log.w('Connectivity monitoring failed: $error');
@@ -13,10 +13,8 @@ extension _DownloadQueueConnectivity on DownloadQueueNotifier {
     );
   }
 
-  void _stopConnectivityMonitoring({bool clearNetworkPause = true}) {
-    if (clearNetworkPause) {
-      _networkPausedByWifiOnly = false;
-    }
+  void _stopConnectivityMonitoring() {
+    _networkPausedByWifiOnly = false;
     // Keep listening while network-failed items remain so the reconnect
     // retry prompt can still fire when the queue is otherwise idle.
     if (_hasNetworkFailedItems) return;

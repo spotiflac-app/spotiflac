@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:spotiflac/controllers/local_track_batch_actions.dart';
 import 'package:spotiflac/l10n/l10n.dart';
 import 'package:spotiflac/providers/settings_provider.dart';
+import 'package:spotiflac/services/batch_metadata_re_enrich.dart';
 import 'package:spotiflac/services/library_database.dart';
-import 'package:spotiflac/services/local_track_batch_actions.dart';
+import 'package:spotiflac/theme/app_theme.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
 import 'package:spotiflac/widgets/app_bottom_sheet.dart';
 import 'package:spotiflac/widgets/re_enrich_review_sheet.dart';
@@ -14,7 +16,145 @@ import 'package:spotiflac/widgets/selection_bottom_bar.dart';
 import 'support/re_enrich_settings.dart';
 
 void main() {
+  testWidgets('review rows span their track card', (tester) async {
+    tester.view.physicalSize = const Size(400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showReEnrichReviewSheet(
+                context,
+                previews: [
+                  BatchReEnrichPreview(
+                    item: LocalLibraryItem(
+                      id: 'song',
+                      trackName: 'Song',
+                      artistName: 'Artist',
+                      albumName: 'Album',
+                      filePath: '/music/song.flac',
+                      scannedAt: DateTime(2026),
+                    ),
+                    updateFields: const ['date', 'isrc'],
+                    enrichedMetadata: const {},
+                    changes: const [
+                      ReEnrichMetadataChange(
+                        field: 'date',
+                        oldValue: '2012',
+                        newValue: '2012-07-16',
+                      ),
+                      ReEnrichMetadataChange(
+                        field: 'isrc',
+                        oldValue: '',
+                        newValue: 'INY091200026',
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              child: const Text('Review'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Review'));
+    await tester.pumpAndSettle();
+    final card = tester.getRect(find.byType(ListTile));
+    for (final value in ['2012-07-16', 'INY091200026']) {
+      final row = tester.getRect(
+        find
+            .ancestor(
+              of: find.textContaining(value, findRichText: true),
+              matching: find.byType(Material),
+            )
+            .first,
+      );
+      expect(row.left, card.left, reason: value);
+      expect(row.width, card.width, reason: value);
+    }
+  });
+
   for (final spotiflac in [false, true]) {
+    testWidgets(
+      'large review builds nearby tracks and keeps Apply visible ($spotiflac)',
+      (tester) async {
+        tester.view.physicalSize = const Size(400, 900);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        Future<bool>? result;
+        await tester.pumpWidget(
+          ProviderScope(
+            child: MaterialApp(
+              theme: spotiflac
+                  ? SpotiFLACTheme.build(Brightness.light)
+                  : AppTheme.light(),
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: Scaffold(
+                body: Builder(
+                  builder: (context) => TextButton(
+                    onPressed: () {
+                      result = showReEnrichReviewSheet(
+                        context,
+                        previews: [
+                          for (var index = 0; index < 300; index++)
+                            BatchReEnrichPreview(
+                              item: LocalLibraryItem(
+                                id: 'fixture-$index',
+                                trackName: 'Fixture song $index',
+                                artistName: 'Artist',
+                                albumName: 'Album',
+                                filePath: '/music/song-$index.flac',
+                                scannedAt: DateTime(2026),
+                              ),
+                              updateFields: const ['genre'],
+                              enrichedMetadata: const {},
+                              changes: const [
+                                ReEnrichMetadataChange(
+                                  field: 'genre',
+                                  oldValue: '',
+                                  newValue: 'Rock',
+                                ),
+                              ],
+                            ),
+                        ],
+                      );
+                    },
+                    child: const Text('Review'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.tap(find.text('Review'));
+        await tester.pumpAndSettle();
+        expect(find.byType(ListTile).evaluate().length, lessThan(20));
+        expect(find.text('Fixture song 0').hitTestable(), findsOneWidget);
+        expect(find.text('Fixture song 299'), findsNothing);
+        expect(find.text('Apply changes').hitTestable(), findsOneWidget);
+
+        await tester.scrollUntilVisible(
+          find.text('Fixture song 299'),
+          600,
+          maxScrolls: 150,
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Fixture song 299').hitTestable(), findsOneWidget);
+        expect(find.text('Apply changes').hitTestable(), findsOneWidget);
+        await tester.tap(find.text('Apply changes'));
+        await tester.pumpAndSettle();
+        expect(await result, isTrue);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
     testWidgets(
       'result is readable above an open metadata sheet ($spotiflac)',
       (tester) async {

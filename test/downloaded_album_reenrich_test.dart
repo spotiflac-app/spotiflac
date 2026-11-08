@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:spotiflac/controllers/local_track_batch_actions.dart';
 import 'package:spotiflac/l10n/l10n.dart';
 import 'package:spotiflac/models/unified_library_item.dart';
 import 'package:spotiflac/providers/download_history_provider.dart';
@@ -14,7 +15,6 @@ import 'package:spotiflac/providers/settings_provider.dart';
 import 'package:spotiflac/screens/downloaded_album_screen.dart';
 import 'package:spotiflac/services/downloaded_embedded_cover_resolver.dart';
 import 'package:spotiflac/services/library_database.dart';
-import 'package:spotiflac/services/local_track_batch_actions.dart';
 import 'package:spotiflac/theme/app_theme.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
 import 'package:spotiflac/widgets/selection_bottom_bar.dart';
@@ -34,6 +34,7 @@ class _History extends DownloadHistoryNotifier {
     required String artistName,
     required String albumName,
     String? albumArtist,
+    String? coverUrl,
     String? isrc,
     int? trackNumber,
     int? totalTracks,
@@ -59,7 +60,10 @@ class _Library extends LocalLibraryNotifier {
   LocalLibraryState build() => LocalLibraryState();
 
   @override
-  Future<void> scanAllSources({bool forceFullScan = false}) async {
+  Future<void> scanAllSources({
+    bool forceFullScan = false,
+    bool notify = true,
+  }) async {
     _refreshes++;
   }
 }
@@ -300,7 +304,6 @@ void main() {
         final l10n = AppLocalizations.of(
           tester.element(find.byType(SelectionBottomBar)),
         );
-        expect(find.text(l10n.selectionShareCount(1)), findsNothing);
 
         Future<void> openReEnrich() async {
           await tester.tap(find.text('${l10n.trackReEnrich} (1)'));

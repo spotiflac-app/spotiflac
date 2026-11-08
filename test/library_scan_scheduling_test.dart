@@ -12,8 +12,11 @@ import 'package:spotiflac/models/settings.dart';
 import 'package:spotiflac/providers/local_library_provider.dart';
 import 'package:spotiflac/providers/settings_provider.dart';
 import 'package:spotiflac/services/library_database.dart';
+import 'package:spotiflac/services/link/client/link_client_library.dart';
+import 'package:spotiflac/services/link/desktop/link_phone_library.dart';
 import 'package:spotiflac/services/platform_bridge.dart';
 import 'package:spotiflac/services/notification_service.dart';
+import 'package:spotiflac/services/network_storage_service.dart';
 import 'package:spotiflac/utils/local_library_scan_prefs.dart';
 
 class _Settings extends SettingsNotifier {
@@ -24,11 +27,28 @@ class _Settings extends SettingsNotifier {
   Future<void> ensureLoaded() async {}
 }
 
+class _ListingStorage extends NetworkStorageService {
+  _ListingStorage() : super(read: () async => null, write: (_) async {});
+
+  final started = Completer<void>();
+  final listing = Completer<List<NetworkEntry>>();
+
+  @override
+  Future<List<NetworkEntry>> list(
+    NetworkConnection connection, [
+    String path = '',
+  ]) {
+    if (!started.isCompleted) started.complete();
+    return listing.future;
+  }
+}
+
 class _Database implements LibraryDatabase {
   _Database(this.sources);
 
   List<LocalLibrarySource> sources;
   Future<List<LocalLibrarySource>> Function()? sourceRead;
+  Future<LocalLibrarySource?> Function(String)? sourceLookup;
   bool failLookup = false;
   bool failScanErrorWrite = false;
   int? countOverride;
@@ -40,6 +60,7 @@ class _Database implements LibraryDatabase {
 
   @override
   Future<LocalLibrarySource?> getSourceByPath(String path) async {
+    if (sourceLookup != null) return sourceLookup!(path);
     if (failLookup) throw StateError('source lookup failed');
     return sources.where((source) => source.path == path).firstOrNull;
   }
@@ -135,6 +156,7 @@ void main() {
   late List<String> calls;
   late List<MethodCall> notificationCalls;
   var completeOnCancel = false;
+  late _ListingStorage storage;
 
   setUp(() async {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
@@ -158,6 +180,7 @@ void main() {
     calls = [];
     notificationCalls = [];
     completeOnCancel = false;
+    storage = _ListingStorage();
     messenger.setMockMethodCallHandler(paths, (_) async => directory.path);
     messenger.setMockMethodCallHandler(notifications, (call) async {
       notificationCalls.add(call);
@@ -183,6 +206,7 @@ void main() {
         localLibraryProvider.overrideWith(
           () => LocalLibraryNotifier(
             database: database,
+            networkStorage: storage,
             availabilityProbe: (path, {bookmark}) =>
                 probe(path, bookmark: bookmark),
           ),
@@ -195,6 +219,10 @@ void main() {
 
   tearDown(() async {
     container.dispose();
+    if (storage.started.isCompleted && !storage.listing.isCompleted) {
+      storage.listing.complete([]);
+    }
+    await storage.dispose();
     for (final (_, response) in scans) {
       if (!response.isCompleted) response.complete('{"cancelled":true}');
     }
@@ -219,6 +247,7 @@ void main() {
         localLibraryProvider.overrideWith(
           () => LocalLibraryNotifier(
             database: database,
+            networkStorage: storage,
             availabilityProbe: probe,
           ),
         ),
@@ -227,6 +256,74 @@ void main() {
     library = container.read(localLibraryProvider.notifier);
     await _waitFor(() => !container.read(localLibraryProvider).isLoading);
   }
+
+  test(
+    'removing a NAS cancels its blocked listing and retains its offline index',
+    () async {
+      const connection = NetworkConnection(
+        id: 'nas',
+        name: 'NAS',
+        protocol: NetworkProtocol.smb,
+        address: 'smb://nas.test/music/',
+      );
+      await storage.save(connection);
+      const path = 'network://nas/';
+      database.sources[0] = LocalLibrarySource(
+        id: 'active',
+        path: path,
+        displayName: 'NAS',
+        available: true,
+      );
+      available[path] = true;
+      final scan = library.startSourceScan('active', forceFullScan: true);
+      await storage.started.future.timeout(const Duration(seconds: 5));
+      expect(container.read(localLibraryProvider).isScanning, isTrue);
+
+      available[path] = false;
+      await storage.remove('nas').timeout(const Duration(seconds: 1));
+      await scan;
+      final state = container.read(localLibraryProvider);
+      expect(state.isScanning, isFalse);
+      expect(state.scanWasCancelled, isTrue);
+      expect(
+        state.sources.firstWhere((s) => s.id == 'active').available,
+        isFalse,
+      );
+      expect(
+        storage.listing.isCompleted,
+        isFalse,
+        reason: 'Cancellation must not wait for the old NAS response',
+      );
+      storage.listing.completeError(
+        const SocketException('Old connection closed'),
+      );
+      await Future<void>.delayed(Duration.zero);
+    },
+  );
+
+  test(
+    'removing the active library source waits for its scan to stop',
+    () async {
+      completeOnCancel = true;
+      final scan = library.startSourceScan('active');
+      await _waitFor(() => scans.isNotEmpty);
+      await library.removeSource('active').timeout(const Duration(seconds: 1));
+      await scan;
+      expect(calls, contains('cancelLibraryScan'));
+      expect(container.read(localLibraryProvider).isScanning, isFalse);
+      expect(database.sources.any((s) => s.id == 'active'), isFalse);
+    },
+  );
+
+  test('removing another connection keeps the active scan running', () async {
+    final scan = library.startSourceScan('active');
+    await _waitFor(() => scans.isNotEmpty);
+    await storage.remove('another-nas');
+    expect(calls, isNot(contains('cancelLibraryScan')));
+    expect(container.read(localLibraryProvider).isScanning, isTrue);
+    scans.single.$2.complete('{"cancelled":true}');
+    await scan;
+  });
 
   test(
     'Android crash details are recovered and retained without manual logs',
@@ -321,6 +418,197 @@ void main() {
       },
     );
   }
+
+  test(
+    'a silent scan retains failures without result banners or noisy recovery',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      final active = library.startSourceScan('active', notify: false);
+      await _waitFor(() => scans.length == 1);
+      expect(prefs.getBool(localLibraryActiveScanNotifyKey), isFalse);
+      scans.single.$2.completeError(StateError('PC disconnected'));
+      await active;
+      final state = container.read(localLibraryProvider);
+      expect(state.sources.first.lastScanError, contains('PC disconnected'));
+      expect(state.totalCount, 1);
+      expect(notificationCalls.where((call) => call.method == 'show'), isEmpty);
+      expect(prefs.containsKey(localLibraryActiveScanNotifyKey), isFalse);
+
+      // A process exit during an automatic scan is still diagnosed on restart.
+      await prefs.setString(localLibraryActiveScanSourceKey, 'active');
+      await prefs.setInt(localLibraryActiveScanStartedAtKey, 100);
+      await prefs.setBool(localLibraryActiveScanNotifyKey, false);
+      await restartLibrary();
+      expect(
+        container.read(localLibraryProvider).sources.first.lastScanError,
+        contains('interrupted'),
+      );
+      expect(notificationCalls.where((call) => call.method == 'show'), isEmpty);
+
+      // Manual scans resume their normal failure notifications.
+      final manual = library.startSourceScan('active');
+      await _waitFor(() => scans.length == 2);
+      scans.last.$2.completeError(StateError('Manual scan failed'));
+      await manual;
+      final notice =
+          notificationCalls.lastWhere((call) => call.method == 'show').arguments
+              as Map;
+      expect(notice['title'], 'Library scan failed');
+      expect(notice['body'], contains('Manual scan failed'));
+    },
+  );
+
+  test('a successful automatic scan posts no result notification', () async {
+    final active = library.startSourceScan('active', notify: false);
+    await _waitFor(() => scans.length == 1);
+    scans.single.$2.complete('{"files":[],"totalFiles":1,"skippedCount":1}');
+    await active;
+    expect(container.read(localLibraryProvider).isScanning, isFalse);
+    expect(notificationCalls.where((call) => call.method == 'show'), isEmpty);
+  });
+
+  for (final automatic in [false, true]) {
+    test('scan all preserves its notification policy ($automatic)', () async {
+      final scan = automatic
+          ? library.scanAllSources(notify: false)
+          : library.scanAllSources();
+      await _waitFor(() => scans.length == 1);
+      scans.single.$2.complete('{"files":[],"totalFiles":1,"skippedCount":1}');
+      await scan;
+      final shows = notificationCalls.where((call) => call.method == 'show');
+      if (automatic) {
+        expect(shows, isEmpty);
+      } else {
+        expect((shows.last.arguments as Map)['title'], 'Library scan complete');
+      }
+    });
+  }
+
+  for (final desktop in [false, true]) {
+    test(
+      'Link automatic scan failures stay silent (desktop: $desktop)',
+      () async {
+        const connection = NetworkConnection(
+          id: 'peer',
+          name: 'Peer',
+          protocol: NetworkProtocol.smb,
+          address: 'smb://peer.test/music/',
+        );
+        await storage.save(connection);
+        final root = NetworkStorageService.source('peer', '');
+        database.sources[0] = LocalLibrarySource(
+          id: 'active',
+          path: root,
+          displayName: 'Peer',
+        );
+        available[root] = true;
+        final bridge = Provider<Future<void> Function(String)>((ref) {
+          if (desktop) {
+            return LinkPhoneLibraryBridge(ref, database: database).rescan;
+          }
+          return LinkNetworkLibraryBridge(
+            ref,
+            database: database,
+            storage: storage,
+          ).rescan;
+        });
+        await container.read(bridge)('peer');
+        await storage.started.future.timeout(const Duration(seconds: 5));
+        storage.listing.completeError(
+          const SocketException('Peer disconnected'),
+        );
+        await _waitFor(
+          () =>
+              database.sources.first.lastScanError?.contains(
+                'Peer disconnected',
+              ) ==
+              true,
+        );
+        final prefs = await SharedPreferences.getInstance();
+        await _waitFor(
+          () => !prefs.containsKey(localLibraryActiveScanSourceKey),
+        );
+        expect(
+          notificationCalls.where((call) => call.method == 'show'),
+          isEmpty,
+        );
+      },
+    );
+
+    test('Link disposal cancels a pending source lookup ($desktop)', () async {
+      final response = Completer<LocalLibrarySource?>();
+      database.sourceLookup = (_) => response.future;
+      final bridge = Provider<Future<void> Function(String)>((ref) {
+        if (desktop) {
+          return LinkPhoneLibraryBridge(ref, database: database).rescan;
+        }
+        return LinkNetworkLibraryBridge(
+          ref,
+          database: database,
+          storage: storage,
+        ).rescan;
+      });
+      final pending = container.read(bridge)('peer');
+      container.dispose();
+      response.complete(database.sources.first);
+      await pending;
+      expect(scans, isEmpty);
+      expect(storage.started.isCompleted, isFalse);
+    });
+  }
+
+  test('simultaneous automatic starts serialize after admission', () async {
+    final first = library.startSourceScan(
+      'active',
+      notify: false,
+      waitForCurrentScan: true,
+    );
+    final second = library.startSourceScan(
+      'active',
+      notify: false,
+      waitForCurrentScan: true,
+    );
+    await _waitFor(() => scans.length == 1);
+    scans.first.$2.complete('{"cancelled":true}');
+    await first;
+    await _waitFor(() => scans.length == 2);
+    scans.last.$2.complete('{"cancelled":true}');
+    await second;
+    expect(container.read(localLibraryProvider).isScanning, isFalse);
+  });
+
+  test('queued automatic scans wait for the previous cleanup', () async {
+    final entered = Completer<void>();
+    final release = Completer<void>();
+    messenger.setMockMethodCallHandler(notifications, (call) async {
+      notificationCalls.add(call);
+      if (call.method == 'show' &&
+          (call.arguments as Map)['title'] == 'Library scan failed') {
+        entered.complete();
+        await release.future;
+      }
+      return call.method == 'initialize' ? true : null;
+    });
+    final first = library.startSourceScan('active');
+    await _waitFor(() => scans.length == 1);
+    scans.first.$2.completeError(StateError('First scan failed'));
+    await entered.future.timeout(const Duration(seconds: 5));
+    expect(container.read(localLibraryProvider).isScanning, isFalse);
+    final queued = library.startSourceScan(
+      'active',
+      notify: false,
+      waitForCurrentScan: true,
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(scans, hasLength(1));
+    release.complete();
+    await first;
+    await _waitFor(() => scans.length == 2);
+    scans.last.$2.complete('{"cancelled":true}');
+    await queued;
+    final shows = notificationCalls.where((call) => call.method == 'show');
+    expect((shows.last.arguments as Map)['title'], 'Library scan failed');
+  });
 
   test(
     'a scan failure remains visible when saving the error also fails',

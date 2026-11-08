@@ -4,6 +4,8 @@ import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:spotiflac/services/platform_bridge.dart';
 import 'package:spotiflac/services/playback_metadata.dart';
+import 'package:spotiflac/services/player_lyrics_persistence.dart';
+import 'package:spotiflac/services/source_metadata_events.dart';
 import 'package:spotiflac/utils/int_utils.dart';
 import 'package:spotiflac/utils/logger.dart';
 import 'package:spotiflac/utils/lyrics_parser.dart';
@@ -12,6 +14,7 @@ final _log = AppLogger('PlayerMetadata');
 
 /// Returns LRC text from the configured lyrics providers, or empty.
 typedef OnlineLyricsFetcher = Future<String> Function(MediaItem item);
+typedef OnlineLyricsSaver = Future<void> Function(String source, String lyrics);
 
 Future<String> _fetchOnlineLyrics(MediaItem item) async {
   final result = await PlatformBridge.getLyricsLRCWithSource(
@@ -30,16 +33,36 @@ class PlayerMetadataController extends ChangeNotifier {
     PlaybackMetadataReader? readMetadata,
     Future<ParsedLyrics> Function(String?)? parseLyrics,
     OnlineLyricsFetcher? fetchOnlineLyrics,
+    OnlineLyricsSaver? saveOnlineLyrics,
+    SourceMetadataEvents? metadataEvents,
   }) : _readMetadata = readMetadata ?? readPlaybackFileMetadataWithRetry,
        _parseLyrics = parseLyrics ?? LyricsParser.parseAsyncNative,
-       _fetchOnline = fetchOnlineLyrics ?? _fetchOnlineLyrics;
+       _fetchOnline = fetchOnlineLyrics ?? _fetchOnlineLyrics,
+       _saveOnline = saveOnlineLyrics ?? persistPlayerLyrics,
+       _metadataEvents = metadataEvents ?? SourceMetadataEvents.instance {
+    _unsubscribeMetadata = _metadataEvents.subscribe((changed) async {
+      if (_disposed ||
+          changed != source ||
+          _savingLyricsSources.contains(changed)) {
+        return;
+      }
+      _requestKey = null;
+      await load(_item);
+    });
+  }
+
+  late final void Function() _unsubscribeMetadata;
 
   final PlaybackMetadataReader _readMetadata;
   final Future<ParsedLyrics> Function(String?) _parseLyrics;
   final OnlineLyricsFetcher _fetchOnline;
+  final OnlineLyricsSaver _saveOnline;
+  final SourceMetadataEvents _metadataEvents;
+  final _savingLyricsSources = <String>{};
   MediaItem? _item;
   bool _searchingOnline = false;
   bool _onlineSearchMissed = false;
+  bool _onlineLyricsSaveFailed = false;
   (String, String, String?)? _requestKey;
   String? _loadedPath;
   Map<String, dynamic> _fallback = const {};
@@ -50,6 +73,13 @@ class PlayerMetadataController extends ChangeNotifier {
   bool _disposed = false;
 
   String? get source => _requestKey?.$2;
+
+  /// The queue item whose file this controller reads, or null for an item
+  /// without one.
+  MediaItem? get item => _item;
+
+  /// The lyrics as stored: LRC, TTML or plain text, empty when none.
+  String get rawLyrics => _lyricsRaw;
 
   /// The path the current metadata was probed from: the resolved copy of a
   /// document, or the source itself.
@@ -64,21 +94,27 @@ class PlayerMetadataController extends ChangeNotifier {
 
   /// The last online search for this track found nothing.
   bool get onlineSearchMissed => _onlineSearchMissed;
+  bool get onlineLyricsSaveFailed => _onlineLyricsSaveFailed;
 
   bool get canSearchOnline =>
       (_item?.title.trim().isNotEmpty ?? false) &&
       (_item?.artist?.trim().isNotEmpty ?? false);
 
-  /// Shows provider lyrics for a file without its own. Nothing is written to
-  /// the file; changing tracks discards the result.
+  /// Displays fetched lyrics and embeds them in the original audio file.
   Future<void> searchOnline() async {
     final item = _item;
-    if (_disposed || item == null || _searchingOnline || !canSearchOnline) {
+    if (_disposed ||
+        item == null ||
+        _searchingOnline ||
+        _savingLyricsSources.contains(this.source) ||
+        !canSearchOnline) {
       return;
     }
     final generation = _generation;
+    final source = this.source!;
     _searchingOnline = true;
     _onlineSearchMissed = false;
+    _onlineLyricsSaveFailed = false;
     notifyListeners();
     var parsed = ParsedLyrics.empty;
     var raw = '';
@@ -98,6 +134,60 @@ class PlayerMetadataController extends ChangeNotifier {
       _lyricsRaw = raw;
     }
     notifyListeners();
+    if (parsed.isEmpty) return;
+
+    _savingLyricsSources.add(source);
+    try {
+      await _saveOnline(source, raw);
+      await _metadataEvents.publish(source);
+      if (_disposed || generation != _generation) return;
+      _metadata = Map.unmodifiable({...?_metadata, 'lyrics': raw});
+      _lyrics = parsed;
+      _lyricsRaw = raw;
+    } catch (error) {
+      _log.w('Could not embed online lyrics: $error');
+      if (_disposed || generation != _generation) return;
+      _onlineLyricsSaveFailed = true;
+    } finally {
+      _savingLyricsSources.remove(source);
+    }
+    if (!_disposed && generation == _generation) notifyListeners();
+  }
+
+  /// Embeds [raw] in the original audio file and shows it. Throws when the
+  /// file can't be written, leaving the current lyrics in place.
+  Future<void> saveEditedLyrics(String raw) async {
+    final source = this.source;
+    if (_disposed || _item == null || source == null) {
+      throw StateError('No editable track is loaded');
+    }
+    final generation = _generation;
+    final parsed = raw.trim().isEmpty
+        ? ParsedLyrics.empty
+        : await _parseLyrics(raw);
+    // A document plays from a copy, so reloading after the save would read
+    // the old lyrics back; show what was written instead.
+    _savingLyricsSources.add(source);
+    try {
+      await _saveOnline(source, raw);
+      await _metadataEvents.publish(source);
+    } finally {
+      _savingLyricsSources.remove(source);
+    }
+    if (_disposed || generation != _generation) return;
+    _metadata = Map.unmodifiable({...?_metadata, 'lyrics': raw});
+    _lyrics = parsed;
+    _lyricsRaw = raw;
+    _onlineSearchMissed = false;
+    _onlineLyricsSaveFailed = false;
+    notifyListeners();
+  }
+
+  /// Reads deferred file tags when opening technical details. Already loaded
+  /// metadata, including online lyrics, stays cached for the current item.
+  Future<void> ensureFileMetadata() async {
+    if (_disposed || _item == null || _loadedPath != null) return;
+    await load(_item, inspectUnresolvedContentUri: true);
   }
 
   Future<void> load(
@@ -106,6 +196,20 @@ class PlayerMetadataController extends ChangeNotifier {
   }) async {
     if (_disposed) return;
     final source = item?.extras?['source']?.toString() ?? '';
+    if (item != null &&
+        source.isEmpty &&
+        item.extras?['displayMetadata'] is Map) {
+      _generation++;
+      _probePending = false;
+      _resetOnlineSearch();
+      _item = null;
+      _requestKey = (item.id, source, null);
+      _loadedPath = null;
+      _fallback = Map.unmodifiable(playbackAudioMetadataFromMediaItem(item));
+      final pending = _replaceMetadata(_fallback);
+      if (pending != null) await pending;
+      return;
+    }
     if (item == null || source.isEmpty) {
       _item = null;
       if (_requestKey == null) return;
@@ -231,10 +335,17 @@ class PlayerMetadataController extends ChangeNotifier {
   void _resetOnlineSearch() {
     _searchingOnline = false;
     _onlineSearchMissed = false;
+    _onlineLyricsSaveFailed = false;
   }
 
   String _metadataPath(String source, String? resolved) =>
-      !source.startsWith('network://') && resolved?.isNotEmpty == true
+      resolved?.isNotEmpty == true &&
+          (!source.startsWith('network://') ||
+              !const {
+                'http',
+                'https',
+                'network',
+              }.contains(Uri.tryParse(resolved!)?.scheme))
       ? resolved!
       : source;
 
@@ -311,6 +422,7 @@ class PlayerMetadataController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _unsubscribeMetadata();
     _generation++;
     super.dispose();
   }

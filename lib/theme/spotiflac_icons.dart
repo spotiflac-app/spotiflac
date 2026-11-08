@@ -17,6 +17,13 @@ const IconData spotiflacArrowForward = IconData(
 /// ([CupertinoIcons.back], not [CupertinoIcons.chevron_back]).
 IconData spotiflacIconFor(IconData icon) {
   if (icon.fontFamily == CupertinoIcons.iconFont) return icon;
+  // The switch compares each pattern in turn; rows look icons up per build.
+  return _spotiflacIcons[icon] ??= _cupertinoFor(icon);
+}
+
+final _spotiflacIcons = <IconData, IconData>{};
+
+IconData _cupertinoFor(IconData icon) {
   return switch (icon) {
     Icons.extension ||
     Icons.extension_outlined ||
@@ -45,7 +52,8 @@ IconData spotiflacIconFor(IconData icon) {
     Icons.folder_outlined ||
     Icons.folder_open ||
     Icons.folder_special ||
-    Icons.folder_special_outlined => CupertinoIcons.folder,
+    Icons.folder_special_outlined ||
+    Icons.drive_file_move_outlined => CupertinoIcons.folder,
     Icons.create_new_folder_outlined => CupertinoIcons.folder_badge_plus,
     Icons.storage_outlined ||
     Icons.sd_storage_outlined ||
@@ -131,6 +139,7 @@ IconData spotiflacIconFor(IconData icon) {
     Icons.wifi => CupertinoIcons.wifi,
     Icons.signal_cellular_alt => CupertinoIcons.antenna_radiowaves_left_right,
     Icons.cloud || Icons.cloud_outlined => CupertinoIcons.cloud,
+    Icons.cloud_upload_outlined => CupertinoIcons.cloud_upload,
     Icons.high_quality => CupertinoIcons.hifispeaker,
     Icons.four_k => CupertinoIcons.waveform,
     Icons.dynamic_feed_outlined ||
@@ -176,6 +185,7 @@ IconData spotiflacIconFor(IconData icon) {
     Icons.bug_report || Icons.bug_report_outlined => CupertinoIcons.ant,
     Icons.timer_outlined => CupertinoIcons.timer,
     Icons.timer_off_outlined => CupertinoIcons.timer,
+    Icons.mic => CupertinoIcons.mic_fill,
     Icons.bedtime_outlined => CupertinoIcons.moon_zzz,
     Icons.explore_outlined => CupertinoIcons.compass,
     Icons.vpn_key_outlined => CupertinoIcons.lock,
@@ -204,6 +214,10 @@ IconData spotiflacIconFor(IconData icon) {
     Icons.computer => CupertinoIcons.desktopcomputer,
     Icons.hub_outlined => CupertinoIcons.link,
     Icons.campaign_outlined => CupertinoIcons.speaker_2,
+    Icons.drag_handle => CupertinoIcons.line_horizontal_3,
+    Icons.swap_vert => CupertinoIcons.arrow_up_arrow_down,
+    Icons.file_open_outlined => CupertinoIcons.doc,
+    Icons.directions_car => CupertinoIcons.car_detailed,
     // Preserve meaning for symbols without a Cupertino counterpart, such as
     // numbered download limits. An unrelated gear hides the action's purpose.
     _ => icon,

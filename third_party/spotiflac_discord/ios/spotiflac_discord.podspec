@@ -1,3 +1,6 @@
+discord_application_id = ENV.fetch('SPOTIFLAC_DISCORD_APPLICATION_ID', '0')
+raise 'Discord application ID must contain decimal digits' unless discord_application_id.match?(/\A[0-9]+\z/)
+
 Pod::Spec.new do |s|
   s.name = 'spotiflac_discord'
   s.version = '0.1.0'
@@ -10,13 +13,13 @@ Pod::Spec.new do |s|
   s.dependency 'Flutter'
   s.platform = :ios, '16.0'
   sdk = 'Frameworks/discord_partner_sdk.xcframework'
-  if ENV['SPOTIFLAC_DISCORD_SDK'] == '1' && File.directory?(File.join(__dir__, sdk))
+  if ENV['SPOTIFLAC_DISCORD_SDK'] != '0' && File.directory?(File.join(__dir__, sdk))
     s.vendored_frameworks = sdk
     s.resources = 'Frameworks/Discord-License-Notices.txt'
     s.pod_target_xcconfig = {
       'CLANG_CXX_LANGUAGE_STANDARD' => 'c++20',
       'OTHER_LDFLAGS' => '$(inherited) -framework discord_partner_sdk',
-      'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) SPOTIFLAC_DISCORD_SDK=1',
+      'GCC_PREPROCESSOR_DEFINITIONS' => "$(inherited) SPOTIFLAC_DISCORD_SDK=1 SPOTIFLAC_DISCORD_APPLICATION_ID=#{discord_application_id}ULL",
       'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386 x86_64'
     }
     # The official SDK contains an arm64 simulator slice only.

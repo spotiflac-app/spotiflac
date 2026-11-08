@@ -1,5 +1,10 @@
 import 'package:spotiflac/utils/string_utils.dart';
 
+/// Another transfer published the same origin while this one was fetching.
+class OfflineCopyAlreadySaved implements Exception {
+  const OfflineCopyAlreadySaved();
+}
+
 class DownloadHistoryItem {
   final String id;
   final String trackName;
@@ -8,6 +13,12 @@ class DownloadHistoryItem {
   final String? albumArtist;
   final String? coverUrl;
   final String filePath;
+
+  /// Stable network source of an independently saved offline copy.
+  final String? originFilePath;
+
+  /// Whether the latest Library scan still contains the original file.
+  final bool originAvailable;
   final String? storageMode;
   final String? downloadTreeUri;
   final String? safRelativeDir;
@@ -41,6 +52,14 @@ class DownloadHistoryItem {
   /// [hasReplayGain] a confirmed absence.
   final int replayGainMetadataScanVersion;
 
+  /// File copies retain their scanned Library identity for playlists/likes.
+  /// The legacy spotifyId column also stores foreign ids from other sources.
+  bool get _offlineLibraryFile =>
+      originFilePath != null &&
+      const {'Network offline', 'SpotiFLAC Link'}.contains(service);
+  String get collectionTrackId => _offlineLibraryFile ? spotifyId ?? id : id;
+  String get collectionTrackSource => _offlineLibraryFile ? 'local' : service;
+
   const DownloadHistoryItem({
     required this.id,
     required this.trackName,
@@ -49,6 +68,8 @@ class DownloadHistoryItem {
     this.albumArtist,
     this.coverUrl,
     required this.filePath,
+    this.originFilePath,
+    this.originAvailable = false,
     this.storageMode,
     this.downloadTreeUri,
     this.safRelativeDir,
@@ -88,6 +109,7 @@ class DownloadHistoryItem {
     'albumArtist': albumArtist,
     'coverUrl': coverUrl,
     'filePath': filePath,
+    'originFilePath': originFilePath,
     'storageMode': storageMode,
     'downloadTreeUri': downloadTreeUri,
     'safRelativeDir': safRelativeDir,
@@ -128,6 +150,9 @@ class DownloadHistoryItem {
         albumArtist: normalizeOptionalString(json['albumArtist'] as String?),
         coverUrl: normalizeCoverReference(json['coverUrl']?.toString()),
         filePath: json['filePath'] as String,
+        originFilePath: json['originFilePath'] as String?,
+        originAvailable:
+            json['originAvailable'] == true || json['originAvailable'] == 1,
         storageMode: json['storageMode'] as String?,
         downloadTreeUri: json['downloadTreeUri'] as String?,
         safRelativeDir: json['safRelativeDir'] as String?,
@@ -169,6 +194,8 @@ class DownloadHistoryItem {
     String? albumArtist,
     String? coverUrl,
     String? filePath,
+    String? originFilePath,
+    bool? originAvailable,
     String? storageMode,
     String? downloadTreeUri,
     String? safRelativeDir,
@@ -205,6 +232,8 @@ class DownloadHistoryItem {
       albumArtist: albumArtist ?? this.albumArtist,
       coverUrl: normalizeCoverReference(coverUrl ?? this.coverUrl),
       filePath: filePath ?? this.filePath,
+      originFilePath: originFilePath ?? this.originFilePath,
+      originAvailable: originAvailable ?? this.originAvailable,
       storageMode: storageMode ?? this.storageMode,
       downloadTreeUri: downloadTreeUri ?? this.downloadTreeUri,
       safRelativeDir: safRelativeDir ?? this.safRelativeDir,
@@ -254,6 +283,12 @@ Map<String, DownloadHistoryItem> _indexRecentHistoryItems(
   return index;
 }
 
+Map<String, DownloadHistoryItem> _indexWithNewest(
+  Map<String, DownloadHistoryItem> index,
+  String? key,
+  DownloadHistoryItem item,
+) => key == null || key.isEmpty ? index : ({...index, key: item});
+
 class DownloadHistoryState {
   final List<DownloadHistoryItem> items;
   final int totalCount;
@@ -279,7 +314,7 @@ class DownloadHistoryState {
        ),
        _byTrackArtistKey = _indexRecentHistoryItems(
          lookupItems ?? items,
-         (item) => _trackArtistKey(item.trackName, item.artistName),
+         (item) => trackArtistKey(item.trackName, item.artistName),
        );
 
   DownloadHistoryState._withExistingLookup({
@@ -292,7 +327,27 @@ class DownloadHistoryState {
        _byIsrc = source._byIsrc,
        _byTrackArtistKey = source._byTrackArtistKey;
 
-  static String _trackArtistKey(String trackName, String artistName) {
+  DownloadHistoryState._withPrependedLookup({
+    required DownloadHistoryState source,
+    required DownloadHistoryItem item,
+    required this.items,
+    required this.totalCount,
+  }) : loadedIndexVersion = source.loadedIndexVersion,
+       _lookupItems = List.unmodifiable([item, ...source._lookupItems]),
+       _bySpotifyId = _indexWithNewest(
+         source._bySpotifyId,
+         item.spotifyId,
+         item,
+       ),
+       _byIsrc = _indexWithNewest(source._byIsrc, item.isrc, item),
+       _byTrackArtistKey = _indexWithNewest(
+         source._byTrackArtistKey,
+         trackArtistKey(item.trackName, item.artistName),
+         item,
+       );
+
+  /// The key [findByTrackArtistKey] reads; '' for an empty track name.
+  static String trackArtistKey(String trackName, String artistName) {
     final normalizedTrack = trackName.trim().toLowerCase();
     if (normalizedTrack.isEmpty) return '';
     final normalizedArtist = artistName.trim().toLowerCase();
@@ -309,11 +364,10 @@ class DownloadHistoryState {
   DownloadHistoryItem? findByTrackAndArtist(
     String trackName,
     String artistName,
-  ) {
-    final key = _trackArtistKey(trackName, artistName);
-    if (key.isEmpty) return null;
-    return _byTrackArtistKey[key];
-  }
+  ) => findByTrackArtistKey(trackArtistKey(trackName, artistName));
+
+  DownloadHistoryItem? findByTrackArtistKey(String key) =>
+      key.isEmpty ? null : _byTrackArtistKey[key];
 
   List<DownloadHistoryItem> get lookupItems => _lookupItems;
 
@@ -338,4 +392,17 @@ class DownloadHistoryState {
       lookupItems: lookupItems,
     );
   }
+
+  /// Same lookups as `copyWith(lookupItems: [item, ...lookupItems])`: the
+  /// first occurrence wins each key, so [item] only overwrites its own keys.
+  DownloadHistoryState copyWithPrependedLookup(
+    DownloadHistoryItem item, {
+    required List<DownloadHistoryItem> items,
+    required int totalCount,
+  }) => DownloadHistoryState._withPrependedLookup(
+    source: this,
+    item: item,
+    items: items,
+    totalCount: totalCount,
+  );
 }

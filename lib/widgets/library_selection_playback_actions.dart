@@ -1,11 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:spotiflac/l10n/l10n.dart';
 import 'package:spotiflac/models/unified_library_item.dart';
 import 'package:spotiflac/providers/music_player_provider.dart';
 import 'package:spotiflac/utils/desktop_platform.dart';
+import 'package:spotiflac/widgets/link/link_actions.dart';
 import 'package:spotiflac/widgets/playlist_picker_sheet.dart';
 import 'package:spotiflac/widgets/selection_action_button.dart';
+import 'package:spotiflac/services/network_offline_saver.dart';
+import 'package:spotiflac/widgets/network_offline_actions.dart';
+import 'package:spotiflac/providers/network_upload_provider.dart';
+import 'package:spotiflac/widgets/network_upload_actions.dart';
 
 /// Collection actions stay separate from actions that modify audio files.
 class LibrarySelectionPlaybackActions extends ConsumerWidget {
@@ -21,7 +28,33 @@ class LibrarySelectionPlaybackActions extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).colorScheme;
+    final showPlayer = ref.watch(playerUiEnabledProvider);
     final actions = <Widget>[
+      if (items.any((item) => networkOfflineOrigin(item) != null))
+        SelectionActionButton(
+          icon: Icons.download_for_offline_outlined,
+          label: context.l10n.offlineSave,
+          colorScheme: colors,
+          onPressed: () {
+            final root = Navigator.of(context, rootNavigator: true).context;
+            unawaited(saveNetworkOffline(root, ref, items));
+            onClose();
+          },
+        ),
+      if (networkUploadOffered(
+        ref.watch(networkUploadConnectionsProvider).value,
+        items,
+      ))
+        SelectionActionButton(
+          icon: Icons.cloud_upload_outlined,
+          label: context.l10n.networkUpload,
+          colorScheme: colors,
+          onPressed: () {
+            final root = Navigator.of(context, rootNavigator: true).context;
+            unawaited(uploadToNetworkStorage(root, ref, items));
+            onClose();
+          },
+        ),
       SelectionActionButton(
         icon: Icons.playlist_add,
         label: context.l10n.collectionAddToPlaylist,
@@ -38,7 +71,7 @@ class LibrarySelectionPlaybackActions extends ConsumerWidget {
                 showAddTracksToPlaylistSheet(navigatorContext, ref, tracks);
               },
       ),
-      for (final next in [true, false])
+      for (final next in showPlayer ? [true, false] : const <bool>[])
         SelectionActionButton(
           icon: next ? Icons.playlist_play : Icons.queue_music,
           label: next
@@ -53,6 +86,8 @@ class LibrarySelectionPlaybackActions extends ConsumerWidget {
                   if (context.mounted) onClose();
                 },
         ),
+      // Copying songs to or from the paired computer (SpotiFLAC Link).
+      ...linkTransferSelectionActions(context, ref, items, onClose: onClose),
     ];
     return LayoutBuilder(
       builder: (context, constraints) => Padding(

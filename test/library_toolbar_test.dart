@@ -21,18 +21,25 @@ import 'package:spotiflac/theme/app_theme.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
 import 'package:spotiflac/utils/desktop_platform.dart';
 import 'package:spotiflac/widgets/app_search_field.dart';
+import 'package:spotiflac/widgets/library_directory_view.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 
 class _Settings extends SettingsNotifier {
+  _Settings(this.initial);
+
+  final AppSettings? initial;
+
   // The Rewind banner animates for as long as it is shown; keep it off so
   // the page settles.
   @override
-  AppSettings build() => const AppSettings(
-    defaultLibraryView: 'all',
-    historyViewMode: 'list',
-    listeningStatisticsEnabled: false,
-  );
+  AppSettings build() =>
+      initial ??
+      const AppSettings(
+        defaultLibraryView: 'all',
+        historyViewMode: 'list',
+        listeningStatisticsEnabled: false,
+      );
 }
 
 /// Downloaded songs added on [dates]. With a queue item present and the
@@ -136,6 +143,7 @@ void main() {
     List<UserPlaylistCollection> playlists = const [],
     bool withQueueItem = true,
   }) async {
+    final preferences = await SharedPreferences.getInstance();
     debugDesktopPlatformOverride = desktop;
     tester.view.physicalSize = const Size(1280, 900);
     tester.view.devicePixelRatio = 1;
@@ -159,7 +167,13 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          settingsProvider.overrideWith(_Settings.new),
+          settingsProvider.overrideWith(
+            () => _Settings(
+              hasPersistedAppSettings(preferences)
+                  ? loadBootstrapSettings(preferences)
+                  : null,
+            ),
+          ),
           downloadHistoryProvider.overrideWith(
             () => _History(dates ?? [DateTime(2026, 1, 10)]),
           ),
@@ -341,10 +355,69 @@ void main() {
 
   for (final desktop in [false, true]) {
     for (final spotiflac in [false, true]) {
+      testWidgets('title sort survives a fresh Library and settings scope '
+          '(desktop: $desktop, SpotiFLAC: $spotiflac)', (tester) async {
+        await pumpLibrary(tester, desktop: desktop, spotiflac: spotiflac);
+        final l10n = l10nOf(tester);
+        await tester.tap(
+          find
+              .text(
+                spotiflac
+                    ? l10n.libraryFilterTitle
+                    : l10n.libraryFilterSortLatest,
+              )
+              .hitTestable(),
+        );
+        for (var i = 0; i < 10; i++) {
+          await tester.pump(const Duration(milliseconds: 50));
+        }
+        final choice = find.text(l10n.searchSortTitleAZ);
+        await tester.ensureVisible(choice);
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.tap(choice);
+        if (spotiflac) {
+          await tester.ensureVisible(find.text(l10n.libraryFilterApply));
+          await tester.pump(const Duration(milliseconds: 300));
+          await tester.tap(find.text(l10n.libraryFilterApply));
+        }
+        for (var i = 0; i < 10; i++) {
+          await tester.pump(const Duration(milliseconds: 50));
+        }
+        final preferences = await SharedPreferences.getInstance();
+        expect(loadBootstrapSettings(preferences).historySortMode, 'a-z');
+        await tester.pumpWidget(const SizedBox.shrink());
+        queries.clear();
+        await pumpLibrary(tester, desktop: desktop, spotiflac: spotiflac);
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(QueueTab)),
+        );
+        expect(container.read(settingsProvider).historySortMode, 'a-z');
+        expect(
+          queries.any((sql) => sql.contains('ORDER BY sort_track ASC')),
+          isTrue,
+        );
+        if (!spotiflac) {
+          expect(
+            find.text(l10n.searchSortTitleAZ).hitTestable(),
+            findsOneWidget,
+          );
+          expect(find.text(l10n.libraryFilterSortLatest), findsNothing);
+        }
+        expect(tester.takeException(), isNull);
+      });
+
       testWidgets('size sort applies from the Library menu '
           '(desktop: $desktop, SpotiFLAC: $spotiflac)', (tester) async {
         await pumpLibrary(tester, desktop: desktop, spotiflac: spotiflac);
         final l10n = l10nOf(tester);
+        // The search field scrolls with the page over its plain background.
+        expect(
+          find.descendant(
+            of: find.byType(AppSearchField),
+            matching: find.byType(BackdropFilter),
+          ),
+          findsNothing,
+        );
         await tester.tap(
           find
               .text(
@@ -374,6 +447,34 @@ void main() {
         }
         expect(queries.any((sql) => sql.contains('sort_size DESC')), isTrue);
         expect(find.text(l10n.libraryFilterSortSizeSmallest), findsNothing);
+        if (!spotiflac) {
+          await tester.tap(
+            find.descendant(
+              of: find.byType(TabBar),
+              matching: find.text(l10n.searchPlaylists),
+            ),
+          );
+          for (var i = 0; i < 40; i++) {
+            await tester.pump(const Duration(milliseconds: 50));
+          }
+          final preferences = await SharedPreferences.getInstance();
+          expect(
+            loadBootstrapSettings(preferences).historySortMode,
+            'size-desc',
+          );
+          await tester.tap(
+            find
+                .descendant(of: find.byType(TabBar), matching: find.byType(Tab))
+                .first,
+          );
+          for (var i = 0; i < 40; i++) {
+            await tester.pump(const Duration(milliseconds: 50));
+          }
+          expect(
+            find.text(l10n.libraryFilterSortSizeLargest).hitTestable(),
+            findsOneWidget,
+          );
+        }
         expect(tester.takeException(), isNull);
       });
     }
@@ -403,6 +504,29 @@ void main() {
     expect(find.text(l10n.libraryFilterTitle), findsOneWidget);
   });
 
+  testWidgets('the Folders tab browses the Library by folder', (tester) async {
+    await pumpLibrary(tester);
+    final l10n = l10nOf(tester);
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(TabBar),
+        matching: find.text(l10n.libraryFolders),
+      ),
+    );
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    expect(find.byType(LibraryDirectoryView), findsOneWidget);
+    // The mocked database has no songs.
+    expect(find.text(l10n.libraryFoldersEmptyTitle), findsOneWidget);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(QueueTab)),
+    );
+    expect(container.read(settingsProvider).historyFilterMode, 'folders');
+  });
+
   testWidgets('SpotiFLAC keeps its filter button', (tester) async {
     await pumpLibrary(tester, spotiflac: true);
     final l10n = l10nOf(tester);
@@ -430,5 +554,36 @@ void main() {
       expect(tester.getSemantics(header), isSemantics(isHeader: true));
     }
     handle.dispose();
+  });
+
+  testWidgets('a rebuild with unchanged rows reuses the month sections', (
+    tester,
+  ) async {
+    await pumpLibrary(
+      tester,
+      dates: [
+        for (var day = 1; day <= 6; day++) DateTime(2026, 3, day),
+        DateTime(2025, 12, 24),
+      ],
+    );
+    final sectionList = find.byWidgetPredicate(
+      (widget) => widget.runtimeType.toString() == '_LibrarySectionList',
+    );
+    // Read the private list's sections without adding a test hook.
+    List<Object?> sections() =>
+        // ignore: avoid_dynamic_calls
+        (tester.widget(sectionList) as dynamic).sections as List<Object?>;
+    final widgetBefore = tester.widget(sectionList);
+    final before = sections();
+    expect(before, hasLength(2));
+
+    // Badge text is display-only: the Library rebuilds with the same rows.
+    ProviderScope.containerOf(tester.element(find.byType(QueueTab)))
+        .read(settingsProvider.notifier)
+        .setLibraryQualityLabelMode(AppSettings.libraryQualityLabelFileFormat);
+    await tester.pump();
+
+    expect(tester.widget(sectionList), isNot(same(widgetBefore)));
+    expect(sections(), same(before));
   });
 }

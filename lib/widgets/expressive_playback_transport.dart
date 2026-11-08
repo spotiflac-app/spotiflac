@@ -2,10 +2,11 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:material_3_expressive/material_3_expressive.dart';
-import 'package:spotiflac/theme/app_motion.dart';
 import 'package:spotiflac/theme/material_expressive.dart';
 import 'package:spotiflac/widgets/app_icon.dart';
 import 'package:spotiflac/widgets/app_loading_indicator.dart';
+import 'package:spotiflac/widgets/expressive_button_group.dart';
+import 'package:spotiflac/widgets/expressive_icon_button.dart';
 
 /// Material 3 Expressive previous / play-pause / next row.
 ///
@@ -27,6 +28,7 @@ class ExpressivePlaybackTransport extends StatefulWidget {
     this.leading,
     this.trailing,
     this.compact = false,
+    this.dense = false,
     this.fill = false,
   });
 
@@ -36,14 +38,20 @@ class ExpressivePlaybackTransport extends StatefulWidget {
   final String playTooltip;
   final String previousTooltip;
   final String nextTooltip;
-  final VoidCallback onPlayPause;
-  final VoidCallback onPrevious;
-  final VoidCallback onNext;
+
+  /// A null callback disables its button, as before a song is loaded.
+  final VoidCallback? onPlayPause;
+  final VoidCallback? onPrevious;
+  final VoidCallback? onNext;
 
   /// 48dp actions beside the group, such as shuffle and repeat.
   final Widget? leading;
   final Widget? trailing;
   final bool compact;
+
+  /// The 40dp desktop size for a bar that also holds the seek row, sized for
+  /// a pointer rather than a thumb.
+  final bool dense;
 
   /// Stretches the group, in its resting proportions, so the row spans the
   /// full width and [leading] and [trailing] line up with its ends.
@@ -55,24 +63,21 @@ class ExpressivePlaybackTransport extends StatefulWidget {
 }
 
 class _ExpressivePlaybackTransportState
-    extends State<ExpressivePlaybackTransport> {
+    extends State<ExpressivePlaybackTransport>
+    with ExpressivePressSquish {
   static const _gap = 8.0;
   static const _sideActionWidth = 48.0;
   static const _minTarget = 48.0;
-  static const _squishRatio = 0.15;
-  static final _pressSpring = SpringCurve(M3EMotion.expressiveSpatialPress);
-
-  int? _pressed;
-
-  void _press(int? index) {
-    if (_pressed != index) setState(() => _pressed = index);
-  }
 
   @override
   Widget build(BuildContext context) {
     final compact = widget.compact;
-    final height = compact ? 56.0 : 72.0;
-    final restingWidths = compact ? [56.0, 80.0, 56.0] : [68.0, 104.0, 68.0];
+    final dense = widget.dense;
+    final height = dense ? 40.0 : (compact ? 56.0 : 72.0);
+    final restingWidths = dense
+        ? [48.0, 64.0, 48.0]
+        : (compact ? [56.0, 80.0, 56.0] : [68.0, 104.0, 68.0]);
+    final sideIconSize = dense ? 20.0 : (compact ? 28.0 : 32.0);
     return LayoutBuilder(
       builder: (context, constraints) {
         final sideActions =
@@ -97,28 +102,31 @@ class _ExpressivePlaybackTransportState
           widths = [for (final width in restingWidths) width * scale];
         }
         final factors = [1.0, 1.0, 1.0];
-        final pressed = _pressed;
+        final pressed = pressedIndex;
         if (pressed != null) {
           // Neighbours give up exactly what the pressed button gains.
-          final growth = restingWidths[pressed] * _squishRatio;
+          final growth = restingWidths[pressed] * squishRatio;
           final neighbours = [
             pressed - 1,
             pressed + 1,
           ].where((index) => index >= 0 && index < widths.length).toList();
-          factors[pressed] += _squishRatio;
+          factors[pressed] += squishRatio;
           for (final index in neighbours) {
             factors[index] -= growth / neighbours.length / restingWidths[index];
           }
         }
         final scheme = widget.colorScheme;
         final playIcon = widget.loading
-            ? AppLoadingIndicator(color: scheme.onSurfaceVariant)
+            ? AppLoadingIndicator(
+                size: dense ? 20 : 32,
+                color: scheme.onSurfaceVariant,
+              )
             : null;
         final buttons = [
           _button(
             tooltip: widget.previousTooltip,
             icon: const AppIcon(Icons.skip_previous),
-            iconSize: compact ? 28 : 32,
+            iconSize: sideIconSize,
             round: false,
             background: scheme.secondaryContainer,
             foreground: scheme.onSecondaryContainer,
@@ -129,7 +137,7 @@ class _ExpressivePlaybackTransportState
             icon: playIcon ?? const AppIcon(Icons.play_arrow),
             selectedIcon: playIcon ?? const AppIcon(Icons.pause),
             selected: widget.playing,
-            iconSize: compact ? 32 : 40,
+            iconSize: dense ? 24 : (compact ? 32 : 40),
             round: true,
             background: scheme.primary,
             foreground: scheme.onPrimary,
@@ -138,7 +146,7 @@ class _ExpressivePlaybackTransportState
           _button(
             tooltip: widget.nextTooltip,
             icon: const AppIcon(Icons.skip_next),
-            iconSize: compact ? 28 : 32,
+            iconSize: sideIconSize,
             round: false,
             background: scheme.secondaryContainer,
             foreground: scheme.onSecondaryContainer,
@@ -149,8 +157,8 @@ class _ExpressivePlaybackTransportState
         // directly instead of restarting a width spring on every frame.
         return TweenAnimationBuilder<_SlotWidths>(
           tween: _SlotWidthsTween(end: (factors[0], factors[1], factors[2])),
-          duration: _pressSpring.duration,
-          curve: _pressSpring,
+          duration: pressSpring.duration,
+          curve: pressSpring,
           builder: (context, slots, _) {
             var previous = widths[0] * slots.$1;
             var play = widths[1] * slots.$2;
@@ -188,15 +196,9 @@ class _ExpressivePlaybackTransportState
   }
 
   Widget _slot(int index, double width, double height, Widget child) =>
-      Listener(
-        onPointerDown: (_) => _press(index),
-        onPointerUp: (_) => _press(null),
-        onPointerCancel: (_) => _press(null),
-        child: SizedBox(
-          width: math.max(0, width),
-          height: height,
-          child: child,
-        ),
+      pressSlot(
+        index,
+        SizedBox(width: math.max(0, width), height: height, child: child),
       );
 
   Widget _button({
@@ -227,25 +229,18 @@ class _ExpressivePlaybackTransportState
             isSelected: selected,
             semanticLabel: tooltip,
             onPressed: onPressed,
-            size: widget.compact ? M3EIconButtonSize.md : M3EIconButtonSize.lg,
+            size: widget.dense
+                ? M3EIconButtonSize.sm
+                : (widget.compact
+                      ? M3EIconButtonSize.md
+                      : M3EIconButtonSize.lg),
             shape: round
                 ? M3EIconButtonShapeVariant.round
                 : M3EIconButtonShapeVariant.square,
             variant: M3EIconButtonVariant.filled,
             matchParentConstraints: true,
             inflateHitTarget: false,
-            decoration: M3EIconButtonDecoration(
-              foregroundColor: WidgetStateProperty.resolveWith(
-                (states) => states.contains(WidgetState.disabled)
-                    ? scheme.onSurface.withValues(alpha: 0.38)
-                    : foreground,
-              ),
-              backgroundColor: WidgetStateProperty.resolveWith(
-                (states) => states.contains(WidgetState.disabled)
-                    ? scheme.onSurface.withValues(alpha: 0.12)
-                    : background,
-              ),
-            ),
+            decoration: expressiveFill(scheme, foreground, background),
           ),
         ),
       ),

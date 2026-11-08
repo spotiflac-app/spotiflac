@@ -3,13 +3,16 @@ import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:spotiflac/controllers/player_metadata_controller.dart';
 import 'package:spotiflac/l10n/l10n.dart';
+import 'package:spotiflac/providers/lyrics_translation_provider.dart';
 import 'package:spotiflac/providers/settings_provider.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
 import 'package:spotiflac/utils/lyrics_parser.dart';
 import 'package:spotiflac/utils/playback_seek_preview.dart';
 import 'package:spotiflac/widgets/app_icon.dart';
 import 'package:spotiflac/widgets/app_loading_indicator.dart';
+import 'package:spotiflac/widgets/app_snack_bar.dart';
 import 'package:spotiflac/widgets/expressive_button.dart';
+import 'package:spotiflac/widgets/lyrics_editor_sheet.dart';
 import 'package:spotiflac/widgets/player_lyrics.dart';
 import 'package:spotiflac/widgets/lyrics_text_scale.dart';
 
@@ -43,43 +46,72 @@ class PlayerLyricsSection extends ConsumerWidget {
             (settings.playerShowPronunciation, settings.playerShowTranslation),
       ),
     );
+    // The AI translation is keyed by these; a change picks another one.
+    ref.watch(
+      settingsProvider.select(
+        (settings) => (
+          settings.lyricsAiProvider,
+          settings.lyricsAiModel,
+          settings.lyricsAiBaseUrl,
+          settings.lyricsTranslationLanguage,
+          settings.locale,
+          settings.lyricsAutoTranslate,
+          settings.lyricsAiWordSync,
+        ),
+      ),
+    );
+    ref.watch(lyricsTranslationProvider.select((state) => state.results));
+    final translation = ref.read(lyricsTranslationProvider.notifier);
     return ListenableBuilder(
       listenable: metadata,
-      builder: (context, _) => _buildLyricsSection(context, visibility),
+      builder: (context, _) => _buildLyricsSection(
+        context,
+        visibility,
+        translation.display(metadata.lyrics),
+      ),
     );
   }
 
-  Widget _buildLyricsSection(BuildContext context, (bool, bool) visibility) {
-    // Center in the part the player's controls leave visible.
-    final covered = LyricsCoveredBottom.of(context);
+  Widget _buildLyricsSection(
+    BuildContext context,
+    (bool, bool) visibility,
+    ParsedLyrics lyrics,
+  ) {
+    // Center in the part the player's controls leave visible. Only these
+    // states depend on it, so a lyric list does not rebuild as they fade.
     if (metadata.loading || metadata.searchingOnline) {
-      return Padding(
-        padding: EdgeInsets.only(bottom: covered),
-        child: const Center(child: AppLoadingIndicator()),
+      return Builder(
+        builder: (context) => Padding(
+          padding: EdgeInsets.only(bottom: LyricsCoveredBottom.of(context)),
+          child: const Center(child: AppLoadingIndicator()),
+        ),
       );
     }
     if (metadata.lyrics.isEmpty) {
       // Scrolls when a short screen leaves too little room above the
       // controls, so the search button stays reachable.
       return LayoutBuilder(
-        builder: (context, constraints) => SingleChildScrollView(
-          padding: EdgeInsets.only(bottom: covered),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minWidth: constraints.maxWidth,
-              minHeight: constraints.hasBoundedHeight
-                  ? (constraints.maxHeight - covered).clamp(
-                      0.0,
-                      double.infinity,
-                    )
-                  : 0,
+        builder: (_, constraints) {
+          final covered = LyricsCoveredBottom.of(context);
+          return SingleChildScrollView(
+            padding: EdgeInsets.only(bottom: covered),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth: constraints.maxWidth,
+                minHeight: constraints.hasBoundedHeight
+                    ? (constraints.maxHeight - covered).clamp(
+                        0.0,
+                        double.infinity,
+                      )
+                    : 0,
+              ),
+              child: Center(child: _noLyrics(context)),
             ),
-            child: Center(child: _noLyrics(context)),
-          ),
-        ),
+          );
+        },
       );
     }
-    return _lyricsContent(context, visibility);
+    return _lyricsContent(context, visibility, lyrics);
   }
 
   Widget _noLyrics(BuildContext context) => Padding(
@@ -105,22 +137,44 @@ class PlayerLyricsSection extends ConsumerWidget {
           const SizedBox(height: 16),
           ExpressiveButton(
             tonal: true,
-            onPressed: metadata.searchOnline,
+            onPressed: () async {
+              await metadata.searchOnline();
+              if (context.mounted && metadata.onlineLyricsSaveFailed) {
+                showAppSnackBar(
+                  context,
+                  content: Text(context.l10n.snackbarFailedToEmbedLyrics),
+                );
+              }
+            },
             icon: const Icon(Icons.manage_search),
             child: Text(context.l10n.nowPlayingSearchLyricsOnline),
+          ),
+        ],
+        if (canEditPlayerLyrics(metadata)) ...[
+          const SizedBox(height: 8),
+          ExpressiveButton(
+            key: const ValueKey('lyrics-write'),
+            text: true,
+            onPressed: () => openLyricsEditor(context, metadata),
+            icon: const Icon(Icons.edit_note),
+            child: Text(context.l10n.lyricsEditWrite),
           ),
         ],
       ],
     ),
   );
 
-  Widget _lyricsContent(BuildContext context, (bool, bool) visibility) {
+  Widget _lyricsContent(
+    BuildContext context,
+    (bool, bool) visibility,
+    ParsedLyrics lyrics,
+  ) {
     if (metadata.lyrics.synced) {
       return Stack(
         fit: StackFit.expand,
         children: [
           SyncedLyricsView(
-            lyrics: metadata.lyrics,
+            lyrics: lyrics,
             seekPreview: seekPreview,
             credits: _lyricsCredits(),
             colorScheme: colorScheme,
@@ -139,8 +193,9 @@ class PlayerLyricsSection extends ConsumerWidget {
         ],
       );
     }
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+    final plain = SingleChildScrollView(
+      // Leaves room for the options button over the end of the text.
+      padding: EdgeInsets.fromLTRB(24, 16, 24, options == null ? 32 : 80),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -165,6 +220,18 @@ class PlayerLyricsSection extends ConsumerWidget {
           ?_lyricsCredits(),
         ],
       ),
+    );
+    if (options == null) return plain;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        plain,
+        PositionedDirectional(
+          start: context.isSpotiFLAC ? spotiflacLyricsContentInset : 24,
+          bottom: 8,
+          child: options!,
+        ),
+      ],
     );
   }
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,6 +16,8 @@ import 'package:spotiflac/providers/settings_provider.dart';
 import 'package:spotiflac/providers/track_provider.dart';
 import 'package:spotiflac/screens/home_tab.dart';
 import 'package:spotiflac/services/library_search.dart';
+import 'package:spotiflac/services/music_player_service.dart'
+    show PlayableMedia, PlaybackResumePreview;
 import 'package:spotiflac/utils/desktop_platform.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
 import 'package:spotiflac/theme/app_theme.dart';
@@ -24,6 +28,151 @@ import 'package:spotiflac/widgets/spotiflac_chrome.dart';
 import 'package:spotiflac/widgets/spotiflac_context_menu.dart';
 
 void main() {
+  for (final desktop in [false, true]) {
+    for (final spotiflac in [false, true]) {
+      testWidgets('Home keeps Resume without a player '
+          '(desktop: $desktop, SpotiFLAC: $spotiflac)', (tester) async {
+        debugDesktopPlatformOverride = desktop;
+        addTearDown(() => debugDesktopPlatformOverride = null);
+        tester.platformDispatcher.accessibilityFeaturesTestValue =
+            const FakeAccessibilityFeatures(disableAnimations: true);
+        addTearDown(
+          tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+        );
+        tester.view.physicalSize = desktop
+            ? const Size(1280, 800)
+            : const Size(430, 932);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        final controller = _ResumeController();
+        await _pumpStartupHome(
+          tester,
+          _StartupExtensions(),
+          _StartupExplore(),
+          spotiflac: spotiflac,
+          feedDisabled: true,
+          resume: const (
+            media: PlayableMedia(
+              id: 'saved-song',
+              source: '/saved.flac',
+              title: 'Last session',
+              artist: 'Saved artist',
+              duration: Duration(minutes: 3),
+            ),
+            position: Duration(seconds: 23),
+          ),
+          controller: controller,
+          recentlyPlayed: Future.value(const <HomeRepeatTrack>[]),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Continue listening'), findsOneWidget);
+        expect(find.text('Last session'), findsOneWidget);
+        expect(find.text('Saved artist'), findsOneWidget);
+        expect(
+          tester
+              .widget<LinearProgressIndicator>(
+                find.byType(LinearProgressIndicator),
+              )
+              .value,
+          closeTo(23 / 180, 0.001),
+        );
+        await tester.tap(find.byTooltip('Play'));
+        await tester.pumpAndSettle();
+        expect(controller.resumes, 1);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpAndSettle();
+      });
+    }
+  }
+
+  for (final result in ['nothing played', 'load error']) {
+    testWidgets('SpotiFLAC Home holds the card until Recently Played settles '
+        '($result)', (tester) async {
+      tester.view.physicalSize = const Size(430, 932);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final recentlyPlayed = Completer<List<HomeRepeatTrack>>();
+      await _pumpStartupHome(
+        tester,
+        _StartupExtensions(),
+        _StartupExplore(),
+        feedDisabled: true,
+        resume: const (
+          media: PlayableMedia(
+            id: 'saved-song',
+            source: '/saved.flac',
+            title: 'Last session',
+            artist: 'Saved artist',
+            duration: Duration(minutes: 3),
+          ),
+          position: Duration(seconds: 23),
+        ),
+        recentlyPlayed: recentlyPlayed.future,
+      );
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('Continue listening'), findsNothing);
+
+      if (result == 'load error') {
+        recentlyPlayed.completeError(StateError('Unavailable'));
+      } else {
+        recentlyPlayed.complete(const <HomeRepeatTrack>[]);
+      }
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('Continue listening'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 1));
+    });
+  }
+
+  testWidgets('Home sections stay in place while Continue listening leaves', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(430, 932);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final showPlayer = ValueNotifier(true);
+    addTearDown(showPlayer.dispose);
+    await _pumpStartupHome(
+      tester,
+      _StartupExtensions(),
+      _StartupExplore(),
+      spotiflac: false,
+      feedDisabled: true,
+      resume: const (
+        media: PlayableMedia(
+          id: 'saved-song',
+          source: '/saved.flac',
+          title: 'Last session',
+          artist: 'Saved artist',
+          duration: Duration(minutes: 3),
+        ),
+        position: Duration(seconds: 23),
+      ),
+      showPlayer: showPlayer,
+    );
+    // Home keeps looping animations, so time passes in fixed steps.
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Continue listening'), findsOneWidget);
+
+    showPlayer.value = false;
+    await tester.pump();
+    final resting = tester.getTopLeft(find.text('Shortcuts')).dy;
+    // Midway through the space closing, the sections must not sink.
+    await tester.pump(const Duration(milliseconds: 120));
+    expect(tester.getTopLeft(find.text('Shortcuts')).dy, resting);
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Continue listening'), findsNothing);
+    expect(tester.getTopLeft(find.text('Shortcuts')).dy, resting);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 1));
+  });
+
   for (final desktop in [false, true]) {
     for (final spotiflac in [false, true]) {
       testWidgets('Home keeps its feed layout through slow startup '
@@ -98,55 +247,84 @@ void main() {
     }
   }
 
-  for (final result in [
-    'no extensions',
-    'initialization error',
-    'feed error',
-    'empty feed',
+  for (final (spotiflac, result) in [
+    for (final spotiflac in [false, true])
+      for (final result in [
+        'no extensions',
+        'initialization error',
+        'feed error',
+        'empty feed',
+      ])
+        (spotiflac, result),
   ]) {
-    testWidgets('Home leaves startup loading after $result', (tester) async {
-      final extensions = _StartupExtensions();
-      final explore = _StartupExplore();
-      await _pumpStartupHome(tester, extensions, explore);
-      expect(find.byType(ShimmerLoading), findsOneWidget);
-      extensions.update(
-        ExtensionState(
-          isInitialized: result != 'initialization error',
-          error: result == 'initialization error'
-              ? 'Unable to initialize'
-              : null,
-          extensions: result == 'feed error' || result == 'empty feed'
-              ? const [_feedExtension]
-              : const [],
-        ),
-      );
-      explore.update(
-        ExploreState(
-          error: result == 'feed error' ? 'Offline' : null,
-          lastFetched: result == 'empty feed' ? DateTime(2026, 10, 22) : null,
-        ),
-      );
-      await tester.pump();
-      await tester.pumpAndSettle();
-      expect(find.byType(ShimmerLoading), findsNothing);
-      expect(find.text('Shortcuts'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
+    testWidgets(
+      'Home leaves startup loading after $result (SpotiFLAC=$spotiflac)',
+      (tester) async {
+        final extensions = _StartupExtensions();
+        final explore = _StartupExplore();
+        await _pumpStartupHome(
+          tester,
+          extensions,
+          explore,
+          spotiflac: spotiflac,
+        );
+        expect(find.byType(ShimmerLoading), findsOneWidget);
+        extensions.update(
+          ExtensionState(
+            isInitialized: result != 'initialization error',
+            error: result == 'initialization error'
+                ? 'Unable to initialize'
+                : null,
+            extensions: result == 'feed error' || result == 'empty feed'
+                ? const [_feedExtension]
+                : const [],
+          ),
+        );
+        explore.update(
+          ExploreState(
+            error: result == 'feed error' ? 'Offline' : null,
+            lastFetched: result == 'empty feed' ? DateTime(2026, 10, 22) : null,
+          ),
+        );
+        await tester.pump();
+        await tester.pumpAndSettle();
+        expect(find.byType(ShimmerLoading), findsNothing);
+        final showsSetupPrompt =
+            !spotiflac &&
+            (result == 'no extensions' || result == 'initialization error');
+        expect(
+          find.text('No search providers yet'),
+          showsSetupPrompt ? findsOneWidget : findsNothing,
+        );
+        expect(
+          find.text('Shortcuts'),
+          !spotiflac && !showsSetupPrompt ? findsOneWidget : findsNothing,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
 
-  testWidgets('Home with its feed disabled shows local sections immediately', (
-    tester,
-  ) async {
-    await _pumpStartupHome(
-      tester,
-      _StartupExtensions(),
-      _StartupExplore(),
-      feedDisabled: true,
+  for (final spotiflac in [false, true]) {
+    testWidgets(
+      'Home with its feed disabled skips startup loading (SpotiFLAC=$spotiflac)',
+      (tester) async {
+        await _pumpStartupHome(
+          tester,
+          _StartupExtensions(),
+          _StartupExplore(),
+          spotiflac: spotiflac,
+          feedDisabled: true,
+        );
+        expect(
+          find.text('Shortcuts'),
+          spotiflac ? findsNothing : findsOneWidget,
+        );
+        expect(find.byType(ShimmerLoading), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
     );
-    expect(find.text('Shortcuts'), findsOneWidget);
-    expect(find.byType(ShimmerLoading), findsNothing);
-    expect(tester.takeException(), isNull);
-  });
+  }
 
   testWidgets('Home can show restored feed content before extensions finish', (
     tester,
@@ -254,7 +432,7 @@ void main() {
                       uri: 'example:section:$index',
                       title: 'Section $index',
                       isFeatured: layout == 'featured',
-                      isYTMusicQuickPicks: layout.startsWith('quick-pick'),
+                      isQuickPicks: layout.startsWith('quick-pick'),
                       items: [
                         ExploreItem(
                           id: 'track-$index',
@@ -338,6 +516,81 @@ void main() {
       },
     );
   }
+
+  testWidgets('Material desktop Home runs across a full screen window', (
+    tester,
+  ) async {
+    debugDesktopPlatformOverride = true;
+    addTearDown(() => debugDesktopPlatformOverride = null);
+    const size = Size(2000, 1200);
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    ExploreItem item(String section, int index) => ExploreItem(
+      id: '$section-$index',
+      uri: 'example:album:$section-$index',
+      type: 'album',
+      name: '$section album $index',
+      artists: 'Example artist',
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          settingsProvider.overrideWith(_Settings.new),
+          extensionProvider.overrideWith(_Extensions.new),
+          exploreProvider.overrideWith(
+            () => _Explore(
+              sections: [
+                ExploreSection(
+                  uri: 'example:new',
+                  title: 'New',
+                  isFeatured: true,
+                  items: [for (var i = 0; i < 6; i++) item('new', i)],
+                ),
+                ExploreSection(
+                  uri: 'example:songs',
+                  title: 'Best New Songs',
+                  items: [for (var i = 0; i < 20; i++) item('songs', i)],
+                ),
+              ],
+            ),
+          ),
+          downloadHistoryProvider.overrideWith(_History.new),
+          recentAccessProvider.overrideWith(_Recent.new),
+          trackProvider.overrideWith(_Search.new),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.dark(),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const HomeTab(mode: HomeTabMode.combined),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // M3's 24dp window margin, not the centered reading column.
+    final search = tester.getRect(find.byType(AppSearchField));
+    expect(search.left, 24);
+    expect(search.right, size.width - 24, reason: 'the search runs full');
+    for (final title in ['New', 'Best New Songs']) {
+      expect(tester.getTopLeft(find.text(title)).dx, 24, reason: title);
+    }
+    expect(
+      tester.getTopLeft(find.text('new album 0')).dx,
+      24,
+      reason: 'the first featured card starts under its title',
+    );
+    // Both shelves still scroll to the window's edge.
+    for (final title in ['new album 0', 'songs album 0']) {
+      final shelf = find
+          .ancestor(of: find.text(title), matching: find.byType(ListView))
+          .first;
+      expect(tester.getRect(shelf).left, 0, reason: title);
+      expect(tester.getRect(shelf).right, size.width, reason: title);
+    }
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'Home keeps its feed while Search retains its query and results',
@@ -447,6 +700,63 @@ void main() {
     await tester.pumpAndSettle();
     expect(search._requests, 2);
     expect(find.text('Found artist'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Search lists collection sections and guards missing sources', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(430, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          settingsProvider.overrideWith(_Settings.new),
+          extensionProvider.overrideWith(_Extensions.new),
+          exploreProvider.overrideWith(_Explore.new),
+          downloadHistoryProvider.overrideWith(_History.new),
+          recentAccessProvider.overrideWith(_Recent.new),
+          trackProvider.overrideWith(_CollectionSearch.new),
+        ],
+        child: MaterialApp(
+          theme: SpotiFLACTheme.build(Brightness.dark),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const Scaffold(body: HomeTab(mode: HomeTabMode.search)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Example');
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
+
+    // The filter chips repeat these labels above the section headers.
+    final headers = [
+      for (final title in ['Artists', 'Albums', 'Playlists'])
+        tester.getTopLeft(find.text(title).last).dy,
+    ];
+    expect(headers, orderedEquals([...headers]..sort()));
+    expect(find.text('Sort'), findsOneWidget);
+    expect(
+      tester.getCenter(find.text('Sort')).dy,
+      closeTo(tester.getCenter(find.text('Artists').last).dy, 24),
+    );
+    for (final kind in ['artist', 'album', 'playlist']) {
+      expect(find.byKey(ValueKey('$kind-$kind-0')), findsOneWidget);
+      await tester.tap(find.text('Found $kind'));
+      await tester.pump();
+      expect(
+        find.text('Cannot load $kind: missing extension source'),
+        findsOneWidget,
+      );
+      ScaffoldMessenger.of(
+        tester.element(find.byType(HomeTab)),
+      ).removeCurrentSnackBar();
+      await tester.pumpAndSettle();
+    }
+    expect(find.byType(HomeTab), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -686,7 +996,7 @@ void main() {
   });
 
   for (final withSearchExtension in [false, true]) {
-    testWidgets('SpotiFLAC Home without a feed shows its sections '
+    testWidgets('SpotiFLAC Home without a feed still shows local playback '
         '(search extension: $withSearchExtension)', (tester) async {
       tester.view.physicalSize = const Size(430, 932);
       tester.view.devicePixelRatio = 1;
@@ -702,6 +1012,21 @@ void main() {
             downloadHistoryProvider.overrideWith(_History.new),
             recentAccessProvider.overrideWith(_Recent.new),
             trackProvider.overrideWith(_Search.new),
+            homeRecentlyPlayedProvider.overrideWith((ref) async => const []),
+            currentMediaItemProvider.overrideWithBuild(
+              (ref, notifier) => Stream.value(null),
+            ),
+            playbackResumeProvider.overrideWith(
+              (ref) async => const (
+                media: PlayableMedia(
+                  id: 'local-song',
+                  source: '/local.flac',
+                  title: 'Local song',
+                  artist: 'Local artist',
+                ),
+                position: Duration(seconds: 10),
+              ),
+            ),
           ],
           child: MaterialApp(
             theme: SpotiFLACTheme.build(Brightness.dark),
@@ -711,9 +1036,11 @@ void main() {
           ),
         ),
       );
-      await tester.pump();
+      await tester.pumpAndSettle();
 
-      expect(find.text('Shortcuts'), findsOneWidget);
+      expect(find.text('Continue listening'), findsOneWidget);
+      expect(find.text('Local song'), findsOneWidget);
+      expect(find.text('Shortcuts'), findsNothing);
       expect(find.text('No search providers yet'), findsNothing);
       expect(tester.takeException(), isNull);
     });
@@ -788,15 +1115,36 @@ Future<void> _pumpStartupHome(
   bool feedDisabled = false,
   ValueNotifier<bool>? homeVisible,
   PageController? pages,
+  PlaybackResumePreview? resume,
+  MusicPlayerController? controller,
+  ValueNotifier<bool>? showPlayer,
+  Future<List<HomeRepeatTrack>>? recentlyPlayed,
 }) => tester.pumpWidget(
   ProviderScope(
     overrides: [
       settingsProvider.overrideWith(() => _StartupSettings(feedDisabled)),
+      if (recentlyPlayed != null)
+        homeRecentlyPlayedProvider.overrideWith((ref) => recentlyPlayed),
       extensionProvider.overrideWith(() => extensions),
       exploreProvider.overrideWith(() => explore),
       downloadHistoryProvider.overrideWith(_History.new),
       recentAccessProvider.overrideWith(_Recent.new),
       trackProvider.overrideWith(_Search.new),
+      if (resume != null) ...[
+        currentMediaItemProvider.overrideWithBuild(
+          (ref, notifier) => Stream.value(null),
+        ),
+        playbackResumeProvider.overrideWith((ref) async => resume),
+      ],
+      if (controller != null)
+        musicPlayerControllerProvider.overrideWithValue(controller),
+      if (showPlayer != null)
+        playerUiEnabledProvider.overrideWith((ref) {
+          void changed() => ref.invalidateSelf();
+          showPlayer.addListener(changed);
+          ref.onDispose(() => showPlayer.removeListener(changed));
+          return showPlayer.value;
+        }),
     ],
     child: MaterialApp(
       theme: spotiflac
@@ -837,6 +1185,16 @@ class _StartupSettings extends _Settings {
   AppSettings build() => super.build().copyWith(
     homeFeedProvider: feedDisabled ? AppSettings.homeFeedProviderOff : null,
   );
+}
+
+class _ResumeController extends MusicPlayerController {
+  int resumes = 0;
+
+  @override
+  Future<bool> resumeSavedSession() async {
+    resumes++;
+    return true;
+  }
 }
 
 class _StartupExtensions extends ExtensionNotifier {
@@ -925,6 +1283,33 @@ class _Recent extends RecentAccessNotifier {
       ),
     ),
   );
+}
+
+class _CollectionSearch extends TrackNotifier {
+  @override
+  Future<void> customSearch(
+    String extensionId,
+    String query, {
+    Map<String, dynamic>? options,
+    String? selectedFilter,
+    bool allowVerificationRetry = true,
+  }) async {
+    state = TrackState(
+      hasSearchText: true,
+      searchExtensionId: 'example',
+      tracks: [
+        for (final kind in ['playlist', 'album', 'artist'])
+          Track(
+            id: '$kind-0',
+            name: 'Found $kind',
+            artistName: '',
+            albumName: '',
+            duration: 0,
+            itemType: kind,
+          ),
+      ],
+    );
+  }
 }
 
 class _Search extends TrackNotifier {

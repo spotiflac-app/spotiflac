@@ -15,14 +15,9 @@ import 'package:spotiflac/services/platform_bridge.dart';
 
 class GeneratedSpectrogram {
   final ui.Image image;
-  final Uint8List rgba;
   final double? cutoffFrequencyHz;
 
-  const GeneratedSpectrogram({
-    required this.image,
-    required this.rgba,
-    this.cutoffFrequencyHz,
-  });
+  const GeneratedSpectrogram({required this.image, this.cutoffFrequencyHz});
 }
 
 class AudioAnalysisRunResult {
@@ -76,7 +71,7 @@ class _MediaInfo {
   final String channelLayout;
   final int bitsPerSample;
   final double duration;
-  final int bitrate;
+  final AudioAnalysisBitrate bitrate;
   final int totalSamples;
 
   const _MediaInfo({
@@ -228,7 +223,8 @@ class AudioAnalysisRunner {
             channelLayout: info.channelLayout,
             bitsPerSample: info.bitsPerSample,
             duration: info.duration,
-            bitrate: info.bitrate,
+            bitrate: info.bitrate.bitsPerSecond,
+            bitrateIsFileAverage: info.bitrate.fileAverage,
             bitDepth: info.bitsPerSample > 0
                 ? '${info.bitsPerSample}-bit'
                 : 'N/A',
@@ -402,7 +398,6 @@ class AudioAnalysisRunner {
       );
       return GeneratedSpectrogram(
         image: await completer.future,
-        rgba: rgba,
         cutoffFrequencyHz: cutoffFrequencyHz,
       );
     } finally {
@@ -458,10 +453,12 @@ class AudioAnalysisRunner {
         0;
     final streamBitrate = int.tryParse(props['bit_rate']?.toString() ?? '');
     final containerBitrate = int.tryParse(info.getBitrate() ?? '');
-    final bitrate =
-        streamBitrate ??
-        containerBitrate ??
-        (duration > 0 && fileSize > 0 ? (fileSize * 8 / duration).round() : 0);
+    final bitrate = AudioAnalysisBitrate.fromProbe(
+      streamBitrate: streamBitrate,
+      containerBitrate: containerBitrate,
+      fileSize: fileSize,
+      duration: duration,
+    );
 
     final canReportStoredBitDepth = _codecHasStoredBitDepth(codecName);
 

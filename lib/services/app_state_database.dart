@@ -4,13 +4,15 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:spotiflac/services/download_queue_codec.dart';
+import 'package:spotiflac/services/playback_resume_store.dart';
 import 'package:spotiflac/services/sqlite_helpers.dart' as sqlite;
+import 'package:spotiflac/services/sqlite_long_text.dart';
 import 'package:spotiflac/utils/logger.dart';
 
 final _log = AppLogger('AppStateDb');
 
 const _dbFileName = 'app_state.db';
-const _dbVersion = 4;
+const _dbVersion = 5;
 
 const _queueTable = 'download_queue_items';
 const _recentTable = 'recent_access_items';
@@ -31,10 +33,34 @@ class AppStateDatabase {
       sqlite.SingleFlightInitializer<Database>();
 
   final Future<SharedPreferences> _prefs = SharedPreferences.getInstance();
+  final Database? _databaseOverride;
 
-  AppStateDatabase._init();
+  AppStateDatabase._init() : _databaseOverride = null;
 
-  Future<Database> get database => _database.getOrCreate(_initDb);
+  /// Keeps scoped playback fixtures on their own native SQLite connection.
+  @visibleForTesting
+  AppStateDatabase.withDatabase(Database database)
+    : _databaseOverride = database;
+
+  /// Opens a private file with the same state and resume schemas as the app.
+  @visibleForTesting
+  static Future<Database> openWithFactory(
+    DatabaseFactory factory,
+    String path,
+  ) => factory.openDatabase(
+    path,
+    options: OpenDatabaseOptions(
+      version: _dbVersion,
+      onCreate: _createDb,
+      onUpgrade: _upgradeDb,
+    ),
+  );
+
+  Future<Database> get database {
+    final override = _databaseOverride;
+    if (override != null) return Future.value(override);
+    return _database.getOrCreate(_initDb);
+  }
 
   Future<Database> _initDb() {
     return sqlite.openAppDatabase(
@@ -46,7 +72,7 @@ class AppStateDatabase {
     );
   }
 
-  Future<void> _createDb(Database db, int version) async {
+  static Future<void> _createDb(Database db, int version) async {
     _log.i('Creating app state database schema v$version');
 
     await db.execute('''
@@ -85,15 +111,23 @@ class AppStateDatabase {
 
     await _createRecentStateTable(db);
     await _createPlaybackSessionTable(db);
+    await PlaybackResumeStore.createSchema(db);
   }
 
-  Future<void> _upgradeDb(Database db, int oldVersion, int newVersion) async {
+  static Future<void> _upgradeDb(
+    Database db,
+    int oldVersion,
+    int newVersion,
+  ) async {
     _log.i('Upgrading app state database from v$oldVersion to v$newVersion');
     if (oldVersion < 3) {
       await _createRecentStateTable(db);
     }
     if (oldVersion < 4) {
       await _migratePlaybackSessionToV4(db);
+    }
+    if (oldVersion < 5) {
+      await PlaybackResumeStore.createSchema(db);
     }
   }
 
@@ -393,20 +427,24 @@ class AppStateDatabase {
   Future<void> clearPendingQueueAfterInstallationRestore() async {
     await replacePendingDownloadQueueRows(const []);
     await clearPlaybackSession();
+    await clearPlaybackResume();
     final prefs = await _prefs;
     await prefs.remove(_legacyQueueKey);
     await prefs.setBool(_queueMigrationKey, true);
   }
 
   Future<Map<String, dynamic>?> getPlaybackSession() async {
-    final db = await database;
-    final rows = await db.query(_playbackSessionTable, limit: 1);
-    if (rows.isEmpty) return null;
-    final row = rows.first;
-    final raw = row['media_json'] as String?;
-    if (raw == null || raw.isEmpty) return null;
+    final stored = await readJsonTextRow(
+      await database,
+      table: _playbackSessionTable,
+      jsonColumn: 'media_json',
+      columns: const ['current_index', 'position_ms', 'shuffle', 'repeat_mode'],
+    );
+    if (stored == null) return null;
+    final row = stored.row;
+    if ((row['media_json_bytes'] as int? ?? 0) == 0) return null;
     try {
-      final decoded = jsonDecode(raw);
+      final decoded = stored.json();
       if (decoded is! List) return null;
       return {
         'version': 2,
@@ -422,14 +460,53 @@ class AppStateDatabase {
     return null;
   }
 
-  Future<void> savePlaybackSession(Map<String, dynamic> session) async {
-    final db = await database;
-    await db.insert(
-      _playbackSessionTable,
-      _playbackSessionRow(session),
-      conflictAlgorithm: ConflictAlgorithm.replace,
+  /// Replaces the saved session in one statement. [mediaJson] is the UTF-8
+  /// JSON of its media list, stored as the same `media_json` text.
+  Future<void> savePlaybackSession({
+    required Uint8List mediaJson,
+    required int index,
+    required int positionMs,
+    required bool shuffle,
+    required String repeatMode,
+  }) async => writePlaybackSession(
+    await database,
+    mediaJson: mediaJson,
+    index: index,
+    positionMs: positionMs,
+    shuffle: shuffle,
+    repeatMode: repeatMode,
+  );
+
+  @visibleForTesting
+  static Future<void> writePlaybackSession(
+    Database db, {
+    required Uint8List mediaJson,
+    required int index,
+    required int positionMs,
+    required bool shuffle,
+    required String repeatMode,
+  }) async {
+    // Bytes cross the platform channel as one copy; SQLite reads them as
+    // text in the database encoding, which only UTF-8 matches.
+    final utf8Text = _utf8Databases[db] ??=
+        (await db.rawQuery('PRAGMA encoding')).single.values.single == 'UTF-8';
+    await db.rawInsert(
+      'INSERT OR REPLACE INTO $_playbackSessionTable '
+      '(id, media_json, current_index, position_ms, shuffle, repeat_mode, '
+      'updated_at) '
+      'VALUES (1, ${utf8Text ? 'CAST(? AS TEXT)' : '?'}, ?, ?, ?, ?, ?)',
+      [
+        utf8Text ? mediaJson : utf8.decode(mediaJson),
+        index,
+        positionMs,
+        shuffle ? 1 : 0,
+        repeatMode,
+        DateTime.now().toIso8601String(),
+      ],
     );
   }
+
+  static final _utf8Databases = Expando<bool>('UTF-8 database');
 
   Future<bool> updatePlaybackSessionState({
     required int index,
@@ -452,6 +529,24 @@ class AppStateDatabase {
     final db = await database;
     await db.delete(_playbackSessionTable);
   }
+
+  Future<void> archivePlaybackSession(Map<String, dynamic> media) async =>
+      PlaybackResumeStore(await database).archive(media);
+
+  Future<Map<String, dynamic>?> getPlaybackResumePreview() async =>
+      PlaybackResumeStore(await database).preview();
+
+  Future<Map<String, dynamic>?> getPlaybackResumeSession() async =>
+      PlaybackResumeStore(await database).session();
+
+  Future<void> clearPlaybackResume() async =>
+      PlaybackResumeStore(await database).clear();
+
+  Future<void> relocatePlaybackSource(
+    String previous,
+    String replacement,
+  ) async =>
+      PlaybackResumeStore(await database).relocateSource(previous, replacement);
 
   Future<void> applyPendingDownloadQueueChanges({
     required List<Map<String, dynamic>> upserts,

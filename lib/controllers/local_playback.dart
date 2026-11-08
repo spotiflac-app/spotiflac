@@ -4,6 +4,7 @@ import 'package:spotiflac/models/track.dart';
 import 'package:spotiflac/providers/download_queue_provider.dart';
 import 'package:spotiflac/providers/local_library_provider.dart';
 import 'package:spotiflac/providers/playback_provider.dart';
+import 'package:spotiflac/providers/settings_provider.dart';
 import 'package:spotiflac/utils/file_access.dart';
 import 'package:spotiflac/widgets/app_snack_bar.dart';
 
@@ -50,6 +51,7 @@ Future<bool> playLocalIfAvailable(
       historyNotifier.removeFromHistory(historyItem.id);
     }
 
+    if (!ref.read(settingsProvider).localLibraryEnabled) return false;
     final localItem = await ref
         .read(localLibraryProvider.notifier)
         .findExistingAsync(

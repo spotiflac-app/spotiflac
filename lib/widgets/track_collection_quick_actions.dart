@@ -10,9 +10,12 @@ import 'package:spotiflac/models/track.dart';
 import 'package:spotiflac/providers/library_collections_provider.dart';
 import 'package:spotiflac/providers/settings_provider.dart';
 import 'package:spotiflac/services/cover_cache_manager.dart';
+import 'package:spotiflac/controllers/clickable_metadata.dart';
 import 'package:spotiflac/controllers/local_playback.dart';
 import 'package:spotiflac/utils/desktop_platform.dart';
+import 'package:spotiflac/utils/service_track_link.dart';
 import 'package:spotiflac/widgets/desktop/context_menu.dart';
+import 'package:spotiflac/widgets/link/link_actions.dart';
 import 'package:spotiflac/widgets/playlist_picker_sheet.dart';
 import 'package:spotiflac/widgets/spotiflac_context_menu.dart';
 import 'package:share_plus/share_plus.dart';
@@ -20,7 +23,6 @@ import 'package:spotiflac/widgets/app_icon.dart';
 import 'package:spotiflac/widgets/app_icon_button.dart';
 import 'package:spotiflac/widgets/track_collection_action_policy.dart';
 import 'package:spotiflac/widgets/track_detail_actions.dart';
-import 'package:spotiflac/utils/clickable_metadata.dart';
 
 class TrackCollectionQuickActions extends ConsumerWidget {
   final Track track;
@@ -132,6 +134,7 @@ List<List<ContextMenuAction>> trackOptionMenuGroups(
     allowQualityVariants: ref.read(settingsProvider).allowQualityVariants,
     hasLocalPlaybackCandidate: hasLocalPlaybackCandidate,
   );
+  final link = serviceTrackLinkFor(track);
 
   void notify(String message) {
     if (!root.mounted) return;
@@ -234,6 +237,17 @@ List<List<ContextMenuAction>> trackOptionMenuGroups(
         label: l10n.trackOptionCopyTrackAndArtist,
         onSelected: () => copy('${track.name} - ${track.artistName}'),
       ),
+      if (link != null)
+        ContextMenuAction(
+          icon: Icons.link,
+          label: l10n.trackOptionCopyLink(link.serviceName),
+          onSelected: () {
+            Clipboard.setData(ClipboardData(text: link.webUrl));
+            if (root.mounted) {
+              notify(root.l10n.snackbarUrlCopied(link.serviceName));
+            }
+          },
+        ),
     ],
   ];
 }
@@ -250,6 +264,7 @@ class _TrackOptionsSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
+    final link = serviceTrackLinkFor(track);
 
     final isLoved = ref.watch(
       libraryCollectionsProvider.select((state) => state.isLoved(track)),
@@ -264,6 +279,7 @@ class _TrackOptionsSheet extends ConsumerWidget {
       allowQualityVariants: allowQualityVariants,
       hasLocalPlaybackCandidate: hasLocalPlaybackCandidate,
     );
+    final linkClient = ref.watch(linkPhoneClientProvider);
 
     if (context.isSpotiFLAC) {
       final l10n = context.l10n;
@@ -298,7 +314,10 @@ class _TrackOptionsSheet extends ConsumerWidget {
               Navigator.pop(context);
               SharePlus.instance.share(
                 ShareParams(
-                  text: '${track.name} — ${track.artistName}',
+                  text: [
+                    '${track.name} - ${track.artistName}',
+                    ?link?.webUrl,
+                  ].join('\n'),
                   sharePositionOrigin: origin,
                 ),
               );
@@ -319,6 +338,12 @@ class _TrackOptionsSheet extends ConsumerWidget {
                 icon: CupertinoIcons.arrow_down_circle,
                 label: l10n.trackOptionDownloadQualityVariant,
                 onPressed: () => _downloadQualityVariant(context, ref),
+              ),
+            if (linkClient != null)
+              SpotiFLACMenuAction(
+                icon: CupertinoIcons.desktopcomputer,
+                label: l10n.linkDownloadOnDesktop(linkDesktopName(linkClient)),
+                onPressed: () => _downloadOnDesktop(context, ref),
               ),
             SpotiFLACMenuAction(
               icon: CupertinoIcons.square_stack,
@@ -363,6 +388,12 @@ class _TrackOptionsSheet extends ConsumerWidget {
               onPressed: () =>
                   _copyText(context, '${track.name} - ${track.artistName}'),
             ),
+            if (link != null)
+              SpotiFLACMenuAction(
+                icon: CupertinoIcons.link,
+                label: l10n.trackOptionCopyLink(link.serviceName),
+                onPressed: () => _copyLink(context, link),
+              ),
           ],
         ],
       );
@@ -441,8 +472,6 @@ class _TrackOptionsSheet extends ConsumerWidget {
                                     ?.copyWith(
                                       color: colorScheme.onSurfaceVariant,
                                     ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
                               ),
                             ],
                           ),
@@ -471,6 +500,14 @@ class _TrackOptionsSheet extends ConsumerWidget {
                   title: context.l10n.trackOptionDownloadQualityVariant,
                   onTap: () => _downloadQualityVariant(context, ref),
                 ),
+              if (linkClient != null)
+                _OptionTile(
+                  icon: Icons.computer,
+                  title: context.l10n.linkDownloadOnDesktop(
+                    linkDesktopName(linkClient),
+                  ),
+                  onTap: () => _downloadOnDesktop(context, ref),
+                ),
 
               _OptionTile(
                 icon: Icons.content_copy_rounded,
@@ -488,6 +525,12 @@ class _TrackOptionsSheet extends ConsumerWidget {
                 onTap: () =>
                     _copyText(context, '${track.name} - ${track.artistName}'),
               ),
+              if (link != null)
+                _OptionTile(
+                  icon: Icons.link,
+                  title: context.l10n.trackOptionCopyLink(link.serviceName),
+                  onTap: () => _copyLink(context, link),
+                ),
 
               _OptionTile(
                 icon: Icons.album_outlined,
@@ -574,6 +617,12 @@ class _TrackOptionsSheet extends ConsumerWidget {
     downloadSingleTrack(rootContext, ref, track, forceQualityPicker: true);
   }
 
+  void _downloadOnDesktop(BuildContext context, WidgetRef ref) {
+    final rootContext = Navigator.of(context, rootNavigator: true).context;
+    Navigator.pop(context);
+    linkDownloadTracksOnDesktop(rootContext, ref, [track]);
+  }
+
   Future<void> _toggleCollection(
     BuildContext context,
     WidgetRef ref, {
@@ -603,6 +652,17 @@ class _TrackOptionsSheet extends ConsumerWidget {
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(rootContext).showSnackBar(
       SnackBar(content: Text(rootContext.l10n.trackCopiedToClipboard)),
+    );
+  }
+
+  void _copyLink(BuildContext context, ServiceTrackLink link) {
+    final rootContext = Navigator.of(context, rootNavigator: true).context;
+    Navigator.pop(context);
+    Clipboard.setData(ClipboardData(text: link.webUrl));
+    ScaffoldMessenger.of(rootContext).showSnackBar(
+      SnackBar(
+        content: Text(rootContext.l10n.snackbarUrlCopied(link.serviceName)),
+      ),
     );
   }
 

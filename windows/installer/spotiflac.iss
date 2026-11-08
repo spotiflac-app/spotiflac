@@ -45,14 +45,14 @@
 #endif
 
 [Setup]
-AppId={{AC323FF9-75C2-4AA6-B343-42C45A389323}
+AppId={{0FFEA5B8-69C1-423B-B38E-1E521494A286}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
-AppPublisher=SpotiFLAC
-AppPublisherURL=https://spotiflac.com
+AppPublisher=zarzet
+AppPublisherURL={#AppUrl}
 AppSupportURL={#AppUrl}/issues
-AppUpdatesURL=https://github.com/spotiflac-app/spotiflac/releases
+AppUpdatesURL=https://github.com/spotiflac-app/spotiflac-releases/releases
 VersionInfoVersion={#NumericVersion}
 VersionInfoProductName={#AppName}
 VersionInfoDescription={#AppName} Setup
@@ -60,6 +60,7 @@ PrivilegesRequired=lowest
 DefaultDirName={userpf}\{#AppName}
 DisableDirPage=yes
 DisableProgramGroupPage=yes
+ChangesAssociations=yes
 DefaultGroupName={#AppName}
 UsePreviousAppDir=yes
 ArchitecturesAllowed={#AllowedArchitectures}
@@ -95,6 +96,40 @@ Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"; AppUserModelID: 
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; AppUserModelID: "{#AppUserModelId}"; Tasks: desktopicon
 
 [Registry]
+; Register an optional player. Never change the user's default or UserChoice.
+Root: HKCU; Subkey: "Software\Classes\SpotiFLAC.Audio"; ValueType: string; ValueName: ""; ValueData: "SpotiFLAC audio"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\SpotiFLAC.Audio\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"",0"
+Root: HKCU; Subkey: "Software\Classes\SpotiFLAC.Audio\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"" ""%1"""
+Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "{#AppName}"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"" ""%1"""
+Root: HKCU; Subkey: "Software\RegisteredApplications"; ValueType: string; ValueName: "SpotiFLAC"; ValueData: "Software\SpotiFLAC\Capabilities"; Flags: uninsdeletevalue
+Root: HKCU; Subkey: "Software\SpotiFLAC\Capabilities"; ValueType: string; ValueName: "ApplicationName"; ValueData: "{#AppName}"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\SpotiFLAC\Capabilities"; ValueType: string; ValueName: "ApplicationDescription"; ValueData: "Play audio files with SpotiFLAC"
+#sub RegisterAudioExtension
+Root: HKCU; Subkey: "Software\Classes\.{#AudioExt}\OpenWithProgids"; ValueType: string; ValueName: "SpotiFLAC.Audio"; ValueData: ""; Flags: uninsdeletevalue
+Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExe}\SupportedTypes"; ValueType: string; ValueName: ".{#AudioExt}"; ValueData: ""
+Root: HKCU; Subkey: "Software\SpotiFLAC\Capabilities\FileAssociations"; ValueType: string; ValueName: ".{#AudioExt}"; ValueData: "SpotiFLAC.Audio"
+#endsub
+#define AudioExt "mp3"
+#call RegisterAudioExtension
+#define AudioExt "flac"
+#call RegisterAudioExtension
+#define AudioExt "alac"
+#call RegisterAudioExtension
+#define AudioExt "wav"
+#call RegisterAudioExtension
+#define AudioExt "aiff"
+#call RegisterAudioExtension
+#define AudioExt "aif"
+#call RegisterAudioExtension
+#define AudioExt "opus"
+#call RegisterAudioExtension
+#define AudioExt "ogg"
+#call RegisterAudioExtension
+#define AudioExt "aac"
+#call RegisterAudioExtension
+#define AudioExt "m4a"
+#call RegisterAudioExtension
 Root: HKCU; Subkey: "Software\Classes\spotiflac"; ValueType: string; ValueName: ""; ValueData: "URL:{#AppName} Protocol"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\spotiflac"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
 Root: HKCU; Subkey: "Software\Classes\spotiflac\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"",0"

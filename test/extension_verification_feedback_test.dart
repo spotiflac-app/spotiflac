@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:spotiflac/controllers/extension_auth_launcher.dart';
 import 'package:spotiflac/l10n/app_localizations.dart';
 import 'package:spotiflac/services/app_navigation_service.dart';
 import 'package:spotiflac/services/platform_bridge.dart';
-import 'package:spotiflac/utils/extension_auth_launcher.dart';
 import 'package:spotiflac/widgets/app_alert_dialog.dart';
 
 void main() {

@@ -18,9 +18,9 @@ extension _HomeTabExploreUI on _HomeTabState {
           if (hasGreeting && index == 0) {
             return Padding(
               padding: EdgeInsets.fromLTRB(
-                16 + wideListInset(context),
+                16 + homeContentInset(context),
                 12,
-                16 + wideListInset(context),
+                16 + homeContentInset(context),
                 4,
               ),
               child: Text(
@@ -58,13 +58,13 @@ extension _HomeTabExploreUI on _HomeTabState {
     }
     final sectionHeight = _exploreSectionHeight(context);
     final isTablet = MediaQuery.sizeOf(context).shortestSide >= 600;
-    if (section.isYTMusicQuickPicks) {
-      return _buildYTMusicQuickPicksSection(section, colorScheme);
+    if (section.isQuickPicks) {
+      return _buildQuickPicksSection(section, colorScheme);
     }
 
     // Titles and the first card line up with the centered column on tablets;
     // the carousel itself still scrolls edge to edge.
-    final inset = wideListInset(context);
+    final inset = homeContentInset(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -107,13 +107,13 @@ extension _HomeTabExploreUI on _HomeTabState {
     );
   }
 
-  /// Skeleton mirroring [_buildExploreSection]'s layout — album cards or
-  /// artist circles — shown while the home feed loads. Wrap in
+  /// Skeleton mirroring [_buildExploreSection]'s album cards or artist
+  /// circles while the home feed loads. Wrap in
   /// [ShimmerLoading] for the sweep effect.
   Widget _buildExploreSectionSkeleton({required bool isArtist}) {
     final cardSize = _exploreCardSize(context);
     final coverSize = _exploreCoverSize(context);
-    final inset = wideListInset(context);
+    final inset = homeContentInset(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -166,7 +166,7 @@ extension _HomeTabExploreUI on _HomeTabState {
     );
   }
 
-  Widget _buildYTMusicQuickPicksSection(
+  Widget _buildQuickPicksSection(
     ExploreSection section,
     ColorScheme colorScheme,
   ) {
@@ -197,7 +197,7 @@ extension _HomeTabExploreUI on _HomeTabState {
     return Semantics(
       button: true,
       label: context.l10n.a11yOpenItem(item.type, item.name),
-      child: GestureDetector(
+      child: TvTapTarget(
         onTap: () => _navigateToExploreItem(item, itemContext),
         child: SizedBox(
           width: cardSize,
@@ -274,8 +274,6 @@ extension _HomeTabExploreUI on _HomeTabState {
                     artistName: item.artists,
                     coverUrl: item.coverUrl,
                     extensionId: item.providerId,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: colorScheme.onSurfaceVariant,
                       fontSize: isTablet ? 14 : 12,
@@ -341,15 +339,13 @@ extension _HomeTabExploreUI on _HomeTabState {
           _showMissingExploreProviderMessage();
           return;
         }
-        Navigator.push(
+        pushPage<void>(
           context,
-          MaterialPageRoute<void>(
-            builder: (context) => ExtensionAlbumScreen(
-              extensionId: extensionId,
-              albumId: item.id,
-              albumName: item.name,
-              coverUrl: item.coverUrl,
-            ),
+          (context) => ExtensionAlbumScreen(
+            extensionId: extensionId,
+            albumId: item.id,
+            albumName: item.name,
+            coverUrl: item.coverUrl,
           ),
         );
         return;
@@ -358,15 +354,13 @@ extension _HomeTabExploreUI on _HomeTabState {
           _showMissingExploreProviderMessage();
           return;
         }
-        Navigator.push(
+        pushPage<void>(
           context,
-          MaterialPageRoute<void>(
-            builder: (context) => ExtensionPlaylistScreen(
-              extensionId: extensionId,
-              playlistId: item.id,
-              playlistName: item.name,
-              coverUrl: item.coverUrl,
-            ),
+          (context) => ExtensionPlaylistScreen(
+            extensionId: extensionId,
+            playlistId: item.id,
+            playlistName: item.name,
+            coverUrl: item.coverUrl,
           ),
         );
         return;
@@ -375,15 +369,13 @@ extension _HomeTabExploreUI on _HomeTabState {
           _showMissingExploreProviderMessage();
           return;
         }
-        Navigator.push(
+        pushPage<void>(
           context,
-          MaterialPageRoute<void>(
-            builder: (context) => ExtensionArtistScreen(
-              extensionId: extensionId,
-              artistId: item.id,
-              artistName: item.name,
-              coverUrl: item.coverUrl,
-            ),
+          (context) => ExtensionArtistScreen(
+            extensionId: extensionId,
+            artistId: item.id,
+            artistName: item.name,
+            coverUrl: item.coverUrl,
           ),
         );
         return;
@@ -488,8 +480,6 @@ extension _HomeTabExploreUI on _HomeTabState {
                           extensionId: item.providerId,
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(color: colorScheme.onSurfaceVariant),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
@@ -572,8 +562,8 @@ extension _HomeTabExploreUI on _HomeTabState {
     }
   }
 
-  /// Music's Search page closes with Browse Categories. SpotiFLAC has no genre
-  /// catalog, so each section of the home feed stands in as one tile.
+  /// Each home-feed section becomes a browse tile without requiring the
+  /// provider to expose a separate genre catalog.
   Widget _buildBrowseSliver() {
     return Consumer(
       builder: (context, ref, _) {
@@ -597,7 +587,7 @@ extension _HomeTabExploreUI on _HomeTabState {
                 .where((url) => url.isNotEmpty)
                 .firstWhere(used.add, orElse: () => ''),
         ];
-        final inset = 16 + wideListInset(context);
+        final inset = 16 + homeContentInset(context);
         return SliverMainAxisGroup(
           slivers: [
             SliverPadding(
@@ -727,16 +717,15 @@ extension _HomeTabExploreUI on _HomeTabState {
 
   void _openExploreSection(ExploreSection section) {
     final colorScheme = Theme.of(context).colorScheme;
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => _ExploreSectionPage(
-          section: section,
-          itemExtent: _exploreCardSize(context),
-          itemHeight: _exploreSectionHeight(context),
-          itemBuilder: (itemContext, item) =>
-              _buildExploreItem(itemContext, item, colorScheme),
-          onOpen: _navigateToExploreItem,
-        ),
+    pushPage<void>(
+      context,
+      (_) => _ExploreSectionPage(
+        section: section,
+        itemExtent: _exploreCardSize(context),
+        itemHeight: _exploreSectionHeight(context),
+        itemBuilder: (itemContext, item) =>
+            _buildExploreItem(itemContext, item, colorScheme),
+        onOpen: _navigateToExploreItem,
       ),
     );
   }
@@ -749,15 +738,13 @@ extension _HomeTabExploreUI on _HomeTabState {
         return;
       }
 
-      Navigator.push(
+      pushPage<void>(
         context,
-        MaterialPageRoute<void>(
-          builder: (context) => ExtensionAlbumScreen(
-            extensionId: extensionId,
-            albumId: item.albumId!,
-            albumName: item.albumName ?? 'Album',
-            coverUrl: item.coverUrl,
-          ),
+        (context) => ExtensionAlbumScreen(
+          extensionId: extensionId,
+          albumId: item.albumId!,
+          albumName: item.albumName ?? 'Album',
+          coverUrl: item.coverUrl,
         ),
       );
     } else {
@@ -1023,9 +1010,9 @@ class _ExploreSectionPage extends StatelessWidget {
           AppSliverHeader.page(title: section.title),
           SliverPadding(
             padding: EdgeInsets.fromLTRB(inset, 8, inset, 24),
-            sliver: SliverLayoutBuilder(
-              builder: (context, constraints) {
-                final width = constraints.crossAxisExtent;
+            sliver: SliverLayoutInfoBuilder(
+              select: (constraints) => constraints.crossAxisExtent,
+              builder: (context, width) {
                 final featuredColumns = _columns(width, 360, 3);
                 final featuredWidth =
                     (width - _gap * (featuredColumns - 1)) / featuredColumns;

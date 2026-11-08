@@ -214,7 +214,7 @@ void main() {
     'refreshes remote config despite a legacy recent-fetch timestamp',
     () async {
       SharedPreferences.setMockInitialValues({
-        'spotiflac_owned_config_v1_cached_json': jsonEncode(
+        'app_remote_config_cached_json': jsonEncode(
           _configPayload(
             announcementId: 'cached-announcement',
             donateTitle: 'Cached donation',
@@ -279,7 +279,7 @@ void main() {
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({
-      'spotiflac_owned_config_v1_cached_json': jsonEncode(
+      'app_remote_config_cached_json': jsonEncode(
         _configPayload(
           announcementId: 'cached-announcement',
           donateTitle: 'Cached donation',

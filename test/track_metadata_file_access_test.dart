@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,12 +8,92 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:spotiflac/l10n/l10n.dart';
 import 'package:spotiflac/providers/download_history_provider.dart';
 import 'package:spotiflac/screens/track_metadata_screen.dart';
+import 'package:spotiflac/services/source_deletion_events.dart';
+import 'package:spotiflac/services/source_metadata_events.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+Future<void> _settleFileIo(WidgetTester tester) async {
+  await tester.runAsync(() async {
+    var idleFrames = 0;
+    for (var i = 0; i < 200 && idleFrames < 3; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+      idleFrames = tester.binding.hasScheduledFrame ? 0 : idleFrames + 1;
+    }
+    expect(idleFrames, 3);
+  });
+  await tester.pumpAndSettle();
+}
 
 void main() {
   const channel = MethodChannel('com.spotiflac.app/backend');
+  const paths = MethodChannel('plugins.flutter.io/path_provider');
+  late Directory cache;
+  setUpAll(() async {
+    cache = await Directory.systemTemp.createTemp('metadata-file-access-');
+  });
+  tearDownAll(() async => cache.delete(recursive: true));
 
   for (final spotiflac in [false, true]) {
+    testWidgets(
+      'open details refresh after an edit and deletion (SpotiFLAC=$spotiflac)',
+      (tester) async {
+        SharedPreferences.setMockInitialValues({});
+        final messenger = tester.binding.defaultBinaryMessenger;
+        messenger.setMockMethodCallHandler(paths, (_) async => cache.path);
+        addTearDown(() => messenger.setMockMethodCallHandler(paths, null));
+        var title = 'Old title';
+        messenger.setMockMethodCallHandler(channel, (call) async {
+          return switch (call.method) {
+            'safStat' => {'exists': true, 'size': 100},
+            'extractCoverToFile' => jsonEncode({'error': 'No cover'}),
+            'readFileMetadata' || 'readAudioMetadata' => jsonEncode({
+              'title': title,
+              'artist': 'Artist',
+              'album': 'Album',
+            }),
+            _ => null,
+          };
+        });
+        addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+        final item = DownloadHistoryItem(
+          id: 'edited-track',
+          trackName: title,
+          artistName: 'Artist',
+          albumName: 'Album',
+          filePath: 'content://provider/music/edited.flac',
+          service: 'provider-a',
+          downloadedAt: DateTime(2026),
+        );
+        await tester.pumpWidget(
+          ProviderScope(
+            child: MaterialApp(
+              theme: spotiflac
+                  ? SpotiFLACTheme.build(Brightness.dark)
+                  : ThemeData.dark(useMaterial3: true),
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: TrackMetadataScreen(item: item),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text(title), findsWidgets);
+        title = 'Edited title';
+        await tester.runAsync(
+          () => SourceMetadataEvents.instance.publish(item.filePath),
+        );
+        await _settleFileIo(tester);
+        expect(find.text(title), findsWidgets);
+        expect(find.text('Old title'), findsNothing);
+        await SourceDeletionEvents.instance.publish(item.filePath);
+        await tester.pumpAndSettle();
+        expect(find.text('File not found'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
     for (final unavailable in [false, true]) {
       testWidgets('file status distinguishes provider errors from absence '
           '(SpotiFLAC=$spotiflac, unavailable=$unavailable)', (tester) async {

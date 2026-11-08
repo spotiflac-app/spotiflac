@@ -9,6 +9,23 @@ version is the one in this folder's `pubspec.yaml` (5.3.0, unchanged).
 
 ## Patches
 
+### Playback thread
+
+`AudioplayersPlugin` serializes method calls on an owned `HandlerThread` with a
+Looper. MediaPlayer construction, source changes, reset, release and transport
+commands stay on that thread. A slow media-service reset therefore does not
+hold Android's input/UI thread. Audio focus and SoundPool load callbacks return
+to the same owner; Flutter event-channel registration and delivery stay on the
+main thread. `create` replies only after that registration: Dart listens as
+soon as the reply lands, and a stream with no handler then loses every event,
+which left playback loading forever. Method errors carry serializable details.
+
+Detaching removes channel handlers immediately and queues cleanup without
+waiting on the UI thread. The retired worker exits after cleanup, and its
+captured callbacks cannot enter a replacement engine. Instrumentation tests
+hold a real wrapper's reset, verify the main Looper still runs and later player
+commands wait, and exercise native prepare, seek and transport callbacks.
+
 ### Proc descriptor sources
 
 `UrlSource` duplicates app-owned `/proc/self/fd/<fd>` sources and passes the
@@ -42,6 +59,30 @@ Dart caller is `lib/services/music_playback_deck.dart` in the app.
   relying on `setPlaybackParams` (or, before API 23, `setRate(1.0)`) to start
   output.
 
+### Mixed output
+
+On Android 9 (API 28) and later, `MediaPlayerWrapper` enables a
+`DynamicsProcessing` effect with no stage in use on the player's own session
+(player/MixedOutput.kt) before each `start()`, and disables it on `pause()`,
+`stop()` and `reset()`; `release()` frees it. Without it, MediaPlayer may
+send long local tracks to a compressed offload output, where the audio DSP
+decodes them outside the platform mixer. Features that read the mixed output
+then get silence, for example the music-synced lights on Nothing phones
+(SpotiFLAC issue 802). An enabled effect without offload support makes the
+platform choose PCM through the mixer, which ExoPlayer-based players use by
+default. The effect leaves the sound unchanged. If the device refuses it,
+playback continues and the plugin logs the reason.
+
+### Next player
+
+A `setNextPlayer` method with an optional `nextPlayerId` links two players
+for gapless playback. `WrappedPlayer.setNext` requires both to hold a
+prepared source and calls `MediaPlayer.setNextMediaPlayer`, so the platform
+starts the next player as the current one completes. `onCompletion` then
+marks the next player as playing before reporting completion, so a later
+`resume` from Dart confirms its state without restarting it. A new source
+or a release drops the link; no `nextPlayerId` unlinks it.
+
 ### Error state
 
 `WrappedPlayer.onError` now marks the player as not prepared and not playing,
@@ -51,10 +92,15 @@ prepared) with the `what` and `extra` codes as details, and returns `true`.
 Upstream returns `false`, which makes MediaPlayer also call the completion
 listener, so the app's queue advanced after a playback failure.
 
+`MediaPlayerWrapper` retires its callbacks before resetting and releasing the
+native player. A late error, prepared, seek or completion callback from a
+cancelled network source cannot change the replacement source's shared
+`WrappedPlayer` state or report its error as a failure of the new song.
+
 ### Build
 
 `android/build.gradle`: Kotlin 1.7.10 to 2.4.21, coroutines 1.6.4 to 1.11.0,
-AGP 7.3.1 to 9.4.1, android-junit5 1.7.1.1 to 2.0.1, compileSdk 36 to 37,
+AGP 7.3.1 to 9.4.1, android-junit5 1.7.1.1 to 2.0.2, compileSdk 36 to 37,
 `androidx.core:core-ktx` 1.9.0 to 1.19.1, `kotlin-stdlib-jdk7` replaced by
 `kotlin-stdlib`, and newer JUnit Jupiter and AssertJ test dependencies.
 `CHANGELOG.md` differs only by removed trailing whitespace.
@@ -66,6 +112,7 @@ Compared against the pub.dev 5.3.0 package in the local pub cache:
 - `android/build.gradle`
 - `android/src/main/kotlin/xyz/luan/audioplayers/AudioplayersPlugin.kt`
 - `android/src/main/kotlin/xyz/luan/audioplayers/player/MediaPlayerWrapper.kt`
+- `android/src/main/kotlin/xyz/luan/audioplayers/player/MixedOutput.kt` (new)
 - `android/src/main/kotlin/xyz/luan/audioplayers/player/PlaybackEqualizer.kt` (new)
 - `android/src/main/kotlin/xyz/luan/audioplayers/player/WrappedPlayer.kt`
 - `android/src/main/kotlin/xyz/luan/audioplayers/source/UrlSource.kt`

@@ -13,11 +13,14 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 spotiflac-mobile = { path = "../mobile" }
+spotiflac-link.workspace = true
+spotiflac-cast.workspace = true
 chrono.workspace = true
 getrandom.workspace = true
 notify.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+tokio.workspace = true
 url.workspace = true
 
 [target.'cfg(windows)'.dependencies]

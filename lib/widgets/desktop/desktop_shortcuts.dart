@@ -1,10 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:spotiflac/constants/app_info.dart';
+import 'package:spotiflac/controllers/open_audio_controller.dart';
 import 'package:spotiflac/l10n/l10n.dart';
 import 'package:spotiflac/providers/music_player_provider.dart';
 import 'package:spotiflac/providers/settings_provider.dart';
@@ -15,6 +17,7 @@ import 'package:spotiflac/services/music_playback_deck.dart'
 import 'package:spotiflac/services/shell_navigation_service.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
 import 'package:spotiflac/widgets/app_refresh_indicator.dart';
+import 'package:spotiflac/widgets/open_audio_button.dart';
 import 'package:spotiflac/widgets/desktop/desktop_commands.dart';
 import 'package:spotiflac/widgets/desktop/desktop_inspector.dart';
 import 'package:spotiflac/widgets/desktop/desktop_player_bar.dart';
@@ -77,24 +80,58 @@ class _DesktopShortcutsState extends ConsumerState<DesktopShortcuts> {
     return focus == null || focus is FocusScopeNode || focus == _idleFocus;
   }
 
-  bool _canRun(DesktopCommand command) => switch (command) {
-    DesktopCommand.playPause => !_editingText && _nothingFocused,
-    // Text fields use these keys for caret movement.
+  bool _playerCommand(DesktopCommand command) => switch (command) {
+    DesktopCommand.playPause ||
     DesktopCommand.next ||
     DesktopCommand.previous ||
     DesktopCommand.volumeUp ||
-    DesktopCommand.volumeDown => !_editingText,
-    DesktopCommand.back => _canCloseTopLayer,
-    DesktopCommand.dismiss =>
-      _editingText ||
-          _canCloseTopLayer ||
-          desktopWindowMode.value != DesktopWindowMode.windowed,
-    _ => true,
+    DesktopCommand.volumeDown ||
+    DesktopCommand.lyrics ||
+    DesktopCommand.upNext ||
+    DesktopCommand.miniPlayer => true,
+    _ => false,
   };
 
+  bool _canRun(DesktopCommand command) {
+    if (_playerCommand(command) && !ref.read(playerUiEnabledProvider)) {
+      return false;
+    }
+    return switch (command) {
+      DesktopCommand.openAudioFiles ||
+      DesktopCommand.openAudioFolder => !ref.read(openAudioControllerProvider),
+      DesktopCommand.playPause => !_editingText && _nothingFocused,
+      // Text fields use these keys for caret movement.
+      DesktopCommand.next ||
+      DesktopCommand.previous ||
+      DesktopCommand.volumeUp ||
+      DesktopCommand.volumeDown => !_editingText,
+      DesktopCommand.back =>
+        _canCloseTopLayer || ShellNavigationService.canNavigateBack,
+      DesktopCommand.forward => ShellNavigationService.canNavigateForward,
+      DesktopCommand.dismiss =>
+        _editingText ||
+            _canCloseTopLayer ||
+            desktopWindowMode.value != DesktopWindowMode.windowed,
+      _ => true,
+    };
+  }
+
   void _run(DesktopCommand command) {
+    if (_playerCommand(command) && !ref.read(playerUiEnabledProvider)) return;
     final controller = ref.read(musicPlayerControllerProvider);
     switch (command) {
+      case DesktopCommand.openAudioFiles:
+      case DesktopCommand.openAudioFolder:
+        final target = _rootNavigator?.context;
+        if (target != null) {
+          unawaited(
+            pickOpenAudio(
+              target,
+              ref,
+              folder: command == DesktopCommand.openAudioFolder,
+            ),
+          );
+        }
       case DesktopCommand.playPause:
         unawaited(
           controller.togglePlayPause(ref.read(playbackPlayingProvider)),
@@ -114,8 +151,11 @@ class _DesktopShortcutsState extends ConsumerState<DesktopShortcuts> {
         _closePages();
         ShellNavigationService.requestTab(ShellTab.settings);
       case DesktopCommand.back:
-        _closeTopLayer();
+        _goBack();
+      case DesktopCommand.forward:
+        ShellNavigationService.navigateForward();
       case DesktopCommand.dismiss:
+        // Escape only closes layers; it never switches destinations.
         if (_editingText) {
           FocusManager.instance.primaryFocus?.unfocus();
         } else if (_canCloseTopLayer) {
@@ -128,7 +168,7 @@ class _DesktopShortcutsState extends ConsumerState<DesktopShortcuts> {
       case DesktopCommand.upNext:
         toggleDesktopInspector(DesktopInspectorPanel.upNext);
       case DesktopCommand.toggleSidebar:
-        desktopSidebarCollapsed.value = !desktopSidebarCollapsed.value;
+        toggleDesktopSidebar();
       case DesktopCommand.refresh:
         AppRefreshIndicator.refreshVisible();
       case DesktopCommand.miniPlayer:
@@ -172,25 +212,60 @@ class _DesktopShortcutsState extends ConsumerState<DesktopShortcuts> {
     );
   }
 
-  double get _windowWidth => MediaQuery.sizeOf(context).width;
+  /// Reads the window width without depending on it: commands run outside
+  /// build, and a dependency would rebuild this layer on every resize.
+  double get _windowWidth =>
+      context.getInheritedWidgetOfExactType<MediaQuery>()!.data.size.width;
 
   bool get _canCloseTopLayer =>
       _rootNavigator?.canPop() == true ||
-      canDismissDesktopPlayerLayer(_windowWidth) ||
+      canDismissDesktopPlayerLayer(
+        _windowWidth,
+        spotiflac: context.isSpotiFLAC,
+      ) ||
       ShellNavigationService.activeBackNavigator()?.canPop() == true;
 
-  /// Closes what Escape or Back closes: a dialog or page over the shell
-  /// first, then the floating inspector or Now Playing, then the active
-  /// destination's own pages.
+  /// Closes what Escape closes: a dialog or page over the shell first, then
+  /// the floating inspector or Now Playing, then the active destination's
+  /// own pages.
   void _closeTopLayer() {
     final root = _rootNavigator;
     if (root != null && root.canPop()) {
       unawaited(root.maybePop());
       return;
     }
-    if (dismissDesktopPlayerLayer(_windowWidth)) return;
+    if (dismissDesktopPlayerLayer(
+      _windowWidth,
+      spotiflac: context.isSpotiFLAC,
+    )) {
+      return;
+    }
     final tab = ShellNavigationService.activeBackNavigator();
     if (tab != null && tab.canPop()) unawaited(tab.maybePop());
+  }
+
+  /// Back closes the top layer like Escape, and once nothing is left to
+  /// close, returns to the previously visited destination.
+  void _goBack() {
+    if (_canCloseTopLayer) {
+      _closeTopLayer();
+    } else {
+      ShellNavigationService.navigateBack();
+    }
+  }
+
+  int _lastPointerButtons = 0;
+
+  /// The mouse side buttons, which only report through pointer buttons.
+  void _handlePointerEvent(PointerEvent event) {
+    if (event.kind != PointerDeviceKind.mouse) return;
+    final pressed = event.buttons & ~_lastPointerButtons;
+    _lastPointerButtons = event.buttons;
+    if ((pressed & kBackMouseButton) != 0) {
+      _goBack();
+    } else if ((pressed & kForwardMouseButton) != 0) {
+      ShellNavigationService.navigateForward();
+    }
   }
 
   void _nudgeVolume(double delta) {
@@ -208,6 +283,14 @@ class _DesktopShortcutsState extends ConsumerState<DesktopShortcuts> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(playerUiEnabledProvider, (_, enabled) {
+      if (enabled) return;
+      desktopNowPlayingOpen.value = false;
+      desktopInspectorPanel.value = null;
+      if (desktopMiniPlayerOpen.value) {
+        unawaited(setDesktopMiniPlayer(open: false));
+      }
+    });
     // Keeps the playback and volume streams alive so the shortcuts read
     // current values even while no player surface is visible.
     ref.listen(playbackPlayingProvider, (_, _) {});
@@ -229,6 +312,14 @@ class _DesktopShortcutsState extends ConsumerState<DesktopShortcuts> {
           ),
         ),
       ),
+    );
+    child = Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: _handlePointerEvent,
+      onPointerMove: _handlePointerEvent,
+      onPointerUp: _handlePointerEvent,
+      onPointerCancel: (_) => _lastPointerButtons = 0,
+      child: child,
     );
     if (defaultTargetPlatform == TargetPlatform.macOS) {
       child = ValueListenableBuilder<DesktopWindowMode>(
@@ -259,20 +350,39 @@ class _DesktopCommandAction extends Action<DesktopCommandIntent> {
 
 /// The macOS menu bar. Items show the same shortcuts as the key bindings;
 /// Play/Pause stays unregistered so typing a space never reaches the menu.
-class _DesktopMenuBar extends StatelessWidget {
+class _DesktopMenuBar extends ConsumerStatefulWidget {
   const _DesktopMenuBar({required this.state, required this.child});
 
   final _DesktopShortcutsState state;
   final Widget child;
 
-  PlatformMenuItem _command(String label, DesktopCommand command) =>
-      PlatformMenuItem(
-        label: label,
-        shortcut: command == DesktopCommand.playPause
-            ? null
-            : desktopCommandShortcut(command),
-        onSelected: () => state._run(command),
-      );
+  @override
+  ConsumerState<_DesktopMenuBar> createState() => _DesktopMenuBarState();
+}
+
+class _DesktopMenuBarState extends ConsumerState<_DesktopMenuBar> {
+  // PlatformMenuItem has no ==, so a new list makes PlatformMenuBar send
+  // the whole menu to the platform again. The items are rebuilt only when
+  // something they show changes.
+  Object? _shown;
+  List<PlatformMenuItem> _menus = const [];
+
+  @override
+  void reassemble() {
+    super.reassemble();
+    _shown = null;
+  }
+
+  PlatformMenuItem _command(String label, DesktopCommand command) {
+    final state = widget.state;
+    return PlatformMenuItem(
+      label: label,
+      shortcut: command == DesktopCommand.playPause
+          ? null
+          : desktopCommandShortcut(command),
+      onSelected: () => state._run(command),
+    );
+  }
 
   PlatformMenuItem _textCommand(
     String label,
@@ -300,194 +410,217 @@ class _DesktopMenuBar extends StatelessWidget {
     final l10n = context.l10n;
     final material = MaterialLocalizations.of(context);
     final spotiflac = context.isSpotiFLAC;
-    return Consumer(
-      builder: (context, ref, child) {
-        final showStore = ref.watch(
-          settingsProvider.select((s) => s.showExtensionStore),
-        );
-        final tabs = desktopDestinationTabs(
+    final showPlayer = ref.watch(playerUiEnabledProvider);
+    final showStore = ref.watch(
+      settingsProvider.select((s) => s.showExtensionStore),
+    );
+    final fullScreen = desktopWindowFullScreen.value;
+    final mode = desktopWindowMode.value;
+    final shown = (
+      widget.state,
+      l10n,
+      material,
+      spotiflac,
+      showPlayer,
+      showStore,
+      fullScreen,
+      mode,
+      desktopMiniPlayerSupported,
+    );
+    if (shown != _shown) {
+      _shown = shown;
+      _menus = _buildMenus(
+        l10n: l10n,
+        material: material,
+        tabs: desktopDestinationTabs(
           spotiflac: spotiflac,
           showStore: showStore,
-        );
-        String tabLabel(ShellTab tab) => switch (tab) {
-          ShellTab.home => l10n.navHome,
-          ShellTab.library => l10n.navLibrary,
-          ShellTab.repository => l10n.navStore,
-          ShellTab.search => l10n.spotiflacSearch,
-          ShellTab.settings => l10n.navSettings,
-        };
-        return PlatformMenuBar(
-          menus: [
-            PlatformMenu(
-              label: AppInfo.appName,
-              menus: [
-                PlatformMenuItemGroup(
-                  members: [
-                    ..._provided([PlatformProvidedMenuItemType.about]),
-                  ],
-                ),
-                PlatformMenuItemGroup(
-                  members: [
-                    _command(l10n.desktopMenuSettings, DesktopCommand.settings),
-                  ],
-                ),
-                PlatformMenuItemGroup(
-                  members: [
-                    ..._provided([
-                      PlatformProvidedMenuItemType.servicesSubmenu,
-                    ]),
-                  ],
-                ),
-                PlatformMenuItemGroup(
-                  members: [
-                    ..._provided([
-                      PlatformProvidedMenuItemType.hide,
-                      PlatformProvidedMenuItemType.hideOtherApplications,
-                      PlatformProvidedMenuItemType.showAllApplications,
-                    ]),
-                  ],
-                ),
-                ..._provided([PlatformProvidedMenuItemType.quit]),
-              ],
-            ),
-            PlatformMenu(
-              label: l10n.desktopMenuFile,
-              menus: [_command(l10n.spotiflacSearch, DesktopCommand.search)],
-            ),
-            PlatformMenu(
-              label: l10n.desktopMenuEdit,
-              menus: [
-                _textCommand(
-                  material.cutButtonLabel,
-                  const SingleActivator(LogicalKeyboardKey.keyX, meta: true),
-                  CopySelectionTextIntent.cut(SelectionChangedCause.keyboard),
-                ),
-                _textCommand(
-                  material.copyButtonLabel,
-                  const SingleActivator(LogicalKeyboardKey.keyC, meta: true),
-                  CopySelectionTextIntent.copy,
-                ),
-                _textCommand(
-                  material.pasteButtonLabel,
-                  const SingleActivator(LogicalKeyboardKey.keyV, meta: true),
-                  const PasteTextIntent(SelectionChangedCause.keyboard),
-                ),
-                _textCommand(
-                  material.selectAllButtonLabel,
-                  const SingleActivator(LogicalKeyboardKey.keyA, meta: true),
-                  const SelectAllTextIntent(SelectionChangedCause.keyboard),
-                ),
-              ],
-            ),
-            PlatformMenu(
-              label: l10n.desktopMenuView,
-              menus: [
-                PlatformMenuItemGroup(
-                  members: [
-                    for (var i = 0; i < tabs.length; i++)
-                      PlatformMenuItem(
-                        label: tabLabel(tabs[i]),
-                        shortcut: i < 5
-                            ? desktopDestinationShortcut(i + 1)
-                            : null,
-                        onSelected: () => state._selectDestination(i + 1),
-                      ),
-                  ],
-                ),
-                PlatformMenuItemGroup(
-                  members: [
-                    _command(material.backButtonTooltip, DesktopCommand.back),
-                    _command(l10n.desktopMenuRefresh, DesktopCommand.refresh),
-                    _command(l10n.nowPlayingTabLyrics, DesktopCommand.lyrics),
-                    _command(l10n.nowPlayingUpNext, DesktopCommand.upNext),
-                  ],
-                ),
-                PlatformMenuItemGroup(
-                  members: [
-                    _command(
-                      desktopWindowFullScreen.value
-                          ? l10n.desktopExitFullscreen
-                          : l10n.desktopWindowFullscreen,
-                      DesktopCommand.fullScreen,
-                    ),
-                    _command(
-                      desktopWindowMode.value == DesktopWindowMode.borderless
-                          ? l10n.desktopWindowed
-                          : l10n.desktopWindowBorderless,
-                      DesktopCommand.borderless,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            PlatformMenu(
-              label: l10n.desktopMenuControls,
-              menus: [
-                PlatformMenuItemGroup(
-                  members: [
-                    _command(
-                      l10n.desktopMenuPlayPause,
-                      DesktopCommand.playPause,
-                    ),
-                    _command(l10n.nowPlayingNextTrack, DesktopCommand.next),
-                    _command(
-                      l10n.nowPlayingPreviousTrack,
-                      DesktopCommand.previous,
-                    ),
-                  ],
-                ),
-                PlatformMenuItemGroup(
-                  members: [
-                    _command(l10n.desktopVolumeUp, DesktopCommand.volumeUp),
-                    _command(l10n.desktopVolumeDown, DesktopCommand.volumeDown),
-                  ],
-                ),
-              ],
-            ),
-            PlatformMenu(
-              label: l10n.desktopMenuWindow,
-              menus: [
-                ..._provided([
-                  PlatformProvidedMenuItemType.minimizeWindow,
-                  PlatformProvidedMenuItemType.zoomWindow,
-                ]),
-                if (desktopMiniPlayerSupported)
-                  PlatformMenuItemGroup(
-                    members: [
-                      _command(
-                        l10n.desktopMenuMiniPlayer,
-                        DesktopCommand.miniPlayer,
-                      ),
-                    ],
-                  ),
-                PlatformMenuItemGroup(
-                  members: [
-                    ..._provided([
-                      PlatformProvidedMenuItemType.arrangeWindowsInFront,
-                    ]),
-                  ],
-                ),
-              ],
-            ),
-            PlatformMenu(
-              label: l10n.desktopMenuHelp,
-              menus: [
+        ),
+        showPlayer: showPlayer,
+        fullScreen: fullScreen,
+        mode: mode,
+      );
+    }
+    return PlatformMenuBar(menus: _menus, child: widget.child);
+  }
+
+  List<PlatformMenuItem> _buildMenus({
+    required AppLocalizations l10n,
+    required MaterialLocalizations material,
+    required List<ShellTab> tabs,
+    required bool showPlayer,
+    required bool fullScreen,
+    required DesktopWindowMode mode,
+  }) {
+    final state = widget.state;
+    String tabLabel(ShellTab tab) => switch (tab) {
+      ShellTab.home => l10n.navHome,
+      ShellTab.library => l10n.navLibrary,
+      ShellTab.repository => l10n.navStore,
+      ShellTab.search => l10n.spotiflacSearch,
+      ShellTab.settings => l10n.navSettings,
+    };
+    return [
+      PlatformMenu(
+        label: AppInfo.appName,
+        menus: [
+          PlatformMenuItemGroup(
+            members: [
+              ..._provided([PlatformProvidedMenuItemType.about]),
+            ],
+          ),
+          PlatformMenuItemGroup(
+            members: [
+              _command(l10n.desktopMenuSettings, DesktopCommand.settings),
+            ],
+          ),
+          PlatformMenuItemGroup(
+            members: [
+              ..._provided([PlatformProvidedMenuItemType.servicesSubmenu]),
+            ],
+          ),
+          PlatformMenuItemGroup(
+            members: [
+              ..._provided([
+                PlatformProvidedMenuItemType.hide,
+                PlatformProvidedMenuItemType.hideOtherApplications,
+                PlatformProvidedMenuItemType.showAllApplications,
+              ]),
+            ],
+          ),
+          ..._provided([PlatformProvidedMenuItemType.quit]),
+        ],
+      ),
+      PlatformMenu(
+        label: l10n.desktopMenuFile,
+        menus: [
+          _command(l10n.openAudioFiles, DesktopCommand.openAudioFiles),
+          _command(l10n.openAudioFolder, DesktopCommand.openAudioFolder),
+          _command(l10n.spotiflacSearch, DesktopCommand.search),
+        ],
+      ),
+      PlatformMenu(
+        label: l10n.desktopMenuEdit,
+        menus: [
+          _textCommand(
+            material.cutButtonLabel,
+            const SingleActivator(LogicalKeyboardKey.keyX, meta: true),
+            CopySelectionTextIntent.cut(SelectionChangedCause.keyboard),
+          ),
+          _textCommand(
+            material.copyButtonLabel,
+            const SingleActivator(LogicalKeyboardKey.keyC, meta: true),
+            CopySelectionTextIntent.copy,
+          ),
+          _textCommand(
+            material.pasteButtonLabel,
+            const SingleActivator(LogicalKeyboardKey.keyV, meta: true),
+            const PasteTextIntent(SelectionChangedCause.keyboard),
+          ),
+          _textCommand(
+            material.selectAllButtonLabel,
+            const SingleActivator(LogicalKeyboardKey.keyA, meta: true),
+            const SelectAllTextIntent(SelectionChangedCause.keyboard),
+          ),
+        ],
+      ),
+      PlatformMenu(
+        label: l10n.desktopMenuView,
+        menus: [
+          PlatformMenuItemGroup(
+            members: [
+              for (var i = 0; i < tabs.length; i++)
                 PlatformMenuItem(
-                  label: l10n.desktopMenuProjectPage,
-                  onSelected: () => unawaited(
-                    launchUrl(
-                      Uri.parse(AppInfo.githubUrl),
-                      mode: LaunchMode.externalApplication,
-                    ),
-                  ),
+                  label: tabLabel(tabs[i]),
+                  shortcut: i < 5 ? desktopDestinationShortcut(i + 1) : null,
+                  onSelected: () => state._selectDestination(i + 1),
                 ),
+            ],
+          ),
+          PlatformMenuItemGroup(
+            members: [
+              _command(material.backButtonTooltip, DesktopCommand.back),
+              _command(l10n.desktopShortcutForward, DesktopCommand.forward),
+              _command(l10n.desktopMenuRefresh, DesktopCommand.refresh),
+              if (showPlayer)
+                _command(l10n.nowPlayingTabLyrics, DesktopCommand.lyrics),
+              if (showPlayer)
+                _command(l10n.nowPlayingUpNext, DesktopCommand.upNext),
+            ],
+          ),
+          PlatformMenuItemGroup(
+            members: [
+              _command(
+                fullScreen
+                    ? l10n.desktopExitFullscreen
+                    : l10n.desktopWindowFullscreen,
+                DesktopCommand.fullScreen,
+              ),
+              _command(
+                mode == DesktopWindowMode.borderless
+                    ? l10n.desktopWindowed
+                    : l10n.desktopWindowBorderless,
+                DesktopCommand.borderless,
+              ),
+            ],
+          ),
+        ],
+      ),
+      if (showPlayer)
+        PlatformMenu(
+          label: l10n.desktopMenuControls,
+          menus: [
+            PlatformMenuItemGroup(
+              members: [
+                _command(l10n.desktopMenuPlayPause, DesktopCommand.playPause),
+                _command(l10n.nowPlayingNextTrack, DesktopCommand.next),
+                _command(l10n.nowPlayingPreviousTrack, DesktopCommand.previous),
+              ],
+            ),
+            PlatformMenuItemGroup(
+              members: [
+                _command(l10n.desktopVolumeUp, DesktopCommand.volumeUp),
+                _command(l10n.desktopVolumeDown, DesktopCommand.volumeDown),
               ],
             ),
           ],
-          child: child!,
-        );
-      },
-      child: child,
-    );
+        ),
+      PlatformMenu(
+        label: l10n.desktopMenuWindow,
+        menus: [
+          ..._provided([
+            PlatformProvidedMenuItemType.minimizeWindow,
+            PlatformProvidedMenuItemType.zoomWindow,
+          ]),
+          if (showPlayer && desktopMiniPlayerSupported)
+            PlatformMenuItemGroup(
+              members: [
+                _command(l10n.desktopMenuMiniPlayer, DesktopCommand.miniPlayer),
+              ],
+            ),
+          PlatformMenuItemGroup(
+            members: [
+              ..._provided([
+                PlatformProvidedMenuItemType.arrangeWindowsInFront,
+              ]),
+            ],
+          ),
+        ],
+      ),
+      PlatformMenu(
+        label: l10n.desktopMenuHelp,
+        menus: [
+          PlatformMenuItem(
+            label: l10n.desktopMenuProjectPage,
+            onSelected: () => unawaited(
+              launchUrl(
+                Uri.parse(AppInfo.githubUrl),
+                mode: LaunchMode.externalApplication,
+              ),
+            ),
+          ),
+        ],
+      ),
+    ];
   }
 }

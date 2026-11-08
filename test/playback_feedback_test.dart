@@ -49,6 +49,8 @@ void main() {
           errorMessage: 'Audio output failed',
         );
         states.add(failed);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 350));
         await tester.pumpAndSettle();
         expect(
           find.text('Cannot open file: Audio output failed'),
@@ -66,6 +68,65 @@ void main() {
           find.text('Cannot open file: Audio output failed'),
           findsNothing,
         );
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'superseded errors do not linger after playback recovers ($spotiflac)',
+      (tester) async {
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        final runtime = MusicPlayerRuntime();
+        addTearDown(runtime.dispose);
+        final states = StreamController<PlaybackState>();
+        addTearDown(states.close);
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              musicPlayerRuntimeProvider.overrideWithValue(runtime),
+              playbackStateProvider.overrideWith((_) => states.stream),
+            ],
+            child: MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              theme: spotiflac
+                  ? SpotiFLACTheme.build(Brightness.dark)
+                  : ThemeData(),
+              builder: (_, child) =>
+                  AppScaffoldMessenger(child: PlaybackFeedback(child: child!)),
+              home: const Scaffold(body: SizedBox.expand()),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final failed = PlaybackState(
+          processingState: AudioProcessingState.error,
+          errorCode: 1,
+          errorMessage: 'Cancelled source',
+        );
+        final ready = PlaybackState(
+          processingState: AudioProcessingState.ready,
+          playing: true,
+        );
+        states.add(failed);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+        states.add(ready);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(find.text('Cannot open file: Cancelled source'), findsNothing);
+
+        // A lasting failure is still visible, then clears when playback works.
+        states.add(failed);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 350));
+        await tester.pumpAndSettle();
+        expect(find.text('Cannot open file: Cancelled source'), findsOneWidget);
+        states.add(ready);
+        await tester.pumpAndSettle();
+        expect(find.text('Cannot open file: Cancelled source'), findsNothing);
         expect(tester.takeException(), isNull);
       },
     );
@@ -129,4 +190,58 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('an unplayable format is named instead of the raw error', (
+    tester,
+  ) async {
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    final runtime = MusicPlayerRuntime();
+    addTearDown(runtime.dispose);
+    final states = StreamController<PlaybackState>();
+    addTearDown(states.close);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          musicPlayerRuntimeProvider.overrideWithValue(runtime),
+          playbackStateProvider.overrideWith((_) => states.stream),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          builder: (_, child) =>
+              AppScaffoldMessenger(child: PlaybackFeedback(child: child!)),
+          home: const Scaffold(body: SizedBox.expand()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    const skipped =
+        "This format can't be played on this device: APE. "
+        'Playing the next song.';
+    runtime.notifyUnplayableSong('APE', skipped: true);
+    await tester.pumpAndSettle();
+    expect(find.text(skipped), findsOneWidget);
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+    expect(find.text(skipped), findsNothing);
+
+    // Playback stops on the last song; its error needs no second notice.
+    runtime.notifyUnplayableSong('WavPack', skipped: false);
+    states.add(
+      PlaybackState(
+        processingState: AudioProcessingState.error,
+        errorCode: 1,
+        errorMessage: 'Cannot Open',
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+    expect(
+      find.text("This format can't be played on this device: WavPack"),
+      findsOneWidget,
+    );
+    expect(find.text('Cannot open file: Cannot Open'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }

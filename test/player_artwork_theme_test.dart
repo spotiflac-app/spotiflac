@@ -10,14 +10,16 @@ import 'package:spotiflac/models/track.dart';
 import 'package:spotiflac/providers/library_collections_provider.dart';
 import 'package:spotiflac/providers/music_player_provider.dart';
 import 'package:spotiflac/providers/runtime_profile_provider.dart';
+import 'package:spotiflac/providers/settings_provider.dart';
 import 'package:spotiflac/providers/system_volume_provider.dart';
 import 'package:spotiflac/screens/now_playing_screen.dart';
 import 'package:spotiflac/theme/app_theme.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
 import 'package:spotiflac/theme/player_artwork_theme.dart';
-import 'package:spotiflac/widgets/app_icon_button.dart';
+import 'package:spotiflac/widgets/cached_cover_image.dart';
 import 'package:spotiflac/widgets/desktop/desktop_downloads_button.dart';
 import 'package:spotiflac/widgets/desktop/desktop_player_bar.dart';
+import 'package:spotiflac/widgets/expressive_playback_transport.dart';
 import 'package:spotiflac/widgets/mini_player.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -74,16 +76,16 @@ void main() {
 
   test('palette sources follow the artwork forms the player shows', () {
     expect(
-      PlayerArtworkTheme.paletteSource('https://example.test/a.jpg'),
+      coverImageSource('https://example.test/a.jpg'),
       'https://example.test/a.jpg',
     );
-    expect(
-      PlayerArtworkTheme.paletteSource(Uri.file(_coverA).toString()),
-      _coverA,
-    );
-    expect(PlayerArtworkTheme.paletteSource(_coverA), _coverA);
-    expect(PlayerArtworkTheme.paletteSource('content://media/cover'), isNull);
-    expect(PlayerArtworkTheme.paletteSource(null), isNull);
+    expect(coverImageSource(Uri.file(_coverA).toString()), _coverA);
+    expect(coverImageSource(_coverA), _coverA);
+    expect(coverImageSource('content://media/cover'), isNull);
+    expect(coverImageSource('network://connection/cover.jpg'), isNull);
+    expect(coverImageSource('file://host/covers/a.jpg'), isNull);
+    expect(coverImageSource('covers/a.jpg'), isNull);
+    expect(coverImageSource(null), isNull);
   });
 
   group('PlayerArtworkTheme', () {
@@ -265,13 +267,14 @@ void main() {
       );
       expect(surface.color, cover.surfaceContainer);
       expect(Theme.of(tester.element(find.text('Song'))).colorScheme, cover);
-      final play = tester
-          .widgetList<AppIconButton>(
-            find.descendant(of: bar, matching: find.byType(AppIconButton)),
-          )
-          .singleWhere((button) => button.style?.backgroundColor != null);
-      expect(play.style!.backgroundColor!.resolve({}), cover.primary);
-      expect(play.style!.foregroundColor!.resolve({}), cover.onPrimary);
+      final transport = tester.widget<ExpressivePlaybackTransport>(
+        find.descendant(
+          of: bar,
+          matching: find.byType(ExpressivePlaybackTransport),
+        ),
+      );
+      expect(transport.colorScheme, cover);
+      expect(transport.dense, isTrue);
       // Downloads are app chrome hosted in the bar.
       expect(
         Theme.of(
@@ -316,6 +319,10 @@ void main() {
       );
       palette.cached[_coverA] = cover;
       await tester.pumpWidget(app(const NowPlayingScreen(), spotiflac: false));
+      // The card, whose scaffold shows the scheme's surface.
+      ProviderScope.containerOf(
+        tester.element(find.byType(NowPlayingScreen)),
+      ).read(settingsProvider.notifier).setPlayerCoverStyle('default');
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 

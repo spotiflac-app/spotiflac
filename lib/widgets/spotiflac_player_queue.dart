@@ -5,7 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:spotiflac/l10n/l10n.dart';
 import 'package:spotiflac/providers/music_player_provider.dart';
 import 'package:spotiflac/providers/settings_provider.dart';
-import 'package:spotiflac/widgets/player_artwork.dart';
+import 'package:spotiflac/utils/desktop_platform.dart';
+import 'package:spotiflac/widgets/player_queue_artwork.dart';
 import 'package:spotiflac/widgets/player_queue_dismissible.dart';
 
 /// Upcoming tracks share the player's artwork backdrop and transport controls.
@@ -17,27 +18,15 @@ class SpotiFLACPlayerQueue extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final queue = ref.watch(playQueueProvider).value ?? const <MediaItem>[];
-    final currentId = ref.watch(
-      currentMediaItemProvider.select((item) => item.value?.id),
-    );
     final playback = ref.watch(
       playbackStateProvider.select(
         (state) => (
-          index: state.value?.queueIndex,
           shuffle: state.value?.shuffleMode == AudioServiceShuffleMode.all,
           repeat: state.value?.repeatMode ?? AudioServiceRepeatMode.none,
         ),
       ),
     );
-    final reportedIndex = playback.index;
-    final currentIndex =
-        reportedIndex != null &&
-            reportedIndex >= 0 &&
-            reportedIndex < queue.length &&
-            queue[reportedIndex].id == currentId
-        ? reportedIndex
-        : queue.indexWhere((item) => item.id == currentId);
-    final start = currentIndex + 1;
+    final start = ref.watch(currentQueueIndexProvider) + 1;
     final count = queue.length - start;
     final controller = ref.read(musicPlayerControllerProvider);
     final autoMix = ref.watch(settingsProvider.select((s) => s.autoMix));
@@ -76,65 +65,129 @@ class SpotiFLACPlayerQueue extends ConsumerWidget {
       ),
     );
 
+    // Desktop shuffle and repeat live in the player capsule, so the
+    // panel keeps only the two wide queue modes, drawn as their icons.
+    Widget desktopModeButton({
+      required IconData icon,
+      required String label,
+      required String stateLabel,
+      required bool selected,
+      required VoidCallback onPressed,
+    }) => Expanded(
+      child: Semantics(
+        selected: selected,
+        label: stateLabel,
+        excludeSemantics: true,
+        button: true,
+        child: FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: Colors.white.withValues(
+              alpha: selected ? 0.82 : 0.12,
+            ),
+            foregroundColor: selected ? Colors.black : Colors.white,
+            minimumSize: const Size(0, 36),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            shape: const StadiumBorder(),
+            textStyle: Theme.of(context).textTheme.bodyMedium,
+          ),
+          onPressed: onPressed,
+          child: Icon(icon, semanticLabel: label, size: 20),
+        ),
+      ),
+    );
+
     return CustomScrollView(
       key: const PageStorageKey('spotiflac-player-queue'),
       slivers: [
         SliverPadding(
-          padding: const EdgeInsets.symmetric(horizontal: 28),
+          padding: EdgeInsets.symmetric(
+            horizontal: isDesktopPlatform ? 16 : 28,
+          ),
           sliver: SliverToBoxAdapter(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    modeButton(
-                      icon: CupertinoIcons.arrow_merge,
-                      label: autoMix
-                          ? context.l10n.autoMixOn
-                          : context.l10n.autoMixOff,
-                      selected: autoMix,
-                      onPressed: () => ref
-                          .read(settingsProvider.notifier)
-                          .setAutoMix(!autoMix),
-                    ),
-                    const SizedBox(width: 12),
-                    modeButton(
-                      icon: CupertinoIcons.shuffle,
-                      label: playback.shuffle
-                          ? context.l10n.nowPlayingShuffleOn
-                          : context.l10n.nowPlayingPlayInOrder,
-                      selected: playback.shuffle,
-                      onPressed: () => controller.setShuffle(!playback.shuffle),
-                    ),
-                    const SizedBox(width: 12),
-                    modeButton(
-                      icon: playback.repeat == AudioServiceRepeatMode.one
-                          ? CupertinoIcons.repeat_1
-                          : CupertinoIcons.repeat,
-                      label: repeatLabel,
-                      selected: playback.repeat != AudioServiceRepeatMode.none,
-                      onPressed: () =>
-                          controller.setRepeatMode(switch (playback.repeat) {
-                            AudioServiceRepeatMode.none =>
-                              AudioServiceRepeatMode.all,
-                            AudioServiceRepeatMode.all =>
-                              AudioServiceRepeatMode.one,
-                            _ => AudioServiceRepeatMode.none,
-                          }),
-                    ),
-                    const SizedBox(width: 12),
-                    modeButton(
-                      icon: CupertinoIcons.infinite,
-                      label: autoplay
-                          ? context.l10n.autoplayOn
-                          : context.l10n.autoplayOff,
-                      selected: autoplay,
-                      onPressed: () => ref
-                          .read(settingsProvider.notifier)
-                          .setAutoplay(!autoplay),
-                    ),
-                  ],
-                ),
+                if (isDesktopPlatform)
+                  Row(
+                    children: [
+                      desktopModeButton(
+                        icon: CupertinoIcons.infinite,
+                        label: context.l10n.queueAutoplay,
+                        stateLabel: autoplay
+                            ? context.l10n.autoplayOn
+                            : context.l10n.autoplayOff,
+                        selected: autoplay,
+                        onPressed: () => ref
+                            .read(settingsProvider.notifier)
+                            .setAutoplay(!autoplay),
+                      ),
+                      const SizedBox(width: 12),
+                      desktopModeButton(
+                        icon: CupertinoIcons.arrow_merge,
+                        label: context.l10n.queueAutoMix,
+                        stateLabel: autoMix
+                            ? context.l10n.autoMixOn
+                            : context.l10n.autoMixOff,
+                        selected: autoMix,
+                        onPressed: () => ref
+                            .read(settingsProvider.notifier)
+                            .setAutoMix(!autoMix),
+                      ),
+                    ],
+                  )
+                else
+                  Row(
+                    children: [
+                      modeButton(
+                        icon: CupertinoIcons.arrow_merge,
+                        label: autoMix
+                            ? context.l10n.autoMixOn
+                            : context.l10n.autoMixOff,
+                        selected: autoMix,
+                        onPressed: () => ref
+                            .read(settingsProvider.notifier)
+                            .setAutoMix(!autoMix),
+                      ),
+                      const SizedBox(width: 12),
+                      modeButton(
+                        icon: CupertinoIcons.shuffle,
+                        label: playback.shuffle
+                            ? context.l10n.nowPlayingShuffleOn
+                            : context.l10n.nowPlayingPlayInOrder,
+                        selected: playback.shuffle,
+                        onPressed: () =>
+                            controller.setShuffle(!playback.shuffle),
+                      ),
+                      const SizedBox(width: 12),
+                      modeButton(
+                        icon: playback.repeat == AudioServiceRepeatMode.one
+                            ? CupertinoIcons.repeat_1
+                            : CupertinoIcons.repeat,
+                        label: repeatLabel,
+                        selected:
+                            playback.repeat != AudioServiceRepeatMode.none,
+                        onPressed: () =>
+                            controller.setRepeatMode(switch (playback.repeat) {
+                              AudioServiceRepeatMode.none =>
+                                AudioServiceRepeatMode.all,
+                              AudioServiceRepeatMode.all =>
+                                AudioServiceRepeatMode.one,
+                              _ => AudioServiceRepeatMode.none,
+                            }),
+                      ),
+                      const SizedBox(width: 12),
+                      modeButton(
+                        icon: CupertinoIcons.infinite,
+                        label: autoplay
+                            ? context.l10n.autoplayOn
+                            : context.l10n.autoplayOff,
+                        selected: autoplay,
+                        onPressed: () => ref
+                            .read(settingsProvider.notifier)
+                            .setAutoplay(!autoplay),
+                      ),
+                    ],
+                  ),
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   child: Column(
@@ -193,8 +246,8 @@ class SpotiFLACPlayerQueue extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(5),
                       child: SizedBox.square(
                         dimension: 40,
-                        child: PlayerArtwork(
-                          artUri: item.artUri?.toString(),
+                        child: PlayerQueueArtwork(
+                          item: item,
                           colorScheme: colorScheme,
                           cacheWidth: 120,
                           iconSize: 22,

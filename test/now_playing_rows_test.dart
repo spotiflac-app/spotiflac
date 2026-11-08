@@ -1,5 +1,6 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spotiflac/l10n/app_localizations.dart';
@@ -9,6 +10,7 @@ import 'package:spotiflac/theme/spotiflac_theme.dart';
 import 'package:spotiflac/theme/player_artwork_theme.dart';
 import 'package:spotiflac/widgets/album_track_tile.dart';
 import 'package:spotiflac/widgets/app_content_card.dart';
+import 'package:spotiflac/widgets/decorative_phase.dart';
 import 'package:spotiflac/widgets/desktop/track_table.dart';
 import 'package:spotiflac/widgets/now_playing_indicator.dart';
 import 'package:spotiflac/widgets/track_card.dart';
@@ -153,23 +155,23 @@ void main() {
         ),
       );
       await tester.pump(const Duration(milliseconds: 100));
-      expect(tester.binding.hasScheduledFrame, isTrue);
+      expect(DecorativePhase.debugClockRunning, isTrue);
 
       playing.value = false;
       await tester.pump();
       await tester.pump();
-      expect(tester.binding.hasScheduledFrame, isFalse);
+      expect(DecorativePhase.debugClockRunning, isFalse);
 
       playing.value = true;
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
-      expect(tester.binding.hasScheduledFrame, isTrue);
+      expect(DecorativePhase.debugClockRunning, isTrue);
     });
 
     testWidgets('stays still under reduced motion', (tester) async {
       await tester.pumpWidget(host(playing: true, reduceMotion: true));
       await tester.pump();
-      expect(tester.binding.hasScheduledFrame, isFalse);
+      expect(DecorativePhase.debugClockRunning, isFalse);
     });
 
     testWidgets('stops its ticker while hidden', (tester) async {
@@ -183,7 +185,7 @@ void main() {
         ),
       );
       await tester.pump();
-      expect(tester.binding.hasScheduledFrame, isFalse);
+      expect(DecorativePhase.debugClockRunning, isFalse);
     });
 
     testWidgets('is a 16dp glyph outside the semantics tree', (tester) async {
@@ -220,7 +222,7 @@ void main() {
       expect(title?.fontWeight, FontWeight.w700);
       expect(_textStyle(tester, 'Alpha')?.fontWeight, FontWeight.w500);
       // The glyph moves while the track plays.
-      expect(tester.binding.hasScheduledFrame, isTrue);
+      expect(DecorativePhase.debugClockRunning, isTrue);
     });
 
     testWidgets('keeps row height and title alignment', (tester) async {
@@ -391,6 +393,57 @@ void main() {
       expect(_scheme(tester, find.text('Other')).primary, isNot(cover.primary));
     });
 
+    testWidgets('text and controls on the fill take its content colour', (
+      tester,
+    ) async {
+      // A black and white cover fills the row with a container close to
+      // the app's supporting colour, which would hide uncoloured text.
+      final cover = ColorScheme.fromSeed(
+        seedColor: Colors.grey,
+        brightness: Brightness.dark,
+        dynamicSchemeVariant: DynamicSchemeVariant.monochrome,
+      );
+      PlayerArtworkTheme.debugPalette = _CachedPalette(cover);
+      addTearDown(() => PlayerArtworkTheme.debugPalette = null);
+      Widget row(String title, String number, {bool current = false}) =>
+          TrackCard(
+            leading: Text(number),
+            title: title,
+            subtitle: Text('$title artist'),
+            trailing: Icon(Icons.more_vert, key: ValueKey(title)),
+            isCurrent: current,
+          );
+      await tester.pumpWidget(
+        _app(
+          Column(
+            children: [row('Song', '1', current: true), row('Other', '2')],
+          ),
+          currentId: 'media',
+          artUri: 'https://example.com/cover.jpg',
+        ),
+      );
+      await _pumpFor(tester, _settle);
+
+      Color? textColor(String text) => tester
+          .renderObject<RenderParagraph>(find.text(text))
+          .text
+          .style
+          ?.color;
+      ColorScheme trailing(String title) =>
+          _scheme(tester, find.byKey(ValueKey(title)));
+
+      expect(textColor('Song artist'), cover.onPrimaryContainer);
+      expect(textColor('1'), cover.onPrimaryContainer);
+      expect(trailing('Song').onSurfaceVariant, cover.onPrimaryContainer);
+      expect(trailing('Song').primary, cover.onPrimaryContainer);
+      expect(trailing('Song').onPrimary, cover.primaryContainer);
+      // Other rows keep the app's supporting colour.
+      final app = _scheme(tester, find.text('Other'));
+      expect(textColor('Other artist'), app.onSurfaceVariant);
+      expect(textColor('2'), app.onSurfaceVariant);
+      expect(trailing('Other'), app);
+    });
+
     testWidgets('reduced motion switches the shape in place', (tester) async {
       // The route caches its page, so the change comes from inside it.
       final current = ValueNotifier(false);
@@ -503,7 +556,6 @@ void main() {
       subtitle: const Text('Artist'),
       isSelectionMode: false,
       isSelected: false,
-      colorScheme: AppTheme.light().colorScheme,
       onToggleSelection: () {},
       onOpen: () {},
       onEnterSelectionMode: () {},

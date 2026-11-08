@@ -68,7 +68,7 @@ void main() {
       'support row updates cached progress after refresh ($spotiflac)',
       (tester) async {
         SharedPreferences.setMockInitialValues({
-          'spotiflac_owned_config_v1_cached_json': jsonEncode(goalConfig()),
+          'app_remote_config_cached_json': jsonEncode(goalConfig()),
         });
         final response = Completer<http.Response>();
         final service = AppRemoteConfigService(

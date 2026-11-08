@@ -86,6 +86,6 @@ checks require Windows with access to that share; host tests do not establish
 SMB compatibility. Check upstream before removing this patch during an upgrade.
 
 References:
-- [Reported desktop issue](https://github.com/spotiflac-app/spotiflac/issues/3)
+- [Reported desktop issue](https://github.com/spotiflac-app/spotiflac-releases/issues/3)
 - [Upstream get_path](https://github.com/bytecodealliance/cap-std/blob/main/cap-primitives/src/windows/fs/get_path.rs)
 - [MoveFileExW](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefileexw)

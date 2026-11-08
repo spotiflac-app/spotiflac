@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:isolate';
-
 import 'package:spotiflac/services/native_cache_maintenance.dart';
 
 /// Trims old cached payloads to a byte budget. Repository metadata, symlinks,

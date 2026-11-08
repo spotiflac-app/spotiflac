@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite/sqflite.dart';
-import 'package:spotiflac/services/library_database_models.dart';
+import 'package:spotiflac/models/library_database_models.dart';
 import 'package:spotiflac/services/library_row_mapper.dart';
 import 'package:spotiflac/services/library_schema.dart';
 
@@ -29,6 +29,170 @@ void main() {
     await db.execute('PRAGMA recursive_triggers = ON');
   });
   tearDown(() => db.close());
+
+  test(
+    'Windows alias migration hides duplicates without deleting records',
+    () async {
+      await LibrarySchema.create(db, LibrarySchema.version);
+      for (final entry in {
+        'a': r'\\?\C:\Music\song.flac',
+        'b': r'C:\Music\song.flac',
+        'c': r'C:\Music\song.opus',
+        'd': r'\\?\UNC\server\share\song.flac',
+        'e': r'\\server\share\song.flac',
+      }.entries) {
+        await db.insert(
+          'library',
+          LibraryRowMapper.encode({
+            ..._track(entry.key),
+            'filePath': entry.value,
+          }),
+        );
+      }
+      final original = await db.query('library');
+      for (var attempt = 0; attempt < 2; attempt++) {
+        await LibrarySchema.upgrade(db, 21, LibrarySchema.version);
+        expect(await db.query('library'), original);
+        final visible = await db.query(
+          LibrarySchema.visibleView,
+          orderBy: 'id',
+        );
+        expect(visible.map((row) => row['id']), ['a', 'c', 'd']);
+      }
+      // An unavailable winning source must not hide an available alias.
+      await db.insert('library_sources', {
+        'id': 'offline',
+        'path': r'C:\Music',
+        'display_name': 'Offline',
+        'enabled': 1,
+        'available': 0,
+      });
+      await db.update(
+        'library',
+        {'source_id': 'offline'},
+        where: 'id = ?',
+        whereArgs: ['a'],
+      );
+      final visible = await db.query(LibrarySchema.visibleView, orderBy: 'id');
+      expect(visible.map((row) => row['id']), ['b', 'c', 'd']);
+    },
+  );
+
+  test(
+    'v20 index migration preserves rows and can run again after a downgrade',
+    () async {
+      await LibrarySchema.create(db, LibrarySchema.version);
+      const removed = {
+        'idx_library_track_artist': 'track_name, artist_name',
+        'idx_library_album': 'album_name, album_artist',
+        'idx_library_track_norm': 'track_name_norm',
+        'idx_library_artist_norm': 'artist_name_norm',
+        'idx_library_album_norm': 'album_name_norm',
+        'idx_library_scanned_at': 'scanned_at',
+      };
+      await db.execute('DROP INDEX idx_library_album_artist_norm');
+      await db.execute('DROP TABLE ${LibrarySchema.stateTable}');
+      for (final MapEntry(:key, :value) in removed.entries) {
+        await db.execute('CREATE INDEX $key ON library($value)');
+      }
+      await db.insert('library', LibraryRowMapper.encode(_track('persisted')));
+      final rows = await db.query('library');
+      final summary = await db.query(LibrarySchema.lookupSummaryTable);
+
+      for (var attempt = 0; attempt < 2; attempt++) {
+        await LibrarySchema.upgrade(db, 20, LibrarySchema.version);
+        expect(await db.query('library'), rows);
+        expect(await db.query(LibrarySchema.lookupSummaryTable), summary);
+        expect(
+          (await db.rawQuery(
+            "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'library'",
+          )).map((row) => row['name']),
+          isNot(anyElement(isIn(removed.keys))),
+        );
+        final plan = await db.rawQuery(
+          'EXPLAIN QUERY PLAN SELECT id FROM library WHERE album_artist_norm = ?',
+          ['artist'],
+        );
+        expect(
+          plan.single['detail'],
+          contains('idx_library_album_artist_norm'),
+        );
+        // Released network ingestion names this index explicitly.
+        expect(
+          await db.rawQuery(
+            'SELECT id FROM library INDEXED BY idx_library_file_path WHERE file_path = ?',
+            ['/music/persisted.flac'],
+          ),
+          [
+            {'id': 'persisted'},
+          ],
+        );
+        expect(await db.query(LibrarySchema.stateTable), isEmpty);
+        for (final MapEntry(:key, :value) in removed.entries) {
+          await db.execute('CREATE INDEX $key ON library($value)');
+        }
+      }
+    },
+  );
+
+  test(
+    'v19 upgrade rescans local Ogg gain tags while preserving indexed fields',
+    () async {
+      await LibrarySchema.create(db, 19);
+      final songs = [
+        ('opus', 'content://media/audio/1', 'opus', 4, 3),
+        ('vorbis', '/music/song.ogg', 'vorbis', 4, 3),
+        ('suffix', '/music/song.OPUS', null, 4, 3),
+        ('remote', 'network://peer/song.opus', 'opus', 4, 4),
+        ('flac', '/music/song.flac', 'flac', 4, 4),
+        ('legacy', '/music/legacy.opus', 'opus', 0, 0),
+      ];
+      for (final (id, path, format, version, _) in songs) {
+        await db.insert('library', {
+          ...LibraryRowMapper.encode(_track(id)),
+          'file_path': path,
+          'format': format,
+          'file_mod_time': 1234,
+          'audio_metadata_scan_version': version,
+        });
+      }
+      await LibrarySchema.upgrade(db, 19, LibrarySchema.version);
+      for (final (id, path, _, _, version) in songs) {
+        final row = (await db.query(
+          'library',
+          where: 'id = ?',
+          whereArgs: [id],
+        )).single;
+        expect(row['audio_metadata_scan_version'], version, reason: id);
+        expect(row['file_path'], path, reason: id);
+        expect(row['file_mod_time'], 1234, reason: id);
+        expect(row['has_lyrics'], 1, reason: id);
+        expect(row['has_replaygain'], 1, reason: id);
+        expect(
+          libraryIncrementalSnapshotModTime(
+            storedModTime: 1234,
+            storedScanVersion: version,
+          ),
+          version < libraryAudioMetadataScanVersion ? -1 : 1234,
+          reason: id,
+        );
+      }
+      // A completed scan writes the current version, so later upgrades do not
+      // repeatedly invalidate these songs.
+      await db.update('library', {'audio_metadata_scan_version': 4});
+      await LibrarySchema.upgrade(
+        db,
+        LibrarySchema.version,
+        LibrarySchema.version,
+      );
+      expect(
+        (await db.query(
+          'library',
+        )).every((row) => row['audio_metadata_scan_version'] == 4),
+        isTrue,
+      );
+    },
+  );
 
   test(
     'fresh schema maintains lookup counts across replace, source move and deletion',

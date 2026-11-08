@@ -1,5 +1,4 @@
 import 'dart:math';
-
 import 'package:flutter/widgets.dart';
 import 'package:spotiflac/models/track.dart';
 import 'package:spotiflac/utils/artist_utils.dart';
@@ -103,6 +102,18 @@ bool isStorageWriteFailure({String? errorType, String? errorMessage}) {
       message.contains('failed to publish deferred saf') ||
       message.contains('failed to copy extension output to saf');
 }
+
+/// [track] as the download queue keeps it: without a `network://` cover,
+/// which only this device's cover store reads (a Loved or playlist entry of
+/// a network song), so a download never shows, fetches or embeds one.
+Track queuedDownloadTrack(Track track) =>
+    track.coverUrl?.startsWith('network://') == true
+    ? Track.fromJson({
+        ...track.toJson(),
+        'coverUrl': null,
+        'availability': track.availability?.toJson(),
+      })
+    : track;
 
 /// Makes the album-artist credit stable for tracks from the same album.
 ///

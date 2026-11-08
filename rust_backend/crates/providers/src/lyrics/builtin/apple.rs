@@ -187,12 +187,7 @@ impl BuiltinLyricsClient {
                 get
             }
             AppleLyricsSource::ZarzLrc => {
-                let endpoint = option_env!("SPOTIFLAC_APPLE_LYRICS_URL")
-                    .filter(|value| value.starts_with("https://"))
-                    .ok_or_else(|| {
-                        LyricsError::Unavailable("Optional lyrics service is not configured".into())
-                    })?;
-                let mut get = Request::new(endpoint);
+                let mut get = Request::new("https://api.zarz.moe/apple-music/lyrics");
                 get.timeout = Duration::from_secs(65);
                 // Let the backup use its account's storefront, since lyric
                 // availability differs between catalog regions.

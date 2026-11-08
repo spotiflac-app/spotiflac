@@ -1,23 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:spotiflac/widgets/app_alert_dialog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:spotiflac/controllers/confirm_and_delete_tracks.dart';
 import 'package:spotiflac/l10n/l10n.dart';
 import 'package:spotiflac/utils/re_enrich_result.dart';
 import 'package:spotiflac/models/settings.dart';
 import 'package:spotiflac/models/track.dart';
 import 'package:spotiflac/models/unified_library_item.dart';
+import 'package:spotiflac/providers/deleted_library_files.dart';
 import 'package:spotiflac/providers/download_queue_provider.dart';
 import 'package:spotiflac/providers/extension_provider.dart';
 import 'package:spotiflac/providers/local_library_provider.dart';
+import 'package:spotiflac/providers/player_motion_artwork_provider.dart';
 import 'package:spotiflac/providers/settings_provider.dart';
 import 'package:spotiflac/services/batch_metadata_re_enrich.dart';
 import 'package:spotiflac/services/downloaded_embedded_cover_resolver.dart';
-import 'package:spotiflac/services/deleted_library_files.dart';
 import 'package:spotiflac/services/library_database.dart';
+import 'package:spotiflac/services/network_file_editor.dart';
 import 'package:spotiflac/services/local_track_redownload_service.dart';
 import 'package:spotiflac/services/platform_bridge.dart';
 import 'package:spotiflac/services/ffmpeg_reenrich.dart';
-import 'package:spotiflac/utils/confirm_and_delete_tracks.dart';
 import 'package:spotiflac/utils/file_access.dart';
 import 'package:spotiflac/utils/int_utils.dart';
 import 'package:spotiflac/utils/lyrics_metadata_helper.dart';
@@ -27,6 +29,8 @@ import 'package:spotiflac/widgets/batch_progress_dialog.dart';
 import 'package:spotiflac/widgets/app_snack_bar.dart';
 import 'package:spotiflac/widgets/re_enrich_field_dialog.dart';
 import 'package:spotiflac/widgets/re_enrich_review_sheet.dart';
+import 'package:spotiflac/widgets/link/link_library_actions.dart';
+import 'package:spotiflac/services/link/link_library_jobs.dart';
 
 final _reEnrichLog = AppLogger('BatchReEnrich');
 
@@ -41,26 +45,14 @@ Future<void> queueLocalTracksAsFlac(
     return;
   }
 
-  final confirmed = await showAppDialog<bool>(
-    context: context,
-    builder: (ctx) => AppAlertDialog(
-      title: Text(context.l10n.queueFlacAction),
-      content: Text(context.l10n.queueFlacConfirmMessage(selected.length)),
-      actions: [
-        AppDialogAction(
-          onPressed: () => Navigator.pop(ctx, false),
-          child: Text(context.l10n.dialogCancel),
-        ),
-        AppDialogAction(
-          filled: true,
-          onPressed: () => Navigator.pop(ctx, true),
-          child: Text(context.l10n.queueFlacAction),
-        ),
-      ],
-    ),
+  final confirmed = await showAppConfirmDialog(
+    context,
+    title: context.l10n.queueFlacAction,
+    message: context.l10n.queueFlacConfirmMessage(selected.length),
+    confirmLabel: context.l10n.queueFlacAction,
   );
 
-  if (confirmed != true || !context.mounted || !isActive()) {
+  if (!confirmed || !context.mounted || !isActive()) {
     return;
   }
 
@@ -158,6 +150,25 @@ Future<void> reEnrichLibraryTracks(
   required VoidCallback onComplete,
 }) async {
   if (selected.isEmpty) return;
+  final container = ProviderScope.containerOf(context, listen: false);
+  if (hasLinkLibrarySongs(container, selected)) {
+    final root = Navigator.of(context, rootNavigator: true).context;
+    await onSelectionHide();
+    if (!root.mounted || !isActive()) return;
+    var accepted = false;
+    await runLinkLibraryAction(
+      root,
+      container,
+      selected,
+      LinkLibraryAction.reEnrich,
+      onAccepted: () {
+        accepted = true;
+        if (isActive()) onComplete();
+      },
+    );
+    if (!accepted && root.mounted && isActive()) onSelectionRestore();
+    return;
+  }
   final downloads = selected
       .map((item) => item.historyItem)
       .whereType<DownloadHistoryItem>()
@@ -187,10 +198,12 @@ Future<void> reEnrichLibraryTracks(
         if (track.spotifyId?.trim().isNotEmpty == true)
           track.id: track.spotifyId!,
     },
-    refreshLibrary: () async {
+    refreshLibrary: (written) async {
       // Downloaded tracks read history, not the local-scan index. Read back
       // saved tags so failed or unselected fields cannot change history.
+      // Only tracks the batch wrote can have changed.
       for (final track in downloads) {
+        if (!written.contains(track.id)) continue;
         try {
           await DownloadedEmbeddedCoverResolver.invalidate(track.filePath);
           final metadata = await PlatformBridge.readDisplayAudioMetadata(
@@ -227,7 +240,11 @@ Future<void> reEnrichLibraryTracks(
           debugPrint('Could not refresh re-enriched download: $error');
         }
       }
-      if (isActive() && selected.any((item) => item.localItem != null)) {
+      if (isActive() &&
+          selected.any(
+            (item) =>
+                item.localItem != null && written.contains(item.localItem!.id),
+          )) {
         await _refreshReEnrichedLocalLibrary(ref);
       }
     },
@@ -255,10 +272,35 @@ Future<void> reEnrichLocalTracks(
   required Future<void> Function() onSelectionHide,
   required VoidCallback onSelectionRestore,
   required VoidCallback onComplete,
-  Future<void> Function()? refreshLibrary,
+
+  /// Refreshes the Library after the batch, given the ids of the tracks it
+  /// wrote to. Defaults to a scan of the Library folders.
+  Future<void> Function(Set<String> written)? refreshLibrary,
   Map<String, String> sourceTrackIds = const {},
 }) async {
   if (selected.isEmpty) return;
+  final container = ProviderScope.containerOf(context, listen: false);
+  final items = [
+    for (final item in selected) UnifiedLibraryItem.fromLocalLibrary(item),
+  ];
+  if (hasLinkLibrarySongs(container, items)) {
+    final root = Navigator.of(context, rootNavigator: true).context;
+    await onSelectionHide();
+    if (!root.mounted || !isActive()) return;
+    var accepted = false;
+    await runLinkLibraryAction(
+      root,
+      container,
+      items,
+      LinkLibraryAction.reEnrich,
+      onAccepted: () {
+        accepted = true;
+        if (isActive()) onComplete();
+      },
+    );
+    if (!accepted && root.mounted && isActive()) onSelectionRestore();
+    return;
+  }
   // Capture a stable route context before a caller removes its overlay.
   context = Navigator.of(context, rootNavigator: true).context;
   await onSelectionHide();
@@ -273,8 +315,15 @@ Future<void> reEnrichLocalTracks(
     return;
   }
 
+  final artworkContainer = ProviderScope.containerOf(context, listen: false);
   final runner = BatchReEnrichRunner(
     sourceTrackIds: sourceTrackIds,
+    saveMotionArtwork: (item, metadata) => saveReEnrichedMotionArtwork(
+      artworkContainer,
+      metadata: metadata,
+      albumName: item.albumName,
+      artistName: item.artistName,
+    ),
     beginPhase: () async {
       final settings = ref.read(settingsProvider);
       await ref
@@ -345,9 +394,11 @@ Future<void> reEnrichLocalTracks(
   );
 
   final lyricsSummary = ReEnrichLyricsSummary();
+  final written = <String>{};
   final successCount = await runner.apply(
     previews,
     onResult: lyricsSummary.add,
+    onWritten: (item) => written.add(item.id),
     shouldStop: () => cancelled || !context.mounted || !isActive(),
     onProgress: (index, item) => BatchProgressDialog.update(
       current: index + 1,
@@ -365,7 +416,7 @@ Future<void> reEnrichLocalTracks(
   final resultClosed = showReEnrichResultDialog(context, message: summary);
 
   if (refreshLibrary != null) {
-    await refreshLibrary();
+    await refreshLibrary(written);
   } else {
     await _refreshReEnrichedLocalLibrary(ref);
   }
@@ -379,6 +430,7 @@ Future<void> reEnrichLocalTracks(
 /// injectable so cancellation, dispatch, and partial failure can be verified
 /// without writing media files or opening dialogs.
 class BatchReEnrichRunner {
+  final NetworkFileEditor? networkEditor;
   final Map<String, String> sourceTrackIds;
   final Future<AppSettings> Function() beginPhase;
   final Future<Map<String, dynamic>> Function(Map<String, dynamic>) reEnrich;
@@ -393,13 +445,20 @@ class BatchReEnrichRunner {
     required String artistTagMode,
   })
   applyFfmpeg;
+  final Future<void> Function(
+    LocalLibraryItem item,
+    Map<String, dynamic> metadata,
+  )?
+  saveMotionArtwork;
 
   BatchReEnrichRunner({
     required this.beginPhase,
+    this.networkEditor,
     this.sourceTrackIds = const {},
     this.reEnrich = PlatformBridge.reEnrichFile,
     this.writeSidecar = writeReEnrichSidecarLrc,
     this.applyFfmpeg = applyFfmpegReEnrichResult,
+    this.saveMotionArtwork,
   });
 
   Future<List<BatchReEnrichPreview>> preview(
@@ -466,6 +525,7 @@ class BatchReEnrichRunner {
     required bool Function() shouldStop,
     required void Function(int, LocalLibraryItem) onProgress,
     void Function(Map<String, dynamic>)? onResult,
+    void Function(LocalLibraryItem)? onWritten,
   }) async {
     if (shouldStop()) return 0;
     // Settings may have changed while the review sheet was open.
@@ -476,38 +536,27 @@ class BatchReEnrichRunner {
       final preview = previews[index];
       onProgress(index, preview.item);
       try {
-        final result = await reEnrich(
-          buildBatchReEnrichRequest(
-            item: preview.item,
-            settings: settings,
-            updateFields: preview.updateFields,
-            resolvedMetadata: preview.enrichedMetadata,
-            sourceTrackId: sourceTrackIds[preview.item.id],
-          ),
-        );
-        switch (result['method']) {
-          case 'native':
-            await writeSidecar(
-              audioFilePath: preview.item.filePath,
-              reEnrichResult: result,
-            );
-            successes++;
-            onResult?.call(result);
-          case 'ffmpeg':
-            if (await applyFfmpeg(
-              item: preview.item,
-              result: result,
-              artistTagMode: settings.artistTagMode,
-            )) {
-              successes++;
-              onResult?.call(result);
-            } else {
-              _reEnrichLog.w('Metadata write failed for ${preview.item.id}');
-            }
-          default:
-            _reEnrichLog.w(
-              'Re-enrich failed for ${preview.item.id}: ${result['error'] ?? result['method']}',
-            );
+        final source = preview.item.filePath;
+        final applied = source.startsWith('network://')
+            ? await (networkEditor ?? NetworkFileEditor.instance).edit(
+                source,
+                (path) => _write(
+                  preview,
+                  settings,
+                  LocalLibraryItem.fromJson({
+                    ...preview.item.toJson(),
+                    'filePath': path,
+                  }),
+                ),
+                succeeded: (result) => result.written,
+                publishLyricsSidecar: true,
+              )
+            : await _write(preview, settings, preview.item);
+        if (applied.written) {
+          successes++;
+          onWritten?.call(preview.item);
+          await _saveMotionArtwork(preview, applied.result);
+          onResult?.call(applied.result);
         }
       } catch (error, stack) {
         _reEnrichLog.w('Re-enrich failed for ${preview.item.id}: $error');
@@ -516,6 +565,65 @@ class BatchReEnrichRunner {
       }
     }
     return successes;
+  }
+
+  Future<({bool written, Map<String, dynamic> result})> _write(
+    BatchReEnrichPreview preview,
+    AppSettings settings,
+    LocalLibraryItem target,
+  ) async {
+    final result = await reEnrich({
+      ...buildBatchReEnrichRequest(
+        item: preview.item,
+        settings: settings,
+        updateFields: preview.updateFields,
+        resolvedMetadata: preview.enrichedMetadata,
+        sourceTrackId: sourceTrackIds[preview.item.id],
+      ),
+      // Reviewed provider metadata must never override the staged file path.
+      'file_path': target.filePath,
+    });
+    switch (result['method']) {
+      case 'native':
+        await writeSidecar(
+          audioFilePath: target.filePath,
+          reEnrichResult: result,
+        );
+        return (written: true, result: result);
+      case 'ffmpeg':
+        final written = await applyFfmpeg(
+          item: target,
+          result: result,
+          artistTagMode: settings.artistTagMode,
+        );
+        if (!written) {
+          _reEnrichLog.w('Metadata write failed for ${preview.item.id}');
+        }
+        return (written: written, result: result);
+      default:
+        _reEnrichLog.w(
+          'Re-enrich failed for ${preview.item.id}: ${result['error'] ?? result['method']}',
+        );
+        return (written: false, result: result);
+    }
+  }
+
+  Future<void> _saveMotionArtwork(
+    BatchReEnrichPreview preview,
+    Map<String, dynamic> result,
+  ) async {
+    if (!preview.updateFields.contains(ReEnrichFields.cover)) return;
+    final applied = result['enriched_metadata'];
+    try {
+      await saveMotionArtwork?.call(preview.item, {
+        ...preview.enrichedMetadata,
+        if (applied is Map<String, dynamic>) ...applied,
+      });
+    } catch (error) {
+      _reEnrichLog.w(
+        'Optional artwork save failed for ${preview.item.id}: $error',
+      );
+    }
   }
 }
 
@@ -557,30 +665,33 @@ Future<void> deleteLibraryTracks(
   required VoidCallback onComplete,
 }) async {
   if (selected.isEmpty) return;
-  final confirmed = await showAppDialog<bool>(
-    context: context,
-    builder: (ctx) => AppAlertDialog(
-      title: Text(context.l10n.dialogDeleteSelectedTitle),
-      content: Text(context.l10n.dialogDeleteSelectedMessage(selected.length)),
-      actions: [
-        AppDialogAction(
-          isDefault: true,
-          onPressed: () => Navigator.pop(ctx, false),
-          child: Text(context.l10n.dialogCancel),
-        ),
-        AppDialogAction(
-          filled: true,
-          isDestructive: true,
-          onPressed: () => Navigator.pop(ctx, true),
-          style: FilledButton.styleFrom(
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-          child: Text(context.l10n.dialogDelete),
-        ),
-      ],
+  final actionContainer = ProviderScope.containerOf(context, listen: false);
+  if (hasLinkLibrarySongs(actionContainer, selected)) {
+    await runLinkLibraryAction(
+      context,
+      actionContainer,
+      selected,
+      LinkLibraryAction.delete,
+      onAccepted: () {
+        if (isActive()) onComplete();
+      },
+    );
+    return;
+  }
+  final confirmed = await showAppConfirmDialog(
+    context,
+    title: context.l10n.dialogDeleteSelectedTitle,
+    message: selected.every((item) => item.historyItem?.originFilePath != null)
+        ? context.l10n.offlineRemoveMessage
+        : context.l10n.dialogDeleteSelectedMessage(selected.length),
+    confirmLabel: context.l10n.dialogDelete,
+    destructive: true,
+    cancelIsDefault: true,
+    confirmStyle: FilledButton.styleFrom(
+      backgroundColor: Theme.of(context).colorScheme.error,
     ),
   );
-  if (confirmed != true || !isActive() || !context.mounted) return;
+  if (!confirmed || !isActive() || !context.mounted) return;
 
   final container = ProviderScope.containerOf(context, listen: false);
   final messenger = ScaffoldMessenger.of(context);

@@ -1,5 +1,9 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spotiflac/models/equalizer_settings.dart';
+import 'package:spotiflac/services/alsa_output_devices.dart';
 import 'package:spotiflac/services/media_kit_playback_deck.dart';
 import 'package:spotiflac/services/music_playback_deck.dart';
 import 'package:spotiflac/services/playback_deck.dart';
@@ -66,6 +70,102 @@ void main() {
     ]);
   });
 
+  test(
+    'native gapless keeps one exclusive output and changes gain at load',
+    () async {
+      playbackExclusiveOutput.value = true;
+      addTearDown(() => playbackExclusiveOutput.value = false);
+      await deck.configureOutput();
+      await deck.setFileSource('/first.flac');
+      await deck.setVolume(0.8);
+      await deck.resume();
+      final events = <String>[];
+      deck.onPlayerComplete.listen((_) => events.add('done'));
+      final originalVolume = engine.volume;
+      final opens = engine.calls.where((call) => call.first == 'open').length;
+      expect(
+        await deck.queueNextSource(
+          '/second.flac',
+          volume: 0.4,
+          onStarted: () => events.add('next'),
+        ),
+        isTrue,
+      );
+      expect(engine.properties['gapless-audio'], 'weak');
+      expect(engine.properties['audio-exclusive'], 'yes');
+      expect(engine.volume, originalVolume);
+      engine.completedEvents.add(true);
+      await Future<void>.delayed(Duration.zero);
+      expect(events, isEmpty);
+      await engine.advance();
+      await Future<void>.delayed(Duration.zero);
+      expect(events, ['next']);
+      expect(deck.state, PlaybackDeckState.playing);
+      expect(engine.volume, closeTo(100 * 0.7368063, 0.001));
+      expect(
+        engine.calls.where((call) => call.first == 'open'),
+        hasLength(opens),
+      );
+      expect(engine.properties['gapless-audio'], 'no');
+      engine.completedEvents.add(true);
+      await Future<void>.delayed(Duration.zero);
+      expect(events, ['next', 'done']);
+    },
+  );
+
+  test('cancelled and replaced native successors cannot start late', () async {
+    await deck.setFileSource('/first.flac');
+    await deck.resume();
+    final events = <String>[];
+    await deck.queueNextSource(
+      '/second.flac',
+      volume: 0.5,
+      onStarted: () => events.add('second'),
+    );
+    final stale = engine.queuedStart!;
+    await deck.clearNextSource();
+    await stale();
+    expect(events, isEmpty);
+    expect(engine.queuedSource, isNull);
+    await deck.queueNextSource(
+      '/third.flac',
+      volume: 1,
+      onStarted: () => events.add('third'),
+    );
+    await stale();
+    expect(engine.queuedSource, '/third.flac');
+    await engine.advance();
+    await Future<void>.delayed(Duration.zero);
+    expect(events, hasLength(1));
+    await deck.dispose();
+    final calls = engine.calls.length;
+    await deck.clearNextSource();
+    await stale();
+    expect(engine.calls, hasLength(calls));
+  });
+
+  test(
+    'a rejected native playlist leaves ordinary completion available',
+    () async {
+      await deck.setFileSource('/first.flac');
+      await deck.resume();
+      engine.failAppend = true;
+      await expectLater(
+        deck.queueNextSource(
+          '/next.flac',
+          volume: 1,
+          onStarted: () => fail('Rejected source must not start'),
+        ),
+        throwsStateError,
+      );
+      expect(engine.queuedSource, isNull);
+      expect(engine.properties['gapless-audio'], 'no');
+      engine.completedEvents.add(true);
+      await Future<void>.delayed(Duration.zero);
+      expect(deck.state, PlaybackDeckState.completed);
+    },
+  );
+
   test('positions are published on a timer while playing', () async {
     final positions = <Duration>[];
     deck.onPositionChanged.listen(positions.add);
@@ -78,6 +178,53 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 40));
     expect(positions, isNotEmpty);
     expect(positions.last, const Duration(seconds: 3));
+  });
+
+  test('the position timer runs only while playing', () async {
+    const interval = Duration(milliseconds: 10);
+    final timers = <Timer>[];
+    final positions = <Duration>[];
+    bool ticking() => timers.any((timer) => timer.isActive);
+    await runZoned(
+      () async {
+        deck.onPositionChanged.listen(positions.add);
+        deck.startPositionUpdates(interval);
+        expect(ticking(), isFalse);
+        await deck.setFileSource('/song.flac');
+        expect(ticking(), isFalse);
+        await deck.resume();
+        expect(ticking(), isTrue);
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+        expect(positions, isNotEmpty);
+        await deck.pause();
+        expect(ticking(), isFalse);
+        // A tick from just before the pause may still be in delivery.
+        await Future<void>.delayed(Duration.zero);
+        positions.clear();
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+        expect(positions, isEmpty);
+        await deck.resume();
+        expect(ticking(), isTrue);
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+        expect(positions, isNotEmpty);
+        engine.completedEvents.add(true);
+        await Future<void>.delayed(Duration.zero);
+        expect(deck.state, PlaybackDeckState.completed);
+        expect(ticking(), isFalse);
+        await deck.resume();
+        await deck.stop();
+        expect(ticking(), isFalse);
+      },
+      zoneSpecification: ZoneSpecification(
+        createPeriodicTimer: (self, parent, zone, period, callback) {
+          final timer = parent.createPeriodicTimer(zone, period, callback);
+          if (period == interval) timers.add(timer);
+          return timer;
+        },
+      ),
+    );
+    // One timer for each of the three times the deck played.
+    expect(timers, hasLength(3));
   });
 
   test(
@@ -116,6 +263,10 @@ void main() {
     (prefix: 'ffmpeg', text: 'Incorrect BOM value'),
     (prefix: 'ffmpeg/demuxer', text: 'Error reading frame TIT2, skipped'),
     (prefix: 'ad', text: 'Error decoding frame'),
+    (
+      prefix: 'cplayer',
+      text: r'Can not open external file \\?\D:\Music\100% Hits\Song.lrc.',
+    ),
   ]) {
     test(
       'recoverable ${diagnostic.prefix} error does not abort opening',
@@ -308,5 +459,208 @@ void main() {
     await deck.dispose();
     expect(playbackEqualizerError.value, isNull);
     expect(engine.disposed, isTrue);
+  });
+
+  group('exclusive output', () {
+    tearDown(() {
+      playbackExclusiveOutput.value = false;
+      playbackExclusiveStatus.value = ExclusiveOutputStatus.pending;
+    });
+
+    int reloads() => engine.calls
+        .where((call) => call[0] == 'command' && call[1] == 'ao-reload')
+        .length;
+
+    test('each source opens in exclusive mode while it is on', () async {
+      playbackExclusiveOutput.value = true;
+      await deck.configureOutput();
+      await deck.setFileSource('/song.flac');
+      expect(engine.properties['audio-exclusive'], 'yes');
+      expect(playbackExclusiveStatus.value, ExclusiveOutputStatus.active);
+      // Nothing was open yet, so the output needed no reload.
+      expect(reloads(), 0);
+    });
+
+    test('a change during playback reopens the output at once', () async {
+      await deck.configureOutput();
+      await deck.setFileSource('/song.flac');
+      await deck.resume();
+      playbackExclusiveOutput.value = true;
+      await _settle();
+      expect(engine.properties['audio-exclusive'], 'yes');
+      expect(reloads(), 1);
+      expect(playbackExclusiveStatus.value, ExclusiveOutputStatus.active);
+
+      playbackExclusiveOutput.value = false;
+      await _settle();
+      expect(engine.properties['audio-exclusive'], 'no');
+      expect(reloads(), 2);
+      expect(playbackExclusiveStatus.value, ExclusiveOutputStatus.pending);
+    });
+
+    test('a refused device plays the source through the mixer', () async {
+      engine.refuseExclusive = true;
+      final errors = <Object>[];
+      deck.onPlayerStateChanged.listen((_) {}, onError: errors.add);
+      playbackExclusiveOutput.value = true;
+      await deck.configureOutput();
+      await deck.setFileSource('/song.flac');
+      await _settle();
+      expect(playbackExclusiveStatus.value, ExclusiveOutputStatus.unavailable);
+      expect(engine.properties['audio-exclusive'], 'no');
+      expect(engine.calls.where((call) => call[0] == 'open'), hasLength(2));
+      // The driver lines are not source failures.
+      await deck.resume();
+      expect(errors, isEmpty);
+
+      // The next source tries exclusive mode again.
+      engine.refuseExclusive = false;
+      await deck.configureOutput();
+      await deck.setFileSource('/next.flac');
+      expect(engine.properties['audio-exclusive'], 'yes');
+      expect(playbackExclusiveStatus.value, ExclusiveOutputStatus.active);
+    });
+
+    test('a device lost while playing resumes where it was', () async {
+      playbackExclusiveOutput.value = true;
+      await deck.configureOutput();
+      await deck.setFileSource('/song.flac');
+      await deck.resume();
+      await deck.queueNextSource(
+        '/next.flac',
+        volume: 1,
+        onStarted: () =>
+            fail('Output recovery must cancel the stale successor'),
+      );
+      engine.calls.clear();
+      engine.position = const Duration(seconds: 30);
+      engine.errorEvents.add((
+        prefix: 'cplayer',
+        text: 'Could not open/initialize audio device -> no sound.',
+      ));
+      await _settle();
+      // The equalizer may also set its chain; the transport is these calls.
+      expect(engine.calls.where((call) => !call.contains('af')), [
+        ['set', 'audio-exclusive', 'no'],
+        ['clearNext'],
+        ['set', 'gapless-audio', 'no'],
+        ['open', '/song.flac'],
+        ['seek', '30000'],
+        ['play'],
+      ]);
+      expect(deck.state, PlaybackDeckState.playing);
+      expect(engine.queuedSource, isNull);
+
+      // Without exclusive mode the same line is a source failure.
+      final errors = <Object>[];
+      deck.onPlayerStateChanged.listen((_) {}, onError: errors.add);
+      engine.errorEvents.add((
+        prefix: 'cplayer',
+        text: 'Could not open/initialize audio device -> no sound.',
+      ));
+      await _settle();
+      expect(errors, hasLength(1));
+    });
+
+    test(
+      'pausing during shared output recovery keeps playback paused',
+      () async {
+        playbackExclusiveOutput.value = true;
+        await deck.configureOutput();
+        await deck.setFileSource('/song.flac');
+        await deck.resume();
+        final reopened = Completer<void>();
+        engine.openBarrier = reopened;
+        engine.errorEvents.add((
+          prefix: 'cplayer',
+          text: 'Could not open/initialize audio device -> no sound.',
+        ));
+        await Future<void>.delayed(Duration.zero);
+        expect(engine.calls.where((call) => call[0] == 'open'), hasLength(2));
+        await deck.pause();
+        reopened.complete();
+        await _settle();
+        expect(deck.state, PlaybackDeckState.paused);
+        expect(engine.calls.where((call) => call[0] == 'play'), hasLength(1));
+      },
+    );
+
+    group('on Linux', () {
+      const device = 'alsa/hw:CARD=PCH,DEV=0';
+      setUp(() {
+        debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+        playbackExclusiveDevice.value = device;
+      });
+      tearDown(() {
+        debugDefaultTargetPlatformOverride = null;
+        playbackExclusiveDevice.value = '';
+      });
+
+      test('opens the ALSA device and returns to the mixer', () async {
+        playbackExclusiveOutput.value = true;
+        await deck.configureOutput();
+        await deck.setFileSource('/song.flac');
+        await deck.resume();
+        expect(engine.properties['audio-device'], device);
+        expect(engine.properties.containsKey('audio-exclusive'), isFalse);
+        expect(playbackExclusiveStatus.value, ExclusiveOutputStatus.active);
+
+        playbackExclusiveOutput.value = false;
+        await _settle();
+        expect(engine.properties['audio-device'], 'auto');
+        expect(reloads(), 1);
+        expect(playbackExclusiveStatus.value, ExclusiveOutputStatus.pending);
+      });
+
+      test('a busy device plays through the sound server', () async {
+        engine.refuseExclusive = true;
+        playbackExclusiveOutput.value = true;
+        await deck.configureOutput();
+        await deck.setFileSource('/song.flac');
+        await _settle();
+        expect(engine.properties['audio-device'], 'auto');
+        expect(
+          playbackExclusiveStatus.value,
+          ExclusiveOutputStatus.unavailable,
+        );
+      });
+
+      test('no known device keeps the shared output', () async {
+        playbackExclusiveDevice.value = '';
+        playbackExclusiveOutput.value = true;
+        await deck.configureOutput();
+        await deck.setFileSource('/song.flac');
+        expect(engine.properties['audio-device'], 'auto');
+        expect(playbackExclusiveStatus.value, ExclusiveOutputStatus.pending);
+
+        // The device list arrives: the output switches to it.
+        playbackExclusiveDevice.value = device;
+        await _settle();
+        expect(engine.properties['audio-device'], device);
+      });
+    });
+  });
+
+  test('ALSA playback devices come from /proc/asound', () {
+    const cards = '''
+ 0 [PCH            ]: HDA-Intel - HDA Intel PCH
+                      HDA Intel PCH at 0xf7f10000 irq 32
+ 1 [DAC            ]: USB-Audio - USB Audio DAC
+                      Generic USB Audio DAC at usb-0000:00:14.0-2, high speed
+''';
+    const pcm = '''
+00-00: ALC892 Analog : ALC892 Analog : playback 1 : capture 1
+00-02: ALC892 Alt Analog : ALC892 Alt Analog : capture 1
+01-00: USB Audio : USB Audio : playback 1
+''';
+    final devices = parseAlsaOutputDevices(cards: cards, pcm: pcm);
+    expect(devices.map((device) => device.id), [
+      'alsa/hw:CARD=PCH,DEV=0',
+      'alsa/hw:CARD=DAC,DEV=0',
+    ]);
+    expect(devices.map((device) => device.label), [
+      'HDA Intel PCH: ALC892 Analog',
+      'USB Audio DAC: USB Audio',
+    ]);
   });
 }

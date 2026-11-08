@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:liquid_glass_easy/liquid_glass_easy.dart';
 import 'package:spotiflac/l10n/l10n.dart';
@@ -60,6 +61,15 @@ class SpotiFLACChromeController extends ValueNotifier<bool> {
   }
 }
 
+/// The tabs' foreground leaves early, before the glass under it narrows past
+/// the outer tabs, and stays bounded while the spring overshoots.
+class _TabOpacity extends Animatable<double> {
+  const _TabOpacity();
+
+  @override
+  double transform(double t) => (1 - t / 0.45).clamp(0.0, 1.0);
+}
+
 /// A single mini-player survives the transition, preserving its artwork Hero,
 /// playback controls and track swipe gestures as the tabs fold away.
 class SpotiFLACBottomBar extends ConsumerStatefulWidget {
@@ -88,24 +98,43 @@ class SpotiFLACBottomBar extends ConsumerStatefulWidget {
 
 class _SpotiFLACBottomBarState extends ConsumerState<SpotiFLACBottomBar>
     with SingleTickerProviderStateMixin {
-  late final _controller = AnimationController(
+  // A spring keeps its velocity when a scroll reverses the fold mid-flight, and
+  // being slightly underdamped lets the glass run past its size and settle.
+  static const _foldSpring = SpringDescription(
+    mass: 1,
+    stiffness: 170,
+    damping: 20,
+  );
+
+  /// Runs past 0 and 1 by the spring's overshoot.
+  late final _controller = AnimationController.unbounded(
     vsync: this,
-    duration: const Duration(milliseconds: 380),
     value: widget.collapsed ? 1 : 0,
   );
-  late final _collapse = CurvedAnimation(
-    parent: _controller,
-    curve: Curves.easeInOutCubic,
-  );
-  late final _tabOpacity = ReverseAnimation(_collapse);
+  late double _target = widget.collapsed ? 1 : 0;
+  late final _tabOpacity = _controller.drive(const _TabOpacity());
+  // Side capsules move between backdrop batches; keep their lenses mounted.
+  final _leadingSurfaceKey = GlobalKey();
+  final _searchSurfaceKey = GlobalKey();
 
   void _updateCollapse() {
     final target = widget.collapsed ? 1.0 : 0.0;
     if (MediaQuery.disableAnimationsOf(context)) {
+      _target = target;
       _controller.value = target;
-    } else {
-      _controller.animateTo(target);
+      return;
     }
+    if (target == _target) return;
+    _target = target;
+    _controller.animateWith(
+      SpringSimulation(
+        _foldSpring,
+        _controller.value,
+        target,
+        _controller.velocity,
+        snapToEnd: true,
+      ),
+    );
   }
 
   @override
@@ -122,7 +151,6 @@ class _SpotiFLACBottomBarState extends ConsumerState<SpotiFLACBottomBar>
 
   @override
   void dispose() {
-    _collapse.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -136,9 +164,11 @@ class _SpotiFLACBottomBarState extends ConsumerState<SpotiFLACBottomBar>
     final onHome = widget.onHome;
     final onSearch = widget.onSearch;
     final blurEnabled = widget.blurEnabled;
-    final hasPlayer = ref.watch(
-      currentMediaItemProvider.select((item) => item.value != null),
-    );
+    final hasPlayer =
+        ref.watch(playerUiEnabledProvider) &&
+        ref.watch(
+          currentMediaItemProvider.select((item) => item.value != null),
+        );
     final liquidGlass = ref.watch(spotiflacLiquidGlassProvider);
     // Animated glass tabs already reserve 8px above their visible capsule.
     final glassTabs = SpotiFLACTabBar.usesLiquidGlass(
@@ -155,20 +185,18 @@ class _SpotiFLACBottomBarState extends ConsumerState<SpotiFLACBottomBar>
     // These contents do not depend on animation progress. Retain their widget
     // instances so folding only updates geometry and foreground opacity. A
     // backdrop inside a fading layer loses access to the page behind the bar.
-    Widget sideSurface() => ScaleTransition(
-      scale: _collapse,
-      child: RepaintBoundary(
-        child: SpotiFLACGlass.navigation(
-          blurEnabled: blurEnabled,
-          strongTint: true,
-          tintOpacity: SpotiFLACTheme.navigationOpacity(context),
-          radius: 26,
-          child: const SizedBox.expand(),
-        ),
+    Widget sideSurface(Key key) => RepaintBoundary(
+      key: key,
+      child: SpotiFLACGlass.navigation(
+        blurEnabled: blurEnabled,
+        strongTint: true,
+        tintOpacity: SpotiFLACTheme.navigationOpacity(context),
+        radius: 26,
+        child: const SizedBox.expand(),
       ),
     );
-    final leadingSurface = sideSurface();
-    final searchSurface = sideSurface();
+    final leadingSurface = sideSurface(_leadingSurfaceKey);
+    final searchSurface = sideSurface(_searchSurfaceKey);
     final searchSelected = selectedIndex == destinations.length - 1;
     final leadingIndex = searchSelected ? 0 : selectedIndex;
     final scheme = Theme.of(context).colorScheme;
@@ -185,6 +213,7 @@ class _SpotiFLACBottomBarState extends ConsumerState<SpotiFLACBottomBar>
           blurEnabled: blurEnabled,
           liquidGlass: liquidGlass,
           contentOpacity: _tabOpacity,
+          fold: _controller,
           hiddenIconIndices: hideMovingIcons
               ? {leadingIndex, destinations.length - 1}
               : const {},
@@ -222,9 +251,30 @@ class _SpotiFLACBottomBarState extends ConsumerState<SpotiFLACBottomBar>
                 destinations.length *
                 (index + 0.5);
         return AnimatedBuilder(
-          animation: _collapse,
+          animation: _controller,
           builder: (context, _) {
-            final amount = _collapse.value;
+            final fold = _controller.value;
+            // Layout stops at the ends; only the capsules take the overshoot.
+            // The snap keeps the wobble around 1 from reopening the tab bar.
+            final clamped = fold.clamp(0.0, 1.0);
+            final amount = clamped > 0.995
+                ? 1.0
+                : clamped < 0.005
+                ? 0.0
+                : clamped;
+            // A capsule grows quickly out of the bar, and stretches along its
+            // path with its speed, as a drop of glass does.
+            final grown =
+                math.pow(clamped, 0.6) * (1 + (fold - clamped).abs() * 2);
+            final stretch = (_controller.velocity.abs() * 0.045).clamp(
+              0.0,
+              0.28,
+            );
+            final drop = Matrix4.diagonal3Values(
+              grown * (1 + stretch),
+              grown * (1 - stretch * 0.6),
+              1,
+            );
             Widget movingIcon({
               required bool leading,
               required Widget surface,
@@ -250,8 +300,19 @@ class _SpotiFLACBottomBarState extends ConsumerState<SpotiFLACBottomBar>
                       children: [
                         Positioned.fill(
                           child: Offstage(
-                            offstage: amount == 0,
-                            child: surface,
+                            // The tab bar's own glass becomes the leading
+                            // circle and hands over only once it is one.
+                            offstage: leading ? amount < 1 : amount == 0,
+                            child: Transform(
+                              alignment: Alignment.center,
+                              transform: drop,
+                              transformHitTests: false,
+                              // While folding, a capsule crosses the tab bar
+                              // and needs a backdrop sample of its own.
+                              child: amount == 1
+                                  ? surface
+                                  : LiquidGlassBatch(child: surface),
+                            ),
                           ),
                         ),
                         Material(
@@ -291,17 +352,38 @@ class _SpotiFLACBottomBarState extends ConsumerState<SpotiFLACBottomBar>
               );
             }
 
-            return Stack(
-              clipBehavior: Clip.none,
-              children: [
-                // Only the non-overlapping player and tab surfaces share a
-                // backdrop. Moving side capsules stay outside this group: they
-                // cross the tab bar while folding and need separate samples.
-                LiquidGlassBatch(
-                  child: BackdropGroup(
+            // Only non-overlapping surfaces share a backdrop: the player, the
+            // tabs and, at rest, the side capsules. Frosted capsules stay out
+            // of the blur group, since they cross the tab bar while folding.
+            return LiquidGlassBatch(
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  BackdropGroup(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
+                      // Laid out top to bottom, but painted bottom first: the
+                      // player settles in front of the shrinking tab bar.
+                      verticalDirection: VerticalDirection.up,
                       children: [
+                        Offstage(
+                          // Retain tab state, but drop its backdrop layers only
+                          // after the last visible frame of the fold.
+                          offstage: amount == 1,
+                          // Unclipped: the bar's glass narrows and shortens
+                          // into the leading circle as one shape.
+                          child: Align(
+                            alignment: Alignment.bottomCenter,
+                            heightFactor: 1 - amount,
+                            child: IgnorePointer(
+                              ignoring: amount > 0.5,
+                              child: ExcludeSemantics(
+                                excluding: amount > 0.5,
+                                child: amount == 0 ? fullTabs : foldingTabs,
+                              ),
+                            ),
+                          ),
+                        ),
                         if (hasPlayer || amount > 0)
                           Align(
                             alignment: Alignment.bottomCenter,
@@ -329,34 +411,13 @@ class _SpotiFLACBottomBarState extends ConsumerState<SpotiFLACBottomBar>
                               ),
                             ),
                           ),
-                        Offstage(
-                          // Retain tab state, but drop its backdrop layers only
-                          // after the last visible frame of the fold.
-                          offstage: amount == 1,
-                          child: ClipRect(
-                            clipBehavior: amount == 0
-                                ? Clip.none
-                                : Clip.hardEdge,
-                            child: Align(
-                              alignment: Alignment.bottomCenter,
-                              heightFactor: 1 - amount,
-                              child: IgnorePointer(
-                                ignoring: amount > 0.5,
-                                child: ExcludeSemantics(
-                                  excluding: amount > 0.5,
-                                  child: amount == 0 ? fullTabs : foldingTabs,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
                       ],
                     ),
                   ),
-                ),
-                movingIcon(leading: true, surface: leadingSurface),
-                movingIcon(leading: false, surface: searchSurface),
-              ],
+                  movingIcon(leading: true, surface: leadingSurface),
+                  movingIcon(leading: false, surface: searchSurface),
+                ],
+              ),
             );
           },
         );

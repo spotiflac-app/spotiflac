@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:spotiflac/controllers/clickable_metadata.dart';
+import 'package:spotiflac/controllers/local_track_batch_actions.dart';
 import 'package:spotiflac/l10n/l10n.dart';
 import 'package:spotiflac/models/unified_library_item.dart';
 import 'package:spotiflac/providers/library_search_provider.dart';
+import 'package:spotiflac/providers/library_lyrics_search_provider.dart';
 import 'package:spotiflac/providers/music_player_provider.dart';
 import 'package:spotiflac/providers/playback_provider.dart';
+import 'package:spotiflac/providers/settings_provider.dart';
 import 'package:spotiflac/screens/downloaded_album_screen.dart';
 import 'package:spotiflac/screens/library_tracks_folder_screen.dart';
 import 'package:spotiflac/screens/local_album_screen.dart';
@@ -13,16 +17,20 @@ import 'package:spotiflac/screens/track_metadata_screen.dart';
 import 'package:spotiflac/services/batch_track_actions.dart';
 import 'package:spotiflac/services/library_database.dart';
 import 'package:spotiflac/services/library_search.dart';
-import 'package:spotiflac/services/local_track_batch_actions.dart';
 import 'package:spotiflac/services/local_track_redownload_service.dart';
 import 'package:spotiflac/theme/spotiflac_theme.dart';
+import 'package:spotiflac/utils/adaptive_layout.dart';
+import 'package:spotiflac/utils/desktop_platform.dart';
 import 'package:spotiflac/widgets/app_choice_chip.dart';
+import 'package:spotiflac/widgets/app_icon.dart';
 import 'package:spotiflac/widgets/cached_cover_image.dart';
 import 'package:spotiflac/widgets/desktop/context_menu.dart';
+import 'package:spotiflac/widgets/desktop/hover_play_button.dart';
 import 'package:spotiflac/widgets/desktop/library_track_menu.dart';
 import 'package:spotiflac/widgets/library_track_selection_bar.dart';
 import 'package:spotiflac/widgets/library_selection_playback_actions.dart';
 import 'package:spotiflac/widgets/selection_bottom_bar.dart';
+import 'package:spotiflac/widgets/sliver_layout_info_builder.dart';
 import 'package:spotiflac/widgets/track_card.dart';
 import 'package:spotiflac/widgets/app_icon_button.dart';
 import 'package:spotiflac/widgets/app_loading_indicator.dart';
@@ -42,7 +50,7 @@ class LibrarySearchResults extends ConsumerStatefulWidget {
   final String query;
   final ValueChanged<String> onOpenArtist;
 
-  /// Groups the overview as Music on the Mac does: artists, albums and
+  /// Groups the overview into artists, albums and
   /// playlists in rows of artwork that scroll sideways, songs as rows, and
   /// no filter chips until a section header opens one kind.
   final bool shelves;
@@ -54,6 +62,7 @@ class LibrarySearchResults extends ConsumerStatefulWidget {
 
 class _LibrarySearchResultsState extends ConsumerState<LibrarySearchResults> {
   LibrarySearchKind? _kind;
+  bool _lyricsSearch = false;
   int _pages = 1;
 
   // Long-pressed songs, keyed by UnifiedLibraryItem.id in selection order.
@@ -308,7 +317,14 @@ class _LibrarySearchResultsState extends ConsumerState<LibrarySearchResults> {
   };
 
   void _select(LibrarySearchKind? kind) => setState(() {
+    _lyricsSearch = false;
     _kind = kind;
+    _pages = 1;
+  });
+
+  void _selectLyrics() => setState(() {
+    _lyricsSearch = true;
+    _kind = LibrarySearchKind.songs;
     _pages = 1;
   });
 
@@ -322,12 +338,11 @@ class _LibrarySearchResultsState extends ConsumerState<LibrarySearchResults> {
           );
           if (!mounted || item == null) return;
           if (!play) {
-            await Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => TrackMetadataScreen(
-                  item: item.historyItem,
-                  localItem: item.localItem,
-                ),
+            await pushPage<void>(
+              context,
+              (_) => TrackMetadataScreen(
+                item: item.historyItem,
+                localItem: item.localItem,
               ),
             );
             return;
@@ -345,12 +360,11 @@ class _LibrarySearchResultsState extends ConsumerState<LibrarySearchResults> {
         case LibrarySearchKind.artists:
           widget.onOpenArtist(hit.title);
         case LibrarySearchKind.playlists:
-          await Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => LibraryTracksFolderScreen(
-                mode: LibraryTracksFolderMode.playlist,
-                playlistId: hit.id,
-              ),
+          await pushPage<void>(
+            context,
+            (_) => LibraryTracksFolderScreen(
+              mode: LibraryTracksFolderMode.playlist,
+              playlistId: hit.id,
             ),
           );
         case LibrarySearchKind.albums:
@@ -358,24 +372,22 @@ class _LibrarySearchResultsState extends ConsumerState<LibrarySearchResults> {
             final rows = await LibraryDatabase.instance
                 .getQueueLocalAlbumTracksByKey(hit.id);
             if (!mounted) return;
-            await Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => LocalAlbumScreen(
-                  albumName: hit.title,
-                  artistName: hit.artist,
-                  coverPath: hit.cover,
-                  tracks: rows.map(LocalLibraryItem.fromJson).toList(),
-                ),
+            await pushPage<void>(
+              context,
+              (_) => LocalAlbumScreen(
+                albumName: hit.title,
+                artistName: hit.artist,
+                coverPath: hit.cover,
+                tracks: rows.map(LocalLibraryItem.fromJson).toList(),
               ),
             );
           } else {
-            await Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => DownloadedAlbumScreen(
-                  albumName: hit.title,
-                  artistName: hit.artist,
-                  coverUrl: hit.cover,
-                ),
+            await pushPage<void>(
+              context,
+              (_) => DownloadedAlbumScreen(
+                albumName: hit.title,
+                artistName: hit.artist,
+                coverUrl: hit.cover,
               ),
             );
           }
@@ -472,34 +484,192 @@ class _LibrarySearchResultsState extends ConsumerState<LibrarySearchResults> {
     );
   }
 
-  Widget _shelfHeader(LibrarySearchKind kind) {
-    return Padding(
-      padding: const EdgeInsetsDirectional.fromSTEB(14, 20, 20, 8),
-      child: Align(
-        alignment: AlignmentDirectional.centerStart,
-        child: Semantics(
-          header: true,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(8),
-            onTap: () => _select(kind),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    _label(kind),
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  Icon(
-                    Icons.chevron_right,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ],
-              ),
+  /// Switches wide results between rows and covers, as the extension
+  /// search's view button does; both searches share the choice. [cover] is
+  /// the layout on screen.
+  Widget _viewToggle({required bool cover}) {
+    return AppIconButton(
+      tooltip: cover
+          ? context.l10n.appearanceHistoryViewList
+          : context.l10n.appearanceHistoryViewGrid,
+      icon: AppIcon(
+        cover ? Icons.view_list : Icons.grid_view,
+        size: 20,
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+      ),
+      onPressed: () => ref
+          .read(settingsProvider.notifier)
+          .setSearchViewMode(cover ? 'list' : 'grid'),
+    );
+  }
+
+  Widget _shelfHeader(LibrarySearchKind kind, {Widget? trailing}) {
+    final header = Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: Semantics(
+        header: true,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => _select(kind),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _label(kind),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                Icon(
+                  Icons.chevron_right,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ],
             ),
+          ),
+        ),
+      ),
+    );
+    return Padding(
+      padding: EdgeInsetsDirectional.fromSTEB(
+        14,
+        20,
+        trailing == null ? 20 : 8,
+        8,
+      ),
+      child: Row(
+        children: [
+          Expanded(child: header),
+          ?trailing,
+        ],
+      ),
+    );
+  }
+
+  /// The title and subtitle under a cover, grown with the text size.
+  double _tileTextHeight({required bool artist}) {
+    final textTheme = Theme.of(context).textTheme;
+    final scaler = MediaQuery.textScalerOf(context);
+    double line(TextStyle? style, double fontSize) =>
+        scaler.scale(style?.fontSize ?? fontSize) * (style?.height ?? 1.3);
+    return line(textTheme.bodyLarge, 17) +
+        (artist ? 0 : line(textTheme.bodyMedium, 15));
+  }
+
+  /// A result as its cover over the title and subtitle, for the shelves and
+  /// the cover grid. Songs keep their row actions: a click opens the
+  /// details, the hover button plays, and a long press selects.
+  Widget _tile(LibrarySearchHit hit, double size) {
+    final artist = hit.kind == LibrarySearchKind.artists;
+    final song = hit.kind == LibrarySearchKind.songs;
+    final selected = song && _selected.containsKey(_itemId(hit));
+    final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
+    final icon = switch (hit.kind) {
+      LibrarySearchKind.songs => Icons.music_note_outlined,
+      LibrarySearchKind.artists => Icons.person_outline,
+      LibrarySearchKind.playlists => Icons.queue_music,
+      LibrarySearchKind.albums => Icons.album_outlined,
+    };
+    Widget fallback(BuildContext context) => ColoredBox(
+      color: colorScheme.surfaceContainerHighest,
+      child: Center(
+        child: Icon(
+          icon,
+          size: size * 0.3,
+          color: colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+    final radius = BorderRadius.circular(artist ? size / 2 : 8);
+    return SizedBox(
+      key: ValueKey('${hit.kind.name}:${hit.source}:${hit.id}'),
+      width: size,
+      child: GestureDetector(
+        onSecondaryTapUp: (details) =>
+            _showHitMenu(hit, details.globalPosition),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          // While selecting, song taps toggle and other results stay inert.
+          onTap: !_selecting
+              ? () => _open(hit)
+              : song
+              ? () => _toggleSelection(hit)
+              : null,
+          onLongPress: song ? () => _toggleSelection(hit) : null,
+          child: Column(
+            crossAxisAlignment: artist
+                ? CrossAxisAlignment.center
+                : CrossAxisAlignment.start,
+            children: [
+              SizedBox.square(
+                dimension: size,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ClipRRect(
+                      borderRadius: radius,
+                      child: hit.cover?.isNotEmpty == true
+                          ? LocalOrNetworkCoverImage(
+                              url: hit.cover!,
+                              placeholder: fallback,
+                            )
+                          : fallback(context),
+                    ),
+                    if (selected) ...[
+                      ClipRRect(
+                        borderRadius: radius,
+                        child: ColoredBox(
+                          color: colorScheme.primary.withValues(alpha: 0.35),
+                        ),
+                      ),
+                      PositionedDirectional(
+                        top: 8,
+                        end: 8,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: colorScheme.primary,
+                            shape: BoxShape.circle,
+                          ),
+                          padding: const EdgeInsets.all(2),
+                          child: Icon(
+                            Icons.check,
+                            size: 18,
+                            color: colorScheme.onPrimary,
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (song && !_selecting)
+                      DesktopHoverPlayButton(
+                        tooltip: context.l10n.tooltipPlay,
+                        onPlay: () => _open(hit, play: true),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                hit.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: artist ? TextAlign.center : TextAlign.start,
+                style: textTheme.bodyLarge,
+              ),
+              if (!artist)
+                Text(
+                  hit.kind == LibrarySearchKind.playlists
+                      ? context.l10n.queueTrackCount(hit.trackCount)
+                      : hit.artist,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+            ],
           ),
         ),
       ),
@@ -509,23 +679,8 @@ class _LibrarySearchResultsState extends ConsumerState<LibrarySearchResults> {
   Widget _shelf(LibrarySearchKind kind, List<LibrarySearchHit> hits) {
     final artist = kind == LibrarySearchKind.artists;
     final size = artist ? 160.0 : 180.0;
-    final textTheme = Theme.of(context).textTheme;
-    final colorScheme = Theme.of(context).colorScheme;
-    final scaler = MediaQuery.textScalerOf(context);
-    final textHeight =
-        scaler.scale(textTheme.bodyLarge?.fontSize ?? 17) * 1.3 +
-        (artist ? 0 : scaler.scale(textTheme.bodyMedium?.fontSize ?? 15) * 1.3);
-    final icon = switch (kind) {
-      LibrarySearchKind.artists => Icons.person_outline,
-      LibrarySearchKind.playlists => Icons.queue_music,
-      _ => Icons.album_outlined,
-    };
-    Widget fallback(BuildContext context) => ColoredBox(
-      color: colorScheme.surfaceContainerHighest,
-      child: Center(child: Icon(icon, size: size * 0.3)),
-    );
     return SizedBox(
-      height: size + 8 + textHeight + 16,
+      height: size + 8 + _tileTextHeight(artist: artist) + 16,
       // Shelves have no paging arrows, so they keep the desktop scrollbar
       // the app hides on other sideways rows.
       child: ScrollConfiguration(
@@ -537,78 +692,89 @@ class _LibrarySearchResultsState extends ConsumerState<LibrarySearchResults> {
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
           itemCount: hits.length,
           separatorBuilder: (_, _) => const SizedBox(width: 20),
-          itemBuilder: (context, index) {
-            final hit = hits[index];
-            return SizedBox(
-              key: ValueKey('${hit.kind.name}:${hit.source}:${hit.id}'),
-              width: size,
-              child: GestureDetector(
-                onSecondaryTapUp: (details) =>
-                    _showHitMenu(hit, details.globalPosition),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(8),
-                  onTap: _selecting ? null : () => _open(hit),
-                  child: Column(
-                    crossAxisAlignment: artist
-                        ? CrossAxisAlignment.center
-                        : CrossAxisAlignment.start,
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(
-                          artist ? size / 2 : 8,
-                        ),
-                        child: SizedBox.square(
-                          dimension: size,
-                          child: hit.cover?.isNotEmpty == true
-                              ? LocalOrNetworkCoverImage(
-                                  url: hit.cover!,
-                                  placeholder: fallback,
-                                )
-                              : fallback(context),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        hit.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: artist ? TextAlign.center : TextAlign.start,
-                        style: textTheme.bodyLarge,
-                      ),
-                      if (!artist)
-                        Text(
-                          kind == LibrarySearchKind.albums
-                              ? hit.artist
-                              : context.l10n.queueTrackCount(hit.trackCount),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: textTheme.bodyMedium?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
+          itemBuilder: (context, index) => _tile(hits[index], size),
         ),
+      ),
+    );
+  }
+
+  /// One kind, filtered, as covers in as many columns as the pane fits, as
+  /// the extension search's grid does.
+  Widget _grid(LibrarySearchKind kind, List<LibrarySearchHit> hits) {
+    final artist = kind == LibrarySearchKind.artists;
+    return SliverPadding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+      // Rebuilds when the pane is resized, not while it scrolls.
+      sliver: SliverLayoutInfoBuilder<double>(
+        select: (constraints) => constraints.crossAxisExtent,
+        builder: (context, width) {
+          final extent = searchCoverGridExtent(width);
+          return SliverGrid.builder(
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: searchCoverGridColumns(width),
+              mainAxisSpacing: searchCoverGap,
+              crossAxisSpacing: searchCoverGap,
+              mainAxisExtent: extent + 8 + _tileTextHeight(artist: artist) + 4,
+            ),
+            itemCount: hits.length,
+            itemBuilder: (context, index) => _tile(hits[index], extent),
+          );
+        },
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final shelves = widget.shelves && _kind == null;
+    // Phones keep their rows in landscape too, as the extension search does.
+    final coverAllowed =
+        isDesktopPlatform || MediaQuery.sizeOf(context).shortestSide >= 600;
+    final inset = wideListInset(context);
+    return PopScope(
+      canPop: !_selecting,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _selecting) _exitSelection();
+      },
+      // Rebuilds only when the pane crosses the breakpoint, not on every
+      // scroll frame.
+      child: SliverLayoutInfoBuilder<bool>(
+        select: (constraints) =>
+            coverAllowed &&
+            constraints.crossAxisExtent - 2 * inset >=
+                searchCoverLayoutMinWidth,
+        builder: (context, wide) => Consumer(
+          builder: (context, ref, _) =>
+              SliverMainAxisGroup(slivers: _buildSlivers(ref, wide: wide)),
+        ),
+      ),
+    );
+  }
+
+  /// The results. [wide] panes offer the cover layout, which the user's
+  /// search view (shared with the extension search) picks: shelves for the
+  /// overview and a grid for one kind, songs included.
+  List<Widget> _buildSlivers(WidgetRef ref, {required bool wide}) {
+    final cover =
+        wide &&
+        ref.watch(settingsProvider.select((s) => s.searchViewMode)) == 'grid';
+    final shelves = (widget.shelves || cover) && _kind == null;
+    // The first section header carries the view button.
+    Widget? toggle = wide ? _viewToggle(cover: cover) : null;
+    Widget? takeToggle() {
+      final taken = toggle;
+      toggle = null;
+      return taken;
+    }
+
     final slivers = <Widget>[
-      if (!shelves)
-        SliverToBoxAdapter(
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            child: Row(
-              spacing: 8,
-              children: [
+      SliverToBoxAdapter(
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          child: Row(
+            spacing: 8,
+            children: [
+              if (!widget.shelves || _kind != null)
                 for (final kind in [null, ...LibrarySearchKind.values])
                   AppChoiceChip(
                     label: Text(
@@ -616,18 +782,68 @@ class _LibrarySearchResultsState extends ConsumerState<LibrarySearchResults> {
                           ? context.l10n.historyFilterAll
                           : _label(kind),
                     ),
-                    selected: _kind == kind,
+                    selected: !_lyricsSearch && _kind == kind,
                     singleChoice: true,
                     onSelected: (_) => _select(kind),
+                  ),
+              AppChoiceChip(
+                label: Text(context.l10n.trackLyrics),
+                selected: _lyricsSearch,
+                singleChoice: true,
+                onSelected: (_) => _selectLyrics(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ];
+    var hasResults = false;
+    var loading = false;
+    var failed = false;
+    if (_lyricsSearch) {
+      final progress = ref.watch(libraryLyricsIndexProvider);
+      loading = !progress.hasError && progress.value?.complete != true;
+      failed = progress.hasError || (progress.value?.failed ?? 0) > 0;
+      slivers.add(
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(context.l10n.libraryLyricsSearchDescription),
+                if (loading)
+                  Text(
+                    context.l10n.libraryLyricsIndexing(
+                      progress.value?.checked ?? 0,
+                    ),
+                  ),
+                if (failed) Text(context.l10n.libraryLyricsSearchIncomplete),
+                if (!loading)
+                  ExpressiveButton(
+                    text: true,
+                    icon: const Icon(Icons.refresh),
+                    onPressed: () async {
+                      try {
+                        final store = await ref.read(
+                          libraryLyricsSearchStoreProvider.future,
+                        );
+                        await store.clear();
+                        if (mounted) ref.invalidate(libraryLyricsIndexProvider);
+                      } catch (_) {
+                        if (mounted) {
+                          ref.invalidate(libraryLyricsSearchStoreProvider);
+                        }
+                      }
+                    },
+                    child: Text(context.l10n.libraryLyricsRefresh),
                   ),
               ],
             ),
           ),
         ),
-    ];
-    var hasResults = false;
-    var loading = false;
-    var failed = false;
+      );
+    }
     final visibleSongs = <LibrarySearchHit>[];
     final kinds = _kind != null
         ? [_kind!]
@@ -640,7 +856,12 @@ class _LibrarySearchResultsState extends ConsumerState<LibrarySearchResults> {
           ]
         : LibrarySearchKind.values;
     for (final kind in kinds) {
-      final shelf = shelves && kind != LibrarySearchKind.songs;
+      // In the cover layout songs take a shelf too, as every other kind.
+      final shelf = shelves && (cover || kind != LibrarySearchKind.songs);
+      // A filtered kind's pages fill one grid, so rows run on across pages.
+      final grid = cover && _kind != null;
+      final gridHits = <LibrarySearchHit>[];
+      var more = false;
       for (var page = 0; page < (_kind == null ? 1 : _pages); page++) {
         final pageSize = _kind != null
             ? 40
@@ -655,7 +876,11 @@ class _LibrarySearchResultsState extends ConsumerState<LibrarySearchResults> {
           limit: pageSize + 1,
           offset: page * pageSize,
         );
-        final result = ref.watch(librarySearchProvider(request));
+        final result = ref.watch(
+          _lyricsSearch
+              ? libraryLyricsSearchProvider(request)
+              : librarySearchProvider(request),
+        );
         loading |= result.isLoading;
         failed |= result.hasError;
         final hits = result.value ?? const <LibrarySearchHit>[];
@@ -665,8 +890,13 @@ class _LibrarySearchResultsState extends ConsumerState<LibrarySearchResults> {
         if (hits.isNotEmpty) {
           hasResults = true;
           if (page == 0 && shelves) {
-            slivers.add(SliverToBoxAdapter(child: _shelfHeader(kind)));
+            slivers.add(
+              SliverToBoxAdapter(
+                child: _shelfHeader(kind, trailing: takeToggle()),
+              ),
+            );
           } else if (page == 0) {
+            final viewToggle = takeToggle();
             slivers.add(
               SliverToBoxAdapter(
                 child: ListTile(
@@ -674,37 +904,35 @@ class _LibrarySearchResultsState extends ConsumerState<LibrarySearchResults> {
                     _label(kind),
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
-                  trailing: _kind == null
-                      ? const Icon(Icons.chevron_right)
-                      : null,
+                  trailing: viewToggle == null && _kind != null
+                      ? null
+                      : Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ?viewToggle,
+                            if (_kind == null) const Icon(Icons.chevron_right),
+                          ],
+                        ),
                   onTap: _kind == null ? () => _select(kind) : null,
                 ),
               ),
             );
           }
-          slivers.add(
-            shelf
-                ? SliverToBoxAdapter(
-                    child: _shelf(kind, hits.take(pageSize).toList()),
-                  )
-                : SliverList.builder(
-                    itemCount: hits.length.clamp(0, pageSize),
-                    itemBuilder: (context, index) => _row(hits[index]),
-                  ),
-          );
-          if (_kind != null && page == _pages - 1 && hits.length > pageSize) {
+          if (grid) {
+            gridHits.addAll(hits.take(pageSize));
+          } else {
             slivers.add(
-              SliverToBoxAdapter(
-                child: Center(
-                  child: AppIconButton(
-                    tooltip: _label(kind),
-                    icon: const Icon(Icons.expand_more),
-                    onPressed: () => setState(() => _pages++),
-                  ),
-                ),
-              ),
+              shelf
+                  ? SliverToBoxAdapter(
+                      child: _shelf(kind, hits.take(pageSize).toList()),
+                    )
+                  : SliverList.builder(
+                      itemCount: hits.length.clamp(0, pageSize),
+                      itemBuilder: (context, index) => _row(hits[index]),
+                    ),
             );
           }
+          more = _kind != null && page == _pages - 1 && hits.length > pageSize;
         }
         if (result.hasError) {
           slivers.add(
@@ -713,14 +941,34 @@ class _LibrarySearchResultsState extends ConsumerState<LibrarySearchResults> {
                 child: ExpressiveButton(
                   text: true,
                   icon: const Icon(Icons.refresh),
-                  onPressed: () =>
-                      ref.invalidate(librarySearchProvider(request)),
+                  onPressed: () {
+                    if (_lyricsSearch) {
+                      ref.invalidate(libraryLyricsIndexProvider);
+                      ref.invalidate(libraryLyricsSearchProvider(request));
+                    } else {
+                      ref.invalidate(librarySearchProvider(request));
+                    }
+                  },
                   child: Text('${_label(kind)} · ${context.l10n.dialogRetry}'),
                 ),
               ),
             ),
           );
         }
+      }
+      if (gridHits.isNotEmpty) slivers.add(_grid(kind, gridHits));
+      if (more) {
+        slivers.add(
+          SliverToBoxAdapter(
+            child: Center(
+              child: AppIconButton(
+                tooltip: _label(kind),
+                icon: const Icon(Icons.expand_more),
+                onPressed: () => setState(() => _pages++),
+              ),
+            ),
+          ),
+        );
       }
     }
     if (loading) {
@@ -754,12 +1002,6 @@ class _LibrarySearchResultsState extends ConsumerState<LibrarySearchResults> {
     if (_selecting || _selectionOverlay.isVisible) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _syncSelectionBar());
     }
-    return PopScope(
-      canPop: !_selecting,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && _selecting) _exitSelection();
-      },
-      child: SliverMainAxisGroup(slivers: slivers),
-    );
+    return slivers;
   }
 }

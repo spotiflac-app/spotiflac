@@ -88,9 +88,10 @@ class SliverTrackTable extends StatefulWidget {
     this.sortableColumns,
     this.albumLayout = false,
     this.albumArtist,
+    this.uniformRowHeight = false,
   });
 
-  /// The album page layout of Apple Music: no column headers, the number,
+  /// The compact album layout: no column headers, the number,
   /// title and duration with a "More" button, the artist under the title only
   /// when it differs from [albumArtist], separators from the title column,
   /// and a play glyph in place of the number under the pointer. [columns],
@@ -99,6 +100,11 @@ class SliverTrackTable extends StatefulWidget {
 
   /// The album's artist, which album rows leave out.
   final String? albumArtist;
+
+  /// Uses the first column row as the extent for every row. Callers opt in
+  /// only when artwork, badges and actions have uniform height. Album rows
+  /// and text scaled above 200% retain variable layout.
+  final bool uniformRowHeight;
 
   final List<TrackTableRow> rows;
   final List<TrackTableColumn> columns;
@@ -132,6 +138,14 @@ class SliverTrackTable extends StatefulWidget {
 class _SliverTrackTableState extends State<SliverTrackTable> {
   TrackTableSort? _localSort;
 
+  // The shown rows, kept while the rows and the applied sort stay the same,
+  // so a selection change does not sort again.
+  List<TrackTableRow>? _source;
+  TrackTableSort? _sortedBy;
+  List<TrackTableRow> _rows = const [];
+  List<String> _orderedIds = const [];
+  bool _hasTrailing = false;
+
   TrackTableSort? get _sort => widget.onSort == null ? _localSort : widget.sort;
 
   void _sortBy(TrackTableColumn column) {
@@ -152,26 +166,26 @@ class _SliverTrackTableState extends State<SliverTrackTable> {
     }
   }
 
-  List<TrackTableRow> get _sortedRows {
-    final sort = _localSort;
-    if (widget.onSort != null || sort == null) return widget.rows;
-    final (:column, :ascending) = sort;
-    final indexed = widget.rows.indexed.toList();
-    indexed.sort((a, b) {
-      final order = compareTrackTableRows(a.$2, b.$2, column);
-      // Equal keys keep their original order in both directions.
-      if (order == 0) return a.$1.compareTo(b.$1);
-      return ascending ? order : -order;
-    });
-    return [for (final entry in indexed) entry.$2];
+  void _updateRows() {
+    final rows = widget.rows;
+    final sort = widget.onSort == null ? _localSort : null;
+    if (identical(rows, _source) && sort == _sortedBy) return;
+    _source = rows;
+    _sortedBy = sort;
+    _rows = sort == null
+        ? rows
+        : [for (final i in _sortOrder(rows, sort)) rows[i]];
+    _orderedIds = [for (final row in _rows) row.id];
+    _hasTrailing = _rows.any((row) => row.trailing != null);
   }
 
   @override
   Widget build(BuildContext context) {
-    final rows = _sortedRows;
+    _updateRows();
+    final rows = _rows;
     final sort = _sort;
-    final orderedIds = [for (final row in rows) row.id];
-    final hasTrailing = rows.any((row) => row.trailing != null);
+    final orderedIds = _orderedIds;
+    final hasTrailing = _hasTrailing;
     if (widget.albumLayout) {
       final albumArtist = widget.albumArtist?.trim().toLowerCase();
       return SliverList.builder(
@@ -203,6 +217,35 @@ class _SliverTrackTableState extends State<SliverTrackTable> {
         },
       );
     }
+    Widget rowList(IndexedWidgetBuilder builder) {
+      if (widget.uniformRowHeight &&
+          rows.isNotEmpty &&
+          MediaQuery.textScalerOf(context).scale(14) <= 28) {
+        return SliverPrototypeExtentList.builder(
+          prototypeItem: TickerMode(
+            enabled: false,
+            child: ExcludeFocus(
+              child: ExcludeSemantics(
+                child: _TrackTableRowView(
+                  row: rows.first,
+                  columns: widget.columns,
+                  hasTrailing: hasTrailing,
+                  selected: false,
+                  current: false,
+                  playing: false,
+                  onTap: () {},
+                  onContextMenu: null,
+                ),
+              ),
+            ),
+          ),
+          itemCount: rows.length,
+          itemBuilder: builder,
+        );
+      }
+      return SliverList.builder(itemCount: rows.length, itemBuilder: builder);
+    }
+
     return SliverMainAxisGroup(
       slivers: [
         SliverPersistentHeader(
@@ -219,49 +262,46 @@ class _SliverTrackTableState extends State<SliverTrackTable> {
             ),
           ),
         ),
-        SliverList.builder(
-          itemCount: rows.length,
-          itemBuilder: (context, index) {
-            final row = rows[index];
-            Widget rowView({
-              Key? key,
-              bool current = false,
-              bool playing = false,
-            }) => _TrackTableRowView(
-              key: key,
-              row: row,
-              columns: widget.columns,
-              hasTrailing: hasTrailing,
-              selected: widget.selectedIds.contains(row.id),
-              current: current,
-              playing: playing,
-              onTap: () => handleDesktopRowClick(
-                row.id,
-                select: (kind) => widget.onSelect(row.id, kind, orderedIds),
-                activate: () => widget.onActivate(row.id),
-              ),
-              onContextMenu: widget.onContextMenu == null
-                  ? null
-                  : (position) => widget.onContextMenu!(row.id, position),
-            );
-            final rowPlayback = row.playback;
-            if (rowPlayback == null || context.isSpotiFLAC) {
-              return rowView(key: ValueKey(row.id));
-            }
-            // Each row follows only its own track, so a track change
-            // rebuilds the two rows involved rather than the whole table.
-            return Consumer(
-              key: ValueKey(row.id),
-              builder: (context, ref, _) {
-                final playback = ref.watch(rowPlayback);
-                return rowView(
-                  current: playback.isCurrent,
-                  playing: playback.isPlaying,
-                );
-              },
-            );
-          },
-        ),
+        rowList((context, index) {
+          final row = rows[index];
+          Widget rowView({
+            Key? key,
+            bool current = false,
+            bool playing = false,
+          }) => _TrackTableRowView(
+            key: key,
+            row: row,
+            columns: widget.columns,
+            hasTrailing: hasTrailing,
+            selected: widget.selectedIds.contains(row.id),
+            current: current,
+            playing: playing,
+            onTap: () => handleDesktopRowClick(
+              row.id,
+              select: (kind) => widget.onSelect(row.id, kind, orderedIds),
+              activate: () => widget.onActivate(row.id),
+            ),
+            onContextMenu: widget.onContextMenu == null
+                ? null
+                : (position) => widget.onContextMenu!(row.id, position),
+          );
+          final rowPlayback = row.playback;
+          if (rowPlayback == null || context.isSpotiFLAC) {
+            return rowView(key: ValueKey(row.id));
+          }
+          // Each row follows only its own track, so a track change
+          // rebuilds the two rows involved rather than the whole table.
+          return Consumer(
+            key: ValueKey(row.id),
+            builder: (context, ref, _) {
+              final playback = ref.watch(rowPlayback);
+              return rowView(
+                current: playback.isCurrent,
+                playing: playback.isPlaying,
+              );
+            },
+          );
+        }),
       ],
     );
   }
@@ -272,47 +312,73 @@ int compareTrackTableRows(
   TrackTableRow a,
   TrackTableRow b,
   TrackTableColumn column,
-) {
-  int text(String? x, String? y) {
-    if (x == null || x.isEmpty) return y == null || y.isEmpty ? 0 : 1;
-    if (y == null || y.isEmpty) return -1;
-    return x.toLowerCase().compareTo(y.toLowerCase());
-  }
+) => _compareKeys(_sortKey(a, column), _sortKey(b, column));
 
-  int number(num? x, num? y) {
-    if (x == null) return y == null ? 0 : 1;
-    if (y == null) return -1;
-    return x.compareTo(y);
-  }
+/// The order of [rows] under [sort], as indexes into [rows]. Each key is
+/// computed once rather than in every comparison.
+List<int> _sortOrder(List<TrackTableRow> rows, TrackTableSort sort) {
+  final (:column, :ascending) = sort;
+  final keys = [for (final row in rows) _sortKey(row, column)];
+  return List.generate(rows.length, (i) => i)..sort((a, b) {
+    final order = _compareKeys(keys[a], keys[b]);
+    // Equal keys keep their original order in both directions.
+    if (order == 0) return a.compareTo(b);
+    return ascending ? order : -order;
+  });
+}
+
+/// The key [row] sorts by in [column]; null for a missing value.
+Comparable<Object?>? _sortKey(TrackTableRow row, TrackTableColumn column) {
+  String? text(String? value) =>
+      value == null || value.isEmpty ? null : value.toLowerCase();
 
   return switch (column) {
-    TrackTableColumn.number => number(a.number, b.number),
-    TrackTableColumn.title => text(a.title, b.title),
-    TrackTableColumn.artist => text(a.artist, b.artist),
-    TrackTableColumn.album => text(a.album, b.album),
-    TrackTableColumn.duration => number(
-      a.duration?.inMilliseconds,
-      b.duration?.inMilliseconds,
-    ),
-    TrackTableColumn.quality => _compareQuality(a.quality, b.quality),
+    TrackTableColumn.number => row.number,
+    TrackTableColumn.title => text(row.title),
+    TrackTableColumn.artist => text(row.artist),
+    TrackTableColumn.album => text(row.album),
+    TrackTableColumn.duration => row.duration?.inMilliseconds,
+    TrackTableColumn.quality => switch (row.quality) {
+      null || '' => null,
+      final label => _QualityKey(label),
+    },
   };
+}
+
+int _compareKeys(Comparable<Object?>? a, Comparable<Object?>? b) {
+  if (a == null) return b == null ? 0 : 1;
+  if (b == null) return -1;
+  return a.compareTo(b);
 }
 
 /// Compares quality labels by their numbers (bit depth, then sample rate or
 /// bitrate), so "24-bit/96kHz" sorts above "16-bit/44.1kHz".
-int _compareQuality(String? a, String? b) {
-  if (a == null || a.isEmpty) return b == null || b.isEmpty ? 0 : 1;
-  if (b == null || b.isEmpty) return -1;
-  final pattern = RegExp(r'\d+(?:\.\d+)?');
-  final x = [for (final m in pattern.allMatches(a)) double.parse(m[0]!)];
-  final y = [for (final m in pattern.allMatches(b)) double.parse(m[0]!)];
-  for (var i = 0; i < x.length && i < y.length; i++) {
-    final order = x[i].compareTo(y[i]);
-    if (order != 0) return order;
+class _QualityKey implements Comparable<_QualityKey> {
+  _QualityKey(String label)
+    : numbers = [
+        for (final m in _number.allMatches(label)) double.parse(m[0]!),
+      ],
+      text = label.toLowerCase();
+
+  static final _number = RegExp(r'\d+(?:\.\d+)?');
+
+  final List<double> numbers;
+  final String text;
+
+  @override
+  int compareTo(_QualityKey other) {
+    final y = other.numbers;
+    for (var i = 0; i < numbers.length && i < y.length; i++) {
+      final order = numbers[i].compareTo(y[i]);
+      if (order != 0) return order;
+    }
+    final order = numbers.length.compareTo(y.length);
+    return order != 0 ? order : text.compareTo(other.text);
   }
-  final order = x.length.compareTo(y.length);
-  return order != 0 ? order : a.toLowerCase().compareTo(b.toLowerCase());
 }
+
+/// How fast a SpotiFLAC row's hover actions appear.
+const _spotiflacRowFade = Duration(milliseconds: 100);
 
 String _formatDuration(Duration duration) {
   final hours = duration.inHours;
@@ -336,7 +402,7 @@ class TrackTableLayout {
   static const double albumNumber = 32;
   static const double albumTitleGap = 14;
 
-  // Pointer rows: Music's 40pt, and the M3 compact list density for Material
+  // Pointer rows: 40pt for SpotiFLAC, and the M3 compact list density for Material
   // instead of the 48dp touch row.
   static double rowMinHeightFor(BuildContext context) =>
       context.isSpotiFLAC ? 40 : 44;
@@ -540,8 +606,15 @@ class _TrackTableRowView extends StatefulWidget {
 }
 
 class _TrackTableRowViewState extends State<_TrackTableRowView> {
-  bool _hovered = false;
+  // Hover only fades the row actions, so it rebuilds only them.
+  final _hovered = ValueNotifier(false);
   bool _trailingFocused = false;
+
+  @override
+  void dispose() {
+    _hovered.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -576,11 +649,16 @@ class _TrackTableRowViewState extends State<_TrackTableRowView> {
             skipTraversal: true,
             onFocusChange: (focused) =>
                 setState(() => _trailingFocused = focused),
-            child: AnimatedOpacity(
-              opacity: _hovered || selected || current || _trailingFocused
-                  ? 1
-                  : 0,
-              duration: tokens.motionFast,
+            child: ValueListenableBuilder(
+              valueListenable: _hovered,
+              builder: (context, hovered, child) => AnimatedOpacity(
+                opacity: hovered || selected || current || _trailingFocused
+                    ? 1
+                    : 0,
+                duration: material ? tokens.motionFast : _spotiflacRowFade,
+                curve: material ? Curves.linear : Curves.easeIn,
+                child: child,
+              ),
               child: row.trailing,
             ),
           );
@@ -673,7 +751,7 @@ class _TrackTableRowViewState extends State<_TrackTableRowView> {
         : colorScheme.secondaryContainer;
     final ink = InkWell(
       onTap: onTap,
-      onHover: (hovered) => setState(() => _hovered = hovered),
+      onHover: (hovered) => _hovered.value = hovered,
       // The M3 hover state layer: 8% of the row's content color.
       hoverColor: material
           ? (content ?? colorScheme.onSurface).withValues(alpha: 0.08)
@@ -815,7 +893,10 @@ class _AlbumRowViewState extends State<_AlbumRowView> {
             onFocusChange: (focused) => setState(() => _focused = focused),
             child: AnimatedOpacity(
               opacity: active ? 1 : 0,
-              duration: tokens.motionFast,
+              duration: context.isSpotiFLAC
+                  ? _spotiflacRowFade
+                  : tokens.motionFast,
+              curve: context.isSpotiFLAC ? Curves.easeIn : Curves.linear,
               child: Builder(
                 builder: (buttonContext) => IconButton(
                   tooltip: l10n.showMenuTooltip,
@@ -899,7 +980,7 @@ class _AlbumRowViewState extends State<_AlbumRowView> {
                   children: [
                     number,
                     const SizedBox(width: TrackTableLayout.albumTitleGap),
-                    // The separator starts at the title, as in Apple Music.
+                    // Align the separator with the title column.
                     Expanded(
                       child: DecoratedBox(
                         decoration: BoxDecoration(

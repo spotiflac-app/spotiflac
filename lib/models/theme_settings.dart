@@ -8,6 +8,7 @@ const String kSeedColorKey = 'seed_color';
 const String kUseAmoledKey = 'use_amoled';
 const String kThemeStyleKey = 'theme_style';
 const String kSpotiFLACAccentKey = 'spotiflac_accent';
+const String kSpotiFLACAccentMovedToBlueKey = 'spotiflac_accent_moved_to_blue';
 const String kUseSystemFontKey = 'use_system_font';
 const String kCustomFontIdKey = 'custom_font_id';
 const String kCustomFontNameKey = 'custom_font_name';
@@ -15,6 +16,21 @@ const String kLyricsTextScaleKey = 'lyrics_text_scale';
 
 double normalizeLyricsTextScale(num? value) =>
     value != null && value.isFinite ? value.toDouble().clamp(0.8, 1.4) : 1.0;
+const String kLyricsBlurKey = 'lyrics_blur';
+
+/// How strongly SpotiFLAC blurs the lyric lines around the current one: 0 turns
+/// it off, 1 is the default.
+double normalizeLyricsBlur(num? value) =>
+    value != null && value.isFinite ? value.toDouble().clamp(0.0, 1.5) : 1.0;
+const String kLyricsOffsetKey = 'lyrics_offset_ms';
+const int kMaxLyricsOffsetMs = 2000;
+
+/// How much later synced lyrics follow playback, in milliseconds, so they
+/// match audio that reaches the ears late (such as over Bluetooth). Negative
+/// values show them earlier.
+int normalizeLyricsOffsetMs(num? value) => value != null && value.isFinite
+    ? value.round().clamp(-kMaxLyricsOffsetMs, kMaxLyricsOffsetMs)
+    : 0;
 const String kSpotiFLACGlassClarityKey = 'spotiflac_glass_clarity';
 const String kSpotiFLACGlassOutlinesKey = 'spotiflac_glass_outlines';
 const double kDefaultSpotiFLACGlassClarity = 0.75;
@@ -31,7 +47,7 @@ enum SpotiFLACAccent { red, orange, green, teal, blue, purple, pink }
 SpotiFLACAccent spotiflacAccentFromString(String? value) =>
     SpotiFLACAccent.values.firstWhere(
       (accent) => accent.name == value,
-      orElse: () => SpotiFLACAccent.red,
+      orElse: () => SpotiFLACAccent.blue,
     );
 
 /// Style used until the person picks one: SpotiFLAC on macOS, Material on
@@ -44,7 +60,7 @@ AppThemeStyle defaultAppThemeStyle() =>
 AppThemeStyle themeStyleFromString(String? value) => AppThemeStyle.values
     .firstWhere((style) => style.name == value, orElse: defaultAppThemeStyle);
 
-/// Default Spotify green color for fallback
+/// Fallback seed when dynamic color and a custom seed are unavailable.
 const int kDefaultSeedColor = 0xFF1DB954;
 
 class ThemeSettings {
@@ -58,6 +74,8 @@ class ThemeSettings {
   final String customFontId;
   final String customFontName;
   final double lyricsTextScale;
+  final double lyricsBlur;
+  final int lyricsOffsetMs;
   final double spotiflacGlassClarity;
   final bool spotiflacGlassOutlines;
 
@@ -67,11 +85,13 @@ class ThemeSettings {
     this.seedColorValue = kDefaultSeedColor,
     this.useAmoled = false,
     this.style = AppThemeStyle.material,
-    this.spotiflacAccent = SpotiFLACAccent.red,
+    this.spotiflacAccent = SpotiFLACAccent.blue,
     this.useSystemFont = false,
     this.customFontId = '',
     this.customFontName = '',
     this.lyricsTextScale = 1,
+    this.lyricsBlur = 1,
+    this.lyricsOffsetMs = 0,
     this.spotiflacGlassClarity = kDefaultSpotiFLACGlassClarity,
     this.spotiflacGlassOutlines = true,
   });
@@ -89,6 +109,8 @@ class ThemeSettings {
     String? customFontId,
     String? customFontName,
     double? lyricsTextScale,
+    double? lyricsBlur,
+    int? lyricsOffsetMs,
     double? spotiflacGlassClarity,
     bool? spotiflacGlassOutlines,
   }) {
@@ -104,6 +126,10 @@ class ThemeSettings {
       customFontName: customFontName ?? this.customFontName,
       lyricsTextScale: normalizeLyricsTextScale(
         lyricsTextScale ?? this.lyricsTextScale,
+      ),
+      lyricsBlur: normalizeLyricsBlur(lyricsBlur ?? this.lyricsBlur),
+      lyricsOffsetMs: normalizeLyricsOffsetMs(
+        lyricsOffsetMs ?? this.lyricsOffsetMs,
       ),
       spotiflacGlassClarity: normalizeSpotiFLACGlassClarity(
         spotiflacGlassClarity ?? this.spotiflacGlassClarity,
@@ -124,6 +150,8 @@ class ThemeSettings {
     kCustomFontIdKey: customFontId,
     kCustomFontNameKey: customFontName,
     kLyricsTextScaleKey: lyricsTextScale,
+    kLyricsBlurKey: lyricsBlur,
+    kLyricsOffsetKey: lyricsOffsetMs,
     kSpotiFLACGlassClarityKey: spotiflacGlassClarity,
     kSpotiFLACGlassOutlinesKey: spotiflacGlassOutlines,
   };
@@ -144,6 +172,8 @@ class ThemeSettings {
       lyricsTextScale: normalizeLyricsTextScale(
         json[kLyricsTextScaleKey] as num?,
       ),
+      lyricsBlur: normalizeLyricsBlur(json[kLyricsBlurKey] as num?),
+      lyricsOffsetMs: normalizeLyricsOffsetMs(json[kLyricsOffsetKey] as num?),
       spotiflacGlassClarity: normalizeSpotiFLACGlassClarity(
         json[kSpotiFLACGlassClarityKey] as num?,
       ),
@@ -165,6 +195,8 @@ class ThemeSettings {
         other.customFontId == customFontId &&
         other.customFontName == customFontName &&
         other.lyricsTextScale == lyricsTextScale &&
+        other.lyricsBlur == lyricsBlur &&
+        other.lyricsOffsetMs == lyricsOffsetMs &&
         other.spotiflacGlassClarity == spotiflacGlassClarity &&
         other.spotiflacGlassOutlines == spotiflacGlassOutlines;
   }
@@ -181,6 +213,8 @@ class ThemeSettings {
       customFontId.hashCode ^
       customFontName.hashCode ^
       lyricsTextScale.hashCode ^
+      lyricsBlur.hashCode ^
+      lyricsOffsetMs.hashCode ^
       spotiflacGlassClarity.hashCode ^
       spotiflacGlassOutlines.hashCode;
 }

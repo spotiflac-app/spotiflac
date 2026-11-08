@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:spotiflac/services/ffmpeg_service.dart';
+import 'package:spotiflac/services/ffmpeg_conversion.dart';
+import 'package:spotiflac/services/ffmpeg_models.dart';
 
 void main() {
   late Directory directory;
@@ -26,7 +27,7 @@ void main() {
       final sibling = await File(
         '${directory.path}/Song "live".flac',
       ).writeAsString('existing');
-      final result = await FFmpegService.convertM4aToFlac(
+      final result = await FFmpegConversion.convertM4aToFlac(
         source.path,
         sourceCodec: 'alac',
         execute: (arguments) async {
@@ -44,7 +45,7 @@ void main() {
 
   test('failed conversion removes partial output and retains source', () async {
     final source = await input('Song.m4a');
-    final result = await FFmpegService.convertM4aToFlac(
+    final result = await FFmpegConversion.convertM4aToFlac(
       source.path,
       sourceCodec: 'alac',
       execute: (arguments) async {
@@ -66,7 +67,7 @@ void main() {
         (_) async => FFmpegResult(success: true, returnCode: 0, output: ''),
       ]) {
         expect(
-          await FFmpegService.convertM4aToFlac(
+          await FFmpegConversion.convertM4aToFlac(
             source.path,
             sourceCodec: 'alac',
             execute: execute,
@@ -81,7 +82,7 @@ void main() {
 
   test('same-suffix conversion stages output until it is complete', () async {
     final source = await input('Song.flac');
-    final result = await FFmpegService.convertM4aToFlac(
+    final result = await FFmpegConversion.convertM4aToFlac(
       source.path,
       sourceCodec: 'alac',
       execute: (arguments) async {
@@ -108,12 +109,12 @@ void main() {
     }
 
     final results = await Future.wait([
-      FFmpegService.convertM4aToFlac(
+      FFmpegConversion.convertM4aToFlac(
         first.path,
         sourceCodec: 'alac',
         execute: execute,
       ),
-      FFmpegService.convertM4aToFlac(
+      FFmpegConversion.convertM4aToFlac(
         second.path,
         sourceCodec: 'alac',
         execute: execute,
@@ -129,7 +130,7 @@ void main() {
     () async {
       final source = await input('Song.m4a');
       final commands = <List<String>>[];
-      final result = await FFmpegService.convertM4aToFlac(
+      final result = await FFmpegConversion.convertM4aToFlac(
         source.path,
         sourceCodec: 'flac',
         execute: (arguments) async {
@@ -168,7 +169,7 @@ void main() {
       () async {
         final source = await input('Song.m4a');
         var encoded = false;
-        final result = await FFmpegService.convertM4aToFlac(
+        final result = await FFmpegConversion.convertM4aToFlac(
           source.path,
           sourceCodec: 'flac',
           execute: (arguments) async {
@@ -206,14 +207,16 @@ void main() {
       final sibling = await File(
         '${directory.path}/Song.flac',
       ).writeAsString('existing');
-      final result = await FFmpegService.ensureNativeFlacExtension(source.path);
+      final result = await FFmpegConversion.ensureNativeFlacExtension(
+        source.path,
+      );
       expect(result, '${directory.path}/Song (2).flac');
       expect(await sibling.readAsString(), 'existing');
       expect(await File(result).readAsString(), 'source');
-      expect(await FFmpegService.ensureNativeFlacExtension(result), result);
+      expect(await FFmpegConversion.ensureNativeFlacExtension(result), result);
       final noSuffix = await input('Other');
       expect(
-        await FFmpegService.ensureNativeFlacExtension(noSuffix.path),
+        await FFmpegConversion.ensureNativeFlacExtension(noSuffix.path),
         '${noSuffix.path}.flac',
       );
     },
@@ -221,9 +224,77 @@ void main() {
 
   test('failed native rename releases its reserved destination', () async {
     await expectLater(
-      FFmpegService.ensureNativeFlacExtension('${directory.path}/missing.m4a'),
+      FFmpegConversion.ensureNativeFlacExtension(
+        '${directory.path}/missing.m4a',
+      ),
       throwsA(isA<FileSystemException>()),
     );
     expect(await directory.list().length, 0);
   });
+
+  Future<List<String>?> splitCue(
+    String source,
+    Future<FFmpegResult> Function(List<String>) execute,
+  ) => FFmpegConversion.splitCueToTracks(
+    audioPath: source,
+    outputDir: directory.path,
+    tracks: [
+      CueSplitTrackInfo(
+        number: 1,
+        title: 'Track',
+        artist: 'Artist',
+        startSec: 0,
+        endSec: -1,
+      ),
+    ],
+    albumMetadata: {'album': 'Album'},
+    execute: execute,
+  );
+
+  test('repeated CUE splits preserve existing tracks and the source', () async {
+    final source = await input('Album.flac');
+    final sibling = await input('01 - Track.flac');
+    final sourceBytes = await source.readAsBytes();
+    final siblingBytes = await sibling.readAsBytes();
+    final first = await splitCue(source.path, succeed);
+    final second = await splitCue(source.path, succeed);
+
+    expect(await sibling.readAsBytes(), siblingBytes);
+    expect(first, ['${directory.path}/01 - Track (2).flac']);
+    expect(second, ['${directory.path}/01 - Track (3).flac']);
+    expect(await source.readAsBytes(), sourceBytes);
+    expect(await File(first!.single).readAsString(), 'converted');
+    expect(await File(second!.single).readAsString(), 'converted');
+    expect(await directory.list().length, 4);
+  });
+
+  for (final failure in ['failed', 'throw', 'empty']) {
+    test(
+      'CUE $failure removes partial output and keeps existing files',
+      () async {
+        final source = await input('Album.flac');
+        final sibling = await input('01 - Track.flac');
+        final sourceBytes = await source.readAsBytes();
+        final siblingBytes = await sibling.readAsBytes();
+        final paths = await splitCue(source.path, (arguments) async {
+          if (failure != 'empty') {
+            await File(
+              arguments[arguments.length - 2],
+            ).writeAsString('partial');
+          }
+          if (failure == 'throw') throw StateError('Fixture failure');
+          return FFmpegResult(
+            success: failure == 'empty',
+            returnCode: failure == 'empty' ? 0 : 1,
+            output: '',
+          );
+        });
+
+        expect(paths, isNull);
+        expect(await source.readAsBytes(), sourceBytes);
+        expect(await sibling.readAsBytes(), siblingBytes);
+        expect(await directory.list().length, 2);
+      },
+    );
+  }
 }
