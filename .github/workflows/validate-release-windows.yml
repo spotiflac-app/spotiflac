@@ -1,0 +1,50 @@
+name: Validate existing Windows release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    name: Validate Windows (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-2022
+          - arch: arm64
+            runner: windows-11-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Verify immutable build provenance
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $build = gh api repos/spotiflac-app/spotiflac/actions/runs/42238210013 | ConvertFrom-Json
+          if ($build.head_sha -ne '9553af072d78936efe03ea80e3d3ae69b041d4f8' -or $build.conclusion -ne 'success') { throw 'Unexpected build provenance' }
+      - name: Download existing Windows package
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          github-token: ${{ github.token }}
+          run-id: 42238210013
+          name: desktop-release-windows-${{ matrix.arch }}
+          path: package
+      - name: Verify package and native startup
+        shell: pwsh
+        run: ./scripts/validate_windows_release.ps1 -Directory package -Arch '${{ matrix.arch }}'
+      - name: Save validation evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: windows-release-validation-${{ matrix.arch }}
+          if-no-files-found: warn
+          path: |
+            package/validation.json
+            package/startup-*.log
