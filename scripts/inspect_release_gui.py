@@ -89,6 +89,7 @@ try:
         subprocess.run(['import', '-window', 'root', str(out / 'initial.png')], check=True)
         import pyatspi
         nodes = []
+        objects = []
         def walk(item, path=(), depth=0):
             if depth > 30 or len(nodes) > 5000: return
             try:
@@ -98,6 +99,7 @@ try:
                     actions = [action.getName(i) for i in range(action.nActions)]
                 except Exception: pass
                 nodes.append({'path': path, 'role': item.getRoleName(), 'name': item.name, 'actions': actions})
+                objects.append(item)
                 for index in range(item.childCount):
                     child = item.getChildAtIndex(index)
                     if child is not None: walk(child, path + (index,), depth + 1)
@@ -106,6 +108,23 @@ try:
         (out / 'accessibility.json').write_text(json.dumps(nodes, indent=2))
         # This first phase records the real UI before input targets are chosen.
         (out / 'inspection.json').write_text(json.dumps({'startup': True, 'nodes': len(nodes), 'requests': routes, 'profile_files': [str(p.relative_to(profile)) for p in profile.rglob('shared_preferences.json')]}, indent=2))
+        candidates = [item for node, item in zip(nodes, objects) if node['name'] == 'Search with SpotiFLAC Isolated QA...']
+        assert len(candidates) == 1, 'Expected one fixture search field'
+        action = candidates[0].queryAction()
+        index = next(i for i in range(action.nActions) if action.getName(i) == 'Tap')
+        assert action.doAction(index)
+        time.sleep(1)
+        subprocess.run(['xdotool', 'type', '--clearmodifiers', 'QA tone'], check=True)
+        subprocess.run(['xdotool', 'key', 'Return'], check=True)
+        for _ in range(30):
+            if '/catalog' in routes: break
+            time.sleep(0.5)
+        time.sleep(2)
+        nodes.clear(); objects.clear(); walk(pyatspi.Registry.getDesktop(0))
+        (out / 'search-accessibility.json').write_text(json.dumps(nodes, indent=2))
+        subprocess.run(['import', '-window', 'root', str(out / 'search.png')], check=True)
+        (out / 'search.json').write_text(json.dumps({'catalog_requested': '/catalog' in routes, 'requests': routes}, indent=2))
+        assert '/catalog' in routes, 'GUI search did not reach the synthetic provider'
 finally:
     if process is not None and process.poll() is None:
         process.terminate(); process.wait(timeout=15)
