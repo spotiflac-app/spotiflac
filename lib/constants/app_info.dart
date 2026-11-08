@@ -3,7 +3,7 @@ import 'package:spotiflac/utils/desktop_platform.dart';
 
 class AppInfo {
   static const String version = '5.2.6';
-  static const String buildNumber = '1';
+  static const String buildNumber = '165';
 
   static const String gitCommit = String.fromEnvironment('GIT_COMMIT');
   static String get shortGitCommit =>

@@ -18,6 +18,9 @@ def validate(root, tag):
     displayed = re.search(r"static\s+const\s+String\s+version\s*=\s*['\"]([^'\"]+)['\"]", constants)
     if not displayed or displayed[1] != version:
         raise ValueError('AppInfo.version does not match pubspec.yaml')
+    displayed_build = re.search(r"static\s+const\s+String\s+buildNumber\s*=\s*['\"]([^'\"]+)['\"]", constants)
+    if not displayed_build or displayed_build[1] != build:
+        raise ValueError('AppInfo.buildNumber does not match pubspec.yaml build number')
     return {'tag': 'v' + version, 'version': version, 'build_number': int(build)}
 
 

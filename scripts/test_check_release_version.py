@@ -12,9 +12,9 @@ class ReleaseVersionTest(unittest.TestCase):
         (self.root / 'lib/constants').mkdir(parents=True)
         self.write('5.2.6+165', '5.2.6')
 
-    def write(self, specification, display):
+    def write(self, specification, display, displayed_build='165'):
         (self.root / 'pubspec.yaml').write_text('version: ' + specification + '\n')
-        (self.root / 'lib/constants/app_info.dart').write_text("static const String version = '" + display + "';\n")
+        (self.root / 'lib/constants/app_info.dart').write_text("static const String version = '" + display + "';\nstatic const String buildNumber = '" + displayed_build + "';\n")
 
     def test_matching_version_retains_build_number(self):
         for tag in ('v5.2.6', '5.2.6'):
@@ -32,6 +32,11 @@ class ReleaseVersionTest(unittest.TestCase):
     def test_build_number_is_required(self):
         self.write('5.2.6', '5.2.6')
         with self.assertRaisesRegex(ValueError, 'build number'):
+            validate(self.root, 'v5.2.6')
+
+    def test_displayed_build_number_must_match_package(self):
+        self.write('5.2.6+165', '5.2.6', '1')
+        with self.assertRaisesRegex(ValueError, 'AppInfo.buildNumber'):
             validate(self.root, 'v5.2.6')
 
 
