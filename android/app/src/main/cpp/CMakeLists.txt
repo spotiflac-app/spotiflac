@@ -15,7 +15,7 @@ set(INSTALL_CMAKE_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
 set(WITH_OGG OFF CACHE BOOL "" FORCE)
 set(ENABLE_MULTITHREADING OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(flac
-    URL https://github.com/xiph/flac/archive/refs/tags/1.5.0.tar.gz
+    URL https://codeload.github.com/xiph/flac/tar.gz/refs/tags/1.5.0
     URL_HASH SHA256=aea54ed186ad07a34750399cb27fc216a2b62d0ffcd6dc2e3064a3518c3146f8)
 function(spotiflac_add_flac)
     if(ANDROID)
@@ -53,10 +53,10 @@ set(WAVPACK_ENABLE_ASM OFF CACHE BOOL "" FORCE)
 
 # Immutable releases plus checksums keep local and CI builds identical.
 FetchContent_Declare(oboe
-    URL https://github.com/google/oboe/archive/refs/tags/1.11.0.tar.gz
+    URL https://codeload.github.com/google/oboe/tar.gz/refs/tags/1.11.0
     URL_HASH SHA256=0ccf2110640a2b4489f1c93a404f2978656b434d8c5dc9cb6258f9cc95c79b15)
 FetchContent_Declare(wavpack
-    URL https://github.com/dbry/WavPack/archive/refs/tags/5.9.0.tar.gz
+    URL https://codeload.github.com/dbry/WavPack/tar.gz/refs/tags/5.9.0
     URL_HASH SHA256=2a53e50aefd8c9f04a0828a0e1ef77b6f4c17b0ef6964ad234ab295f313b7d6d)
 FetchContent_MakeAvailable(oboe wavpack)
 

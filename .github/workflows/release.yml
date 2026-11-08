@@ -22,6 +22,10 @@ on:
         description: "Build Windows packages only without updating the release"
         type: boolean
         default: false
+      android_only:
+        description: "Build Android packages only without updating the release"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -280,7 +284,7 @@ jobs:
             build/app/outputs/flutter-apk/SHA256SUMS.txt
 
   build-ios:
-    if: ${{ !inputs.linux_only && !inputs.windows_only }}
+    if: ${{ !inputs.linux_only && !inputs.windows_only && !inputs.android_only }}
     runs-on: macos-15-intel
     needs: get-version # Only depends on version, NOT android build!
     env:
@@ -404,7 +408,7 @@ jobs:
   # AppImage and deb per Linux architecture, and a Windows installer and
   # portable zip. Each job uploads SHA256SUMS-<target>.txt for create-release.
   build-macos:
-    if: ${{ !inputs.linux_only && !inputs.windows_only }}
+    if: ${{ !inputs.linux_only && !inputs.windows_only && !inputs.android_only }}
     name: Build macOS (universal)
     runs-on: macos-15-intel
     needs: get-version
@@ -506,7 +510,7 @@ jobs:
             build/desktop/SHA256SUMS-macos.txt
 
   build-linux:
-    if: ${{ !inputs.windows_only }}
+    if: ${{ !inputs.windows_only && !inputs.android_only }}
     name: Build Linux (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     needs: get-version
@@ -675,7 +679,7 @@ jobs:
             build/desktop/SHA256SUMS-linux-*.txt
 
   build-windows:
-    if: ${{ !inputs.linux_only }}
+    if: ${{ !inputs.linux_only && !inputs.android_only }}
     name: Build Windows (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     strategy:
@@ -855,7 +859,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [get-version, build-android, build-ios, build-macos, build-linux, build-windows]
     if: >-
-      ${{ !inputs.build_only && !inputs.windows_only && !inputs.linux_only && !cancelled() && (needs.build-android.result == 'success'
+      ${{ !inputs.build_only && !inputs.windows_only && !inputs.linux_only && !inputs.android_only && !cancelled() && (needs.build-android.result == 'success'
       || needs.build-ios.result == 'success' || needs.build-macos.result == 'success'
       || needs.build-linux.result == 'success' || needs.build-windows.result == 'success') }}
     permissions:

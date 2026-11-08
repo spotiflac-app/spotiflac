@@ -58,6 +58,7 @@ jobs:
         run: |
           python scripts/prepare_release_config.py --repository spotiflac-app/spotiflac-releases
           flutter pub get
+          python scripts/stage_verified_sqlite.py windows '${{ matrix.arch }}'
           dart scripts/prepare_flutter_sdk.dart
           $commit = git rev-parse --short=8 HEAD
           flutter build windows --release --target lib/main.dart --dart-define="GIT_COMMIT=$commit" --dart-define-from-file=.release-defines.json
