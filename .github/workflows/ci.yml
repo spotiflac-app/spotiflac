@@ -36,7 +36,7 @@ jobs:
   required:
     name: CI required checks
     runs-on: ubuntu-latest
-    needs: [changes, python, flutter, rust, ios, android]
+    needs: [changes, python, flutter, rust, rust-ios, android]
     if: ${{ always() }}
     steps:
       - name: Require successful applicable checks
