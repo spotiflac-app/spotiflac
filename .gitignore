@@ -100,6 +100,7 @@ DerivedData/
 /docs/*
 !/docs/RELEASE_SETUP.md
 !/docs/OWNERSHIP_HANDOVER.md
+!/docs/BRANDING_SETUP.md
 
 # Temporary files and logs
 /.tmp/

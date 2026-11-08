@@ -1,10 +1,13 @@
 # SpotiFLAC release setup
 
-## Repository and first release
+## Repository and published release
 
-The source is maintained at `spotiflac-app/spotiflac` on `main`. Use tag `v5.2.6`
-for the first release. The pinned Flutter/Rust toolchains and operating-system
-runners build the mobile and desktop packages. Draft releases combine every
+The source is maintained at `spotiflac-app/spotiflac` on `main`.
+[SpotiFLAC v5.2.6](https://github.com/spotiflac-app/spotiflac-releases/releases/tag/v5.2.6)
+was published on 2026-11-08 with product version 5.2.6+165 and 18 verified assets.
+The original copyright and license notices remain in the source archives.
+The pinned Flutter/Rust toolchains and operating-system runners build the
+mobile and desktop packages. Draft releases combine every
 successful platform, with one set of release notes and SHA256SUMS.txt.
 
 The default is a draft release. Validate builds, signatures, fresh installation,
@@ -57,16 +60,21 @@ accounts you control, with the `spotiflac://` callbacks registered as required.
 
 ## Feed and website
 
-`apps.json` intentionally contains no apps until the first public iOS release.
-The release workflow then derives its bundle ID, size, date and asset URL from
-the actual IPA. Do not advertise nonexistent packages or inherited versions.
+The public `apps.json` now contains the published v5.2.6 IPA. Its bundle ID,
+size, date and URL come from the real package. The source repository copy is
+synchronized. The live source URL is
+`https://raw.githubusercontent.com/spotiflac-app/spotiflac-releases/main/apps.json`.
+For future releases, derive metadata from the actual IPA.
 
-Point the website's release feed at
-`https://api.github.com/repos/spotiflac-app/spotiflac-releases/releases` and remove its
-inherited download URLs after verified releases exist. An empty release feed
+The website source now uses
+`https://api.github.com/repos/spotiflac-app/spotiflac-releases/releases` and the
+published SpotiFLAC download URLs. An empty release feed
 should display that the first release is being prepared, without falling back
 to another project's packages. Website deployment requires access to its source
 and hosting; changing this app repository does not modify the existing website.
+The website update was pushed as `04f74a2` in `carrompool234/spotiflacc`, but
+Vercel blocked deployment. Live pages had not changed at the last verification.
+See [ownership status](OWNERSHIP_HANDOVER.md#website-deployment).
 
 ## Verification
 
@@ -83,10 +91,10 @@ Discord. A source audit is not a substitute for running those builds.
 The owner approved making the development repository public on 2026-11-06.
 Its standard GitHub-hosted build runners use the free public-repository tier.
 Public download hosting remains at
-https://github.com/spotiflac-app/spotiflac-releases. Only its README, safe
-announcement configuration, icon and empty placeholder feed are initially public.
-Release packages and matching source snapshots stay in drafts during validation.
-The existing website download links are unchanged while the website is developed.
+https://github.com/spotiflac-app/spotiflac-releases. The v5.2.6 packages, matching source snapshots, checksums, icon, safe
+announcement configuration and populated iOS feed are public. Future packages
+remain drafts during validation. The separate website deployment is blocked
+in Vercel; its source already contains the corrected download links.
 
 Every official Release build generates `.release-defines.json` using
 `scripts/prepare_release_config.py`. The `DISTRIBUTION_REPO` Actions variable can
@@ -110,8 +118,8 @@ creates a draft in the downloads repository. Existing different assets cannot
 be silently overwritten. Credentials remain in the environment or local Git
 credential manager. Do not store a broad personal token in the application.
 
-Once the owner completes installation and update tests, publish the downloads
-draft explicitly. Its public release API becomes the app's unauthenticated update
+For future releases, publish the verified downloads draft explicitly after the
+chosen release checks. The v5.2.6 downloads release is already published. Its public release API becomes the app's unauthenticated update
 feed. The AltStore source is the stable release asset URL
 `https://github.com/spotiflac-app/spotiflac-releases/releases/latest/download/apps.json`;
 it is generated from the actual IPA. No production download is advertised before
@@ -119,26 +127,25 @@ a release is published. Trusted signing still requires owner-held Apple or
 Windows signing credentials; a self-signed certificate does not establish public
 distribution trust.
 
-## Build verification (2026-11-05)
+## Current release verification
 
-Android, iOS, Windows x64/ARM64, Linux x64/ARM64 and universal macOS builds
-passed their CI checks. Flutter analysis and 3,557 tests passed; Rust Clippy
-and 475 tests passed. See [ownership status](OWNERSHIP_HANDOVER.md) for run links,
-skipped-test counts and distribution limitations. A successful CI build is not
-a published production release. Existing website download links remain in place
-while the website is under development, as requested by the owner.
+All final packages were built successfully, and all 18 published asset digests
+were verified against the staged manifests. The About screen and diagnostics
+retain build 165. Package identities remain `com.spotiflac.app` where applicable.
+See [ownership status](OWNERSHIP_HANDOVER.md) for the exact final platform runs,
+source provenance, signing status and verification limits.
 
-## Current release status
+Release preflight checks `pubspec.yaml`, `AppInfo.version`, `AppInfo.buildNumber`
+and the requested tag before platform jobs start. Do not relabel historical QA
+binaries. Android signing keys and private symbols stay outside source control.
 
-The target is 5.2.6+165, matching the downloaded source version and build number. Previous test binaries embed an incorrect initial version and are retired QA artifacts, not 5.2.6 packages. Do not rename those binaries or reuse their source archive for the corrected release. Rebuild each platform from the corrected source. The earlier private-repository builds were blocked by account billing or its spending limit. With owner approval, the source repository is now public and the standard-runner release build has started successfully. No payment or spending-limit change was made.
-
-The standalone provider smoke script exercises a shipped native library and bundled FFmpeg tools with an isolated synthetic HTTP provider. Pass `--library`, `--ffmpeg`, `--ffprobe` and `--report-dir` paths. It checks search, downloaded bytes, decoding and output-directory protection. Windows x64 and Linux x64 executions passed locally. Desktop and Release jobs now include those checks. This does not replace commercial-provider, GUI, physical phone or version-upgrade tests.
-
-Release preflight checks `pubspec.yaml`, `AppInfo.version` and the requested tag before expensive platform jobs start. The build number must be present and positive. The new version checks have four passing unit tests.
+The standalone provider smoke script exercises a shipped native library and
+bundled FFmpeg tools with isolated synthetic HTTP audio. It does not establish
+physical-phone, hardware-audio or commercial-provider GUI coverage.
 
 ## Local Windows build requirements
 
-Windows x64 5.2.6+165 was compiled, packaged and installer-upgrade tested locally. Hosted Actions billing is not required for that local build. Corrected hosted builds have now passed for all platforms; see the completed-build status below.
+Windows x64 5.2.6+165 was compiled, packaged and installer-upgrade tested locally. Hosted Actions billing is not required for that local build. Corrected hosted builds have now passed for all platforms; see the final build provenance in the ownership status.
 
 Use the Flutter version pinned in `.fvmrc`, Visual Studio 2022 C++ Build Tools with `Microsoft.VisualStudio.Workload.VCTools` and `Microsoft.VisualStudio.Component.VC.ATL`, Rust for the media-control plugin, and Inno Setup 6 for the installer. Flutter plugins also require working plugin-folder links. Apply `scripts/prepare_flutter_sdk.dart`, generate `.release-defines.json` and run `scripts/check_release_version.py --version v5.2.6` before building.
 
@@ -153,76 +160,29 @@ Prepare public endpoints with `python3 scripts/prepare_release_config.py --repos
 Use the existing project signing key and the release workflow's signing procedure, then verify the signer certificate, all required signature schemes, version name/code, package identity, APK alignment and `scripts/check_backend_apk.py` results. A release build can use a debug key when no local release signing configuration is present; verify the actual certificate before distribution. Store signing material outside the repository, and retain the exact commit, checksums, Dart symbols and shrinking map privately. Physical phone and live-provider tests remain separate from package verification.
 
 
-## Corrected release build completed
+## Linux packaging and native reuse
 
-All seven platform builds and release assembly passed in [run 42238210013](https://github.com/spotiflac-app/spotiflac/actions/runs/42238210013), using source commit `9553af072d78936efe03ea80e3d3ae69b041d4f8`. The draft contains Android ARM32/ARM64, Windows x64/ARM64, Linux x64/ARM64, universal macOS and the unsigned iOS IPA. Version remains 5.2.6+165. Standard public-repository runners were used; no billing settings were changed.
+Debian packaging requires `dpkg-shlibdeps` and fails on unresolved dependencies.
+`verify_linux_runtime.py` rejects GLIBC_PRIVATE and GLIBC requirements above
+2.35. Native recipes build pinned LGPL FFmpeg sources and the original
+dart_smb2 0.1.3/r8 sources and patches on Ubuntu 22.04. Do not substitute the
+superseded GLIBC-incompatible artifacts from the original draft.
 
-The original draft remains quarantined because its Linux binaries have the GLIBC conflict described below. The corrected run documented below resolves that conflict and verifies declared runtime dependencies. Phone tests and trusted Apple/Windows distribution signing remain outstanding; build and package checks do not establish installation or playback on every platform.
+Debian packages explicitly depend on `libgles2` and `libegl1`, which Flutter
+opens dynamically, and recommend Mesa and desktop integration tools. AppImages
+use host GTK, EGL/GLES, libsecret, playback and codec libraries; they do not
+remove the runtime dependency requirements.
 
-## Linux dependency validation
+The final Linux branding build reuses verified native components from
+[run 42468204499](https://github.com/spotiflac-app/spotiflac/actions/runs/42468204499)
+after comparing native source and dependency trees. The final Windows branding
+build follows the same provenance check against
+[run 42238210013](https://github.com/spotiflac-app/spotiflac/actions/runs/42238210013).
+`stage_verified_sqlite.py` additionally requires the pinned upstream SQLite hash.
+Rebuild native components when their source or dependency graph changes.
 
-Debian packaging now requires dpkg-shlibdeps and fails if dependency resolution fails or returns an empty result. The previous fixed fallback could advertise libc6 >= 2.35 despite a bundled SMB library requiring GLIBC 2.38, and could omit codec runtime dependencies. Install the actual bundle runtime dependencies on the packaging host and resolve ABI compatibility before packaging. Do not publish the existing Linux draft assets based solely on a successful compilation. AppImage also uses system libraries and does not remove the bundled library's GLIBC requirement.
-
-## Linux compatibility rebuild (2026-11-07)
-
-The Ubuntu 22.04 bundle audit identified three incompatible ELF files:
-`libsmb2.so` required GLIBC 2.38, while the static-glibc `ffmpeg` and
-`ffprobe` imported GLIBC_PRIVATE resolver symbols and produced a libc6
-upper bound below 2.36. The replacement recipes build FFmpeg from pinned
-LGPL sources and the original dart_smb2 0.1.3/r8 source and patch set on
-the native Ubuntu 22.04 release runners. No Dart dependency is upgraded.
-
-`verify_linux_runtime.py` rejects GLIBC_PRIVATE and GLIBC requirements
-above 2.35 before either AppImage or Debian packaging. Manual Release
-runs can select `linux_only` to build both Linux architectures without
-rebuilding successful platforms or changing the existing draft release.
-Both corrected Linux architectures passed in
-[run 42369265356](https://github.com/spotiflac-app/spotiflac/actions/runs/42369265356),
-source `fa7b65a91bf76e55e273c56cf8efe5ba3c783eda`. The AppImage and Debian
-bundles passed the glibc audit; Debian packages installed on clean Ubuntu
-24.04 containers and resolved their native dependencies, loaded playback,
-SMB and backend libraries, and ran both FFmpeg CLI tools. The x64 isolated
-provider search/download/full FLAC decode and permission guard passed.
-The unused Android path-provider JNI bridge is excluded from Linux.
-Desktop uses the FFmpeg CLI on both architectures; the upstream ARM64
-plugin does not supply FFmpegKit, which is therefore checked only when
-present. No application features or dependency versions were changed.
-
-Keep the original Linux assets in draft release 436671583 quarantined;
-only the new run's verified artifacts are candidates for the downloads
-draft. Non-Linux artifacts retain source commit
-`9553af072d78936efe03ea80e3d3ae69b041d4f8`; distribute both matching source
-archives and identify their platform scope. The source tag/commit must
-not imply that the new Linux packages came from the original build.
-
-Downloads draft 437551007 in `spotiflac-app/spotiflac-releases` now contains
-18 assets verified against local SHA-256 digests, including both source
-archives and unified checksums. It remains unpublished. No billing settings
-or website download links were changed. Physical devices, commercial-provider
-GUI tests and trusted distribution signing remain external work.
-
-### Native startup and dynamically loaded dependencies
-
-On 2026-11-08, clean Ubuntu GUI startup exposed a dependency that ELF
-scanning cannot discover: Flutter dynamically opens `libGLESv2.so.2`.
-Debian packages now explicitly depend on `libgles2` and `libegl1`, and
-recommend Mesa drivers and desktop integration tools. AppImages retain
-their verified bytes and still require the host desktop runtime, including
-GLES/EGL, GTK, libsecret, playback and codec libraries; use the Debian package
-when automatic dependency installation is needed.
-
-[Repack run 42468204499](https://github.com/spotiflac-app/spotiflac/actions/runs/42468204499)
-compares the application bundle byte-for-byte after Debian metadata
-repacking, then installs and starts it under Xvfb on clean Ubuntu 22.04 and
-24.04 containers for both native architectures. The AppImages are copied
-unchanged. Packaging-source commit:
-`a6f8660daf37e0e71676a12b44ef484150caef72`; compiled Linux source remains
-`fa7b65a91bf76e55e273c56cf8efe5ba3c783eda`.
-
-Existing Windows x64/ARM64 portable packages also passed native startup in
-[run 42467371457](https://github.com/spotiflac-app/spotiflac/actions/runs/42467371457).
-The universal macOS DMG passed package/signature integrity, FFmpeg execution
-and native startup on Intel and Apple Silicon in
-[run 42467169533](https://github.com/spotiflac-app/spotiflac/actions/runs/42467169533).
-These checks do not claim hardware playback, real-provider GUI testing or
-trusted distribution signing.
+Manual Release runs support `build_only`, `linux_only`, `windows_only` and
+`android_only` to recover individual builds without replacing a release.
+The final branding workflows are recovery recipes tied to the immutable
+verified native runs above. Use the normal release workflow for changed native
+source or dependencies.
