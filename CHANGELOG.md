@@ -1,9 +1,26 @@
-## 5.2.6 - SpotiFLAC adaptation - 2026-11-05
-
-- Establish independent SpotiFLAC branding, namespace, release configuration, and repository-controlled announcements.
-- Disable unconfigured funding and account integrations.
-
 # Changelog
+
+## [5.2.7] - 2026-11-08
+
+### Security
+
+- Update the native ZIP parser to 9.0.5 and rustls to 0.23.46.
+- Require verified input checksums for every release package and Android signature sidecar.
+
+### Fixed
+
+- Detect preview, beta and release-candidate updates with semantic version ordering.
+- Publish verified packages and stable iOS source metadata to the public downloads repository.
+
+### Maintenance
+
+- Run release/configuration tests independently in CI and require applicable checks before merging.
+- Enable repository security scanning, protected main-branch checks and private vulnerability reporting.
+
+## [5.2.6] - 2026-11-08
+
+- Configure the application namespace, release endpoints and repository-controlled announcements.
+- Disable unconfigured funding and account integrations.
 
 ## [4.9.6] - 2026-09-07
 

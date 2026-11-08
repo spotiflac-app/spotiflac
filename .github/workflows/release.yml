@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version tag (e.g., v5.2.6)"
+        description: "Version tag (e.g., v5.2.7)"
         required: true
-        default: "v5.2.6"
+        default: "v5.2.7"
       linux_only:
         description: "Build and validate Linux artifacts only; do not update the release"
         type: boolean
