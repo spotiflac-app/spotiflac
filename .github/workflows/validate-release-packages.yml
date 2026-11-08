@@ -1,0 +1,121 @@
+name: Validate release packages
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful Release build run ID
+        required: true
+      source_commit:
+        description: Full immutable source commit of the Release run
+        required: true
+      version:
+        description: Product version without v prefix
+        required: true
+        default: '5.2.7'
+      build_number:
+        description: Product build number
+        required: true
+        default: '166'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  validate:
+    name: Validate ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: windows-x64
+            runner: windows-2022
+            artifact: desktop-release-windows-x64
+            arch: x64
+          - target: windows-arm64
+            runner: windows-11-arm
+            artifact: desktop-release-windows-arm64
+            arch: arm64
+          - target: macos-x64
+            runner: macos-15-intel
+            artifact: desktop-release-macos
+            arch: x64
+          - target: macos-arm64
+            runner: macos-15
+            artifact: desktop-release-macos
+            arch: arm64
+          - target: linux-x86_64
+            runner: ubuntu-22.04
+            artifact: desktop-release-linux-x86_64
+            arch: x86_64
+          - target: linux-aarch64
+            runner: ubuntu-22.04-arm
+            artifact: desktop-release-linux-aarch64
+            arch: aarch64
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Verify build provenance
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_RUN: ${{ inputs.run_id }}
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+          PRODUCT_VERSION: ${{ inputs.version }}
+          PRODUCT_BUILD: ${{ inputs.build_number }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN" > native-run.json
+          python - <<'PY'
+          import json, os, re
+          d=json.load(open('native-run.json'))
+          assert re.fullmatch('[0-9a-f]{40}',os.environ['SOURCE_COMMIT'])
+          assert d['head_sha']==os.environ['SOURCE_COMMIT'] and d['conclusion']=='success'
+          assert d['path']=='.github/workflows/release.yml'
+          assert re.fullmatch(r'\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?',os.environ['PRODUCT_VERSION'])
+          assert int(os.environ['PRODUCT_BUILD'])>0
+          PY
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.run_id }}
+          name: ${{ matrix.artifact }}
+          path: package
+      - name: Validate Windows portable startup and installer upgrade
+        if: startsWith(matrix.target, 'windows-')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRODUCT_VERSION: ${{ inputs.version }}
+          PRODUCT_BUILD: ${{ inputs.build_number }}
+        run: |
+          ./scripts/validate_windows_release.ps1 -Directory package -Arch '${{ matrix.arch }}' -Version $env:PRODUCT_VERSION -BuildNumber ([int]$env:PRODUCT_BUILD)
+          ./scripts/validate_windows_upgrade.ps1 -Directory package -Arch '${{ matrix.arch }}' -Version $env:PRODUCT_VERSION -BuildNumber ([int]$env:PRODUCT_BUILD)
+      - name: Validate macOS package and native startup
+        if: startsWith(matrix.target, 'macos-')
+        env:
+          PRODUCT_VERSION: ${{ inputs.version }}
+          PRODUCT_BUILD: ${{ inputs.build_number }}
+        run: python3 scripts/validate_macos_release.py package --report package/validation.json --version "$PRODUCT_VERSION" --build-number "$PRODUCT_BUILD"
+      - name: Validate Linux clean installation and startup
+        if: startsWith(matrix.target, 'linux-')
+        run: |
+          (cd package && sha256sum -c SHA256SUMS-linux-*.txt)
+          for baseline in 22.04 24.04; do
+            mkdir -p "evidence/$baseline"
+            docker run --rm -v "$PWD/package:/packages:ro" -v "$PWD/scripts:/checks:ro" -v "$PWD/evidence/$baseline:/evidence" "ubuntu:$baseline" bash -euc '
+              apt-get update -qq
+              DEBIAN_FRONTEND=noninteractive apt-get install -y /packages/*.deb python3 binutils xvfb x11-utils imagemagick
+              export LD_LIBRARY_PATH=/usr/lib/spotiflac/lib
+              python3 /checks/verify_linux_installed.py
+              dbus-run-session -- xvfb-run -a python3 /checks/validate_linux_startup.py
+            '
+          done
+      - name: Save validation evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: release-validation-${{ matrix.target }}
+          if-no-files-found: warn
+          path: |
+            package/*validation.json
+            package/startup*.log
+            evidence/
