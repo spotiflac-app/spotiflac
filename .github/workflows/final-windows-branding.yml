@@ -1,6 +1,11 @@
 name: Final Windows branding packages
 on:
   workflow_dispatch:
+    inputs:
+      arm64_only:
+        description: "Rebuild only the remaining ARM64 package"
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -15,11 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - arch: x64
-            runner: windows-2022
-          - arch: arm64
-            runner: windows-11-arm
+        include: ${{ fromJSON(inputs.arm64_only && '[{"arch":"arm64","runner":"windows-11-arm"}]' || '[{"arch":"x64","runner":"windows-2022"},{"arch":"arm64","runner":"windows-11-arm"}]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -62,7 +63,13 @@ jobs:
           dart scripts/prepare_flutter_sdk.dart
           $commit = git rev-parse --short=8 HEAD
           flutter build windows --release --target lib/main.dart --dart-define="GIT_COMMIT=$commit" --dart-define-from-file=.release-defines.json
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($LASTEXITCODE -ne 0) {
+            $buildExit = $LASTEXITCODE
+            Push-Location 'build\windows\${{ matrix.arch }}'
+            cmake -DCMAKE_INSTALL_CONFIG_NAME=Release -P cmake_install.cmake
+            Pop-Location
+            exit $buildExit
+          }
           ./scripts/check_windows_bundle.ps1 -BundleDir 'build\windows\${{ matrix.arch }}\runner\Release' -Arch ${{ matrix.arch }}
       - name: Package final branded app
         run: |
