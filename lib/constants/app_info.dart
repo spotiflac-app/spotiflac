@@ -25,16 +25,25 @@ class AppInfo {
 
   static const String mobileAuthor = 'spotiflac-app';
   static const String websiteUrl = 'https://spotiflac.com';
+  static const bool discordEnabled = bool.fromEnvironment(
+    'SPOTIFLAC_DISCORD_ENABLED',
+    defaultValue: true,
+  );
 
   static const String githubRepo = String.fromEnvironment(
-    'SPOTIFLAC_GITHUB_REPO', defaultValue: 'spotiflac-app/spotiflac');
+    'SPOTIFLAC_GITHUB_REPO',
+    defaultValue: 'spotiflac-app/spotiflac',
+  );
   static const String githubUrl = 'https://github.com/$githubRepo';
 
   /// Public downloads for every platform.
   static const String desktopGithubRepo = String.fromEnvironment(
-    'SPOTIFLAC_DESKTOP_GITHUB_REPO', defaultValue: 'spotiflac-app/spotiflac-releases');
+    'SPOTIFLAC_DESKTOP_GITHUB_REPO',
+    defaultValue: 'spotiflac-app/spotiflac-releases',
+  );
   static const String remoteConfigApiUrl = String.fromEnvironment(
     'SPOTIFLAC_CONFIG_URL',
-    defaultValue: 'https://raw.githubusercontent.com/spotiflac-app/spotiflac-releases/main/config/app.json');
-
+    defaultValue:
+        'https://raw.githubusercontent.com/spotiflac-app/spotiflac-releases/main/config/app.json',
+  );
 }

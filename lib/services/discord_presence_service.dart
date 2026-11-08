@@ -5,6 +5,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:spotiflac/constants/app_info.dart';
 import 'package:spotiflac/services/discord_artwork_resolver.dart';
 import 'package:spotiflac/services/platform_bridge.dart';
 import 'package:spotiflac/services/secure_storage_options.dart';
@@ -113,6 +114,7 @@ class DesktopDiscordChannel extends MethodChannel {
 /// All failures stay in this optional integration and cannot stop playback.
 class DiscordPresenceService {
   DiscordPresenceService({
+    this.integrationEnabled = AppInfo.discordEnabled,
     MethodChannel? channel,
     bool? requiresLink,
     Future<String?> Function()? readRefreshToken,
@@ -133,6 +135,7 @@ class DiscordPresenceService {
     _channel.setMethodCallHandler(_onNativeCall);
   }
 
+  final bool integrationEnabled;
   static final instance = DiscordPresenceService();
   static const _tokenKey = 'discord_presence_refresh_token';
   static const _storage = FlutterSecureStorage(
@@ -185,6 +188,10 @@ class DiscordPresenceService {
   }
 
   Future<void> setEnabled(bool enabled) async {
+    if (enabled && !integrationEnabled) {
+      status.value = DiscordPresenceStatus.sdkUnavailable;
+      return;
+    }
     if (_enabled == enabled) return;
     _enabled = enabled;
     final generation = ++_generation;
