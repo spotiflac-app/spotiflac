@@ -106,6 +106,7 @@ See [Release setup](RELEASE_SETUP.md) for operational instructions.
 - [Linux metadata repack](https://github.com/spotiflac-app/spotiflac/actions/runs/42468204499): declared dynamically loaded EGL/GLES dependencies, retained AppImages byte-for-byte and compared extracted bundles after rebuilding Debian metadata. Both architectures passed clean installation, native loading and visible startup on Ubuntu 22.04 and 24.04. Screenshots show the first-run onboarding UI.
 - Compiled Linux source remains `fa7b65a91bf76e55e273c56cf8efe5ba3c783eda`; the matching packaging source is `a6f8660daf37e0e71676a12b44ef484150caef72`. Application, assets, Rust, CMake and dependency source trees were checked unchanged before repacking.
 - The installed Windows 5.2.6 UI opened with the preserved synthetic-track queue. The local UI helper could not target its controls, so no additional local playback or provider test is claimed.
+- Downloads draft 437551007 was refreshed after the GLES/EGL fix. All 18 assets and the unified checksum manifest were reverified. Only the two Debian packages, Linux source archive and manifest changed; AppImages and non-Linux packages retained their exact digests. The public iOS feed remains empty and nothing was published.
 
 
 ## Corrected release build completed
