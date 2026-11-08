@@ -53,7 +53,9 @@ jobs:
         run: |
           mkdir package
           export SPOTIFLAC_PACKAGE_ARCH='${{ matrix.arch }}'
-          bash scripts/package_linux.sh appimage extracted/usr/lib/spotiflac v5.2.6 package/SpotiFLAC-v5.2.6-linux-${{ matrix.arch }}.AppImage
+          # Only Debian dependency metadata changes. Preserve the already
+          # verified AppImage byte-for-byte; it uses the same native bundle.
+          cp original/SpotiFLAC-v5.2.6-linux-${{ matrix.arch }}.AppImage package/
           bash scripts/package_linux.sh deb extracted/usr/lib/spotiflac v5.2.6 package/SpotiFLAC-v5.2.6-linux-${{ matrix.deb_arch }}.deb
           dpkg-deb -x package/*.deb verified
           diff -qr extracted/usr/lib/spotiflac verified/usr/lib/spotiflac
