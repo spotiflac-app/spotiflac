@@ -127,14 +127,19 @@ fn downloads_publish_the_actual_container_for_regular_and_explicit_working_paths
             assert_eq!(response["file_path"], published.to_string_lossy().as_ref());
             assert_eq!(std::fs::read(&published).unwrap(), payload);
             assert!(!output.join(format!("{stem}.flac")).exists());
-            // Resolving the corrected suffix must never replace a sibling.
+            // Resolving the corrected suffix must never replace a sibling. A
+            // non-empty destination is the already-downloaded result even
+            // when the requested extension differed from the provider's
+            // actual container.
             let second: Value = serde_json::from_str(
                 &backend
                     .download_by_strategy(&request.to_string(), &|| Ok(()))
                     .unwrap(),
             )
             .unwrap();
-            assert_eq!(second["success"], false, "{second}");
+            assert_eq!(second["success"], true, "{second}");
+            assert_eq!(second["already_exists"], true, "{second}");
+            assert_eq!(second["message"], "File already exists", "{second}");
             assert_eq!(std::fs::read(&published).unwrap(), payload);
             backend.shutdown();
         }

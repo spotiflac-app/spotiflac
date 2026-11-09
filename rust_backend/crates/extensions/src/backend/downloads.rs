@@ -878,13 +878,21 @@ impl Backend {
             drop(guard);
             files.lock(&destination, &check)?
         };
-        if final_path != path && destination.metadata().is_ok() {
-            return Ok(DownloadOutcome::Final(failure(
-                &manifest.name,
-                &format!("resolve album folder: open {final_path}: file exists"),
-                "file_error",
-                0,
-            )));
+        if final_path != path
+            && destination
+                .metadata()
+                .is_ok_and(|metadata| metadata.is_file() && metadata.len() > 0)
+        {
+            // The provider may return a different container than the one that
+            // was requested (for example, M4A for a requested MP3/FLAC).  The
+            // initial duplicate check cannot know that final extension yet.
+            // Treat an existing, non-empty resolved destination as the same
+            // safe duplicate handled above instead of failing after a complete
+            // re-download on every retry.
+            response["file_path"] = final_path.into();
+            response["already_exists"] = true.into();
+            response["message"] = "File already exists".into();
+            return Ok(DownloadOutcome::Final(response));
         }
         let mut source = input
             .open(OpenOptions::new().read(true))
