@@ -514,6 +514,9 @@ class _FilesSettingsPageState extends ConsumerState<FilesSettingsPage> {
   ) async {
     final title = context.l10n.setupDownloadLocationTitle;
     final current = ref.read(settingsProvider).downloadDirectory;
+    // The page can unmount while the native dialog is open, so read the
+    // notifier before awaiting it.
+    final settingsNotifier = ref.read(settingsProvider.notifier);
     String? picked;
     try {
       picked = await FilePicker.getDirectoryPath(
@@ -533,7 +536,7 @@ class _FilesSettingsPageState extends ConsumerState<FilesSettingsPage> {
       return;
     }
     if (picked == null || picked.isEmpty) return;
-    await ref.read(settingsProvider.notifier).useAppFolderStorage(picked);
+    await settingsNotifier.useAppFolderStorage(picked);
   }
 
   Future<String> _getDefaultAndroidDirectory() async {
